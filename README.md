@@ -27,6 +27,10 @@ Implementación del [PRD v1.0](PRD.md). Publicado en https://pipp0.github.io/for
 | 07 Biblioteca versionada, adopción y roles | `Biblioteca`, `Equipo` |
 | 08 Accesibilidad en el guardarraíl, importación de tokens, HTML, código e imágenes | `Sistema de diseño`, `Diseñar` |
 
+## Proyecto de ejemplo completo
+
+[`examples/proyecto-qa-completo.json`](examples/proyecto-qa-completo.json) es el proyecto construido durante el QA: sistema de diseño ajustado, 7 pantallas con variantes, versiones, biblioteca publicada y adoptada, equipo con tres roles, un estudio con 2 tareas y 8 sesiones con resultados. Para verlo, entra al sitio y ve a **Ajustes › Importar respaldo** (reemplaza los datos de ese navegador) y entra como `valentina.rojas@banco.cl`. El detalle de la prueba está en [QA.md](QA.md).
+
 ## Correr en local
 
 ```bash
