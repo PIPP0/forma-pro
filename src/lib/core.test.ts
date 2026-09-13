@@ -201,6 +201,27 @@ describe('datos ingresados en pantallas siguientes', () => {
   });
 });
 
+describe('ejemplo Banco New en espacios existentes', () => {
+  it('se agrega una sola vez, con ids nuevos y la persona como dueña', async () => {
+    const { adoptSample } = await import('./store');
+    const { bancoNewProject } = await import('./seedBancoNew');
+    const { emptyDb } = await import('./model');
+    const user = { id: 'u1', name: 'Ana Soto', email: 'ana@correo.cl' };
+    const project = bancoNewProject('otra');
+    const ex = exampleStudy(transferProject('otra'), 'otra');
+    const sample = { project, versions: [], studies: [{ ...ex.study, projectId: project.id }], sessions: ex.sessions, events: ex.events };
+    const once = adoptSample({ ...emptyDb(), users: [user], currentUserId: 'u1' }, user, sample);
+    expect(once.projects).toHaveLength(1);
+    expect(once.projects[0].id).not.toBe(project.id);
+    expect(once.projects[0].owner).toBe('u1');
+    expect(once.studies[0].projectId).toBe(once.projects[0].id);
+    expect(once.sessions.every((s) => s.studyId === once.studies[0].id)).toBe(true);
+    expect(once.events.every((e) => once.sessions.some((s) => s.id === e.sessionId))).toBe(true);
+    expect(once.users[0].samples).toContain('bancoNew');
+    expect(adoptSample(once, once.users[0], sample).projects).toHaveLength(1);
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { Comment, DB, LibraryRelease, Op, OpInput, Project, Role, Session, Study, StudyEvent, StudyTask, User } from './model';
+import type { Comment, DB, LibraryRelease, Op, OpInput, Project, ProjectVersion, Role, Session, Study, StudyEvent, StudyTask, User } from './model';
 import { emptyDb } from './model';
 import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
@@ -101,8 +101,64 @@ export function signIn(name: string, email: string): boolean {
   next = { ...next, currentUserId: user.id };
   commit(next);
   if (!projectsFor(db, user).length) createProject({ name: 'Ahorro con propósito', business: 'Proyecto bancario', template: 'transfer' });
+  void ensureSamples();
   return true;
 }
+
+// ---------- Proyecto de ejemplo Banco New ----------
+
+const SAMPLE = 'bancoNew';
+let adopting = false;
+
+export interface SampleFile {
+  project: Project;
+  versions: ProjectVersion[];
+  studies: Study[];
+  sessions: Session[];
+  events: StudyEvent[];
+}
+
+/** Agrega Banco New, con su estudio y resultados de QA, una sola vez a cada persona. */
+export async function ensureSamples() {
+  const user = currentUser();
+  if (!user || adopting || user.samples?.includes(SAMPLE) || typeof fetch === 'undefined') return;
+  adopting = true;
+  try {
+    const res = await fetch('./examples/banco-new.json');
+    if (!res.ok) return;
+    const sample = (await res.json()) as SampleFile;
+    const fresh = currentUser();
+    if (!fresh || fresh.id !== user.id || fresh.samples?.includes(SAMPLE)) return;
+    commit(adoptSample(db, fresh, sample));
+  } catch {
+    /* sin conexión: se intenta en la próxima visita */
+  } finally {
+    adopting = false;
+  }
+}
+
+/** Copia el ejemplo con identificadores nuevos y la persona actual como dueña. */
+export function adoptSample(d: DB, user: User, s: SampleFile): DB {
+  const users = d.users.map((u) => (u.id === user.id ? { ...u, samples: [...(u.samples ?? []), SAMPLE] } : u));
+  if (projectsFor(d, user).some((p) => p.name === s.project.name)) return { ...d, users };
+  const projectId = uid('p_');
+  const studyIds = new Map(s.studies.map((x) => [x.id, uid('st_')]));
+  const sessionIds = new Map(s.sessions.map((x) => [x.id, uid('se_')]));
+  const own = (p: Project): Project => ({ ...p, id: projectId, owner: user.id });
+  return {
+    ...d,
+    users,
+    projects: [...d.projects, { ...own(s.project), updatedAt: Date.now() }],
+    memberships: [...d.memberships, { id: uid('m_'), subjectType: 'project' as const, subjectId: projectId, email: user.email, role: 'owner' as const }],
+    versions: [...d.versions, ...s.versions.map((v) => ({ ...v, id: uid('v_'), projectId, createdBy: user.id, snapshot: own(v.snapshot) }))],
+    studies: [...d.studies, ...s.studies.map((x) => ({ ...x, id: studyIds.get(x.id)!, projectId, owner: user.id, snapshot: own(x.snapshot) }))],
+    sessions: [...d.sessions, ...s.sessions.filter((x) => studyIds.has(x.studyId)).map((x) => ({ ...x, id: sessionIds.get(x.id)!, studyId: studyIds.get(x.studyId)! }))],
+    events: [...d.events, ...s.events.filter((e) => sessionIds.has(e.sessionId)).map((e) => ({ ...e, id: uid('ev_'), sessionId: sessionIds.get(e.sessionId)! }))],
+  };
+}
+
+// Personas que ya tenían sesión abierta antes de que existiera el ejemplo.
+if (typeof window !== 'undefined') void Promise.resolve().then(ensureSamples);
 
 export const signOut = () => commit({ ...db, currentUserId: undefined });
 export const switchUser = (id: string) => commit({ ...db, currentUserId: id });

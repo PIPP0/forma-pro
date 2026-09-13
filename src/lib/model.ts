@@ -238,6 +238,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  /** Proyectos de ejemplo que ya se agregaron a esta persona (no reaparecen si los elimina). */
+  samples?: string[];
 }
 
 export interface Membership {
