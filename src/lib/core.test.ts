@@ -97,6 +97,20 @@ describe('tokens', () => {
   });
 });
 
+describe('enlace público de estudio', () => {
+  it('la copia congelada viaja comprimida en el enlace y vuelve intacta', async () => {
+    const { encodeStudy, decodeStudy } = await import('./share');
+    const { study } = exampleStudy(transferProject('u1'), 'u1');
+    const encoded = await encodeStudy(study);
+    expect(encoded).toMatch(/^[A-Za-z0-9_-]+$/);
+    expect(encoded.length).toBeLessThan(JSON.stringify(study.snapshot).length);
+    const back = await decodeStudy(encoded);
+    expect(back.id).toBe(study.id);
+    expect(back.tasks).toEqual(study.tasks);
+    expect(back.snapshot).toEqual(study.snapshot);
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

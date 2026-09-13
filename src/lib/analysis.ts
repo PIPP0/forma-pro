@@ -57,8 +57,9 @@ export const fmtDuration = (ms: number) => {
   return s < 60 ? `${s} s` : `${Math.floor(s / 60)} min ${s % 60} s`;
 };
 
+// «1 de 15 personas dudó», «6 de 15 personas dudaron»
 const people = (n: number, total: number, singular: string, plural: string) =>
-  `${n} de ${total} ${n === 1 ? `persona ${singular}` : `personas ${plural}`}`;
+  `${n} de ${total} ${total === 1 ? 'persona' : 'personas'} ${n === 1 ? singular : plural}`;
 
 export function screenName(p: Project, id: string) {
   return p.screens.find((s) => s.id === id)?.name ?? 'pantalla eliminada';
