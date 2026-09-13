@@ -17,6 +17,16 @@ export function CommitInput({
   const commit = () => {
     if (draft !== value) onCommit(draft);
   };
+  // Si el campo desaparece antes de perder el foco, el cambio no se pierde.
+  const pending = useRef({ draft, value, onCommit });
+  pending.current = { draft, value, onCommit };
+  useEffect(
+    () => () => {
+      const { draft: d, value: v, onCommit: c } = pending.current;
+      if (d !== v) c(d);
+    },
+    [],
+  );
   if (multiline)
     return (
       <textarea

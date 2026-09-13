@@ -142,7 +142,8 @@ export function importHtml(html: string): Block[] {
     const id = el.getAttribute('id');
     const byFor = id ? doc.querySelector(`label[for="${id}"]`) : null;
     const wrap = el.closest('label');
-    const t = (byFor && text(byFor)) || (wrap && text(wrap)) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || el.getAttribute('name') || '';
+    // Sin etiqueta real queda vacío: el guardarraíl lo marca como problema de accesibilidad.
+    const t = (byFor && text(byFor)) || (wrap && text(wrap)) || el.getAttribute('aria-label') || el.getAttribute('placeholder') || '';
     return t;
   };
   const blocks: Block[] = [];

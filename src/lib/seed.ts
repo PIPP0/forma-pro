@@ -93,7 +93,6 @@ export function blankProject(ownerId: string, name: string, business: string): P
     brand: name,
     business,
     tagline: name,
-    summary: 'Describe aquí el objetivo del flujo.',
     flowName: 'Flujo principal',
     owner: ownerId,
     version: 1,

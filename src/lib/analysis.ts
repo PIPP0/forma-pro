@@ -206,7 +206,7 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
         themes.push({
           id: `det-${task.id}-${screen}`,
           kind: 'detour',
-          title: `${people(list.length, total, 'se desvió', 'se desviaron')} a «${screenName(p, screen)}» mientras intentaban «${task.prompt.replace(/\.$/, '')}»`,
+          title: `${people(list.length, total, 'se desvió', 'se desviaron')} a «${screenName(p, screen)}» mientras ${list.length === 1 ? 'intentaba' : 'intentaban'} «${task.prompt.replace(/\.$/, '')}»`,
           detail: 'Esa pantalla no está en el camino más corto hacia el objetivo de la tarea.',
           count: list.length,
           total,

@@ -160,7 +160,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   useEffect(() => {
     if (!editable || !block || !screen || play) return;
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).closest('input, textarea, select, [contenteditable], dialog')) return;
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable], dialog')) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
         if (apply([edit.removeBlock(project, screen.id, block.id)], `Eliminar «${block.label || blockMeta(block.type).label}»`)) setBlockId(undefined);

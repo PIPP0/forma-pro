@@ -75,6 +75,17 @@ describe('análisis de estudios', () => {
   });
 });
 
+describe('redacción de hallazgos', () => {
+  it('usa singular cuando una sola persona se desvía', () => {
+    const p = transferProject('u1');
+    const { study, sessions, events } = exampleStudy(p, 'u1');
+    const withoutP8 = sessions.filter((s) => s.participant !== 'P8');
+    const a = analyzeStudy(study, withoutP8, events);
+    const detour = a.themes.find((t) => t.kind === 'detour')!;
+    expect(detour.title).toBe('1 de 14 personas se desvió a «Mis metas» mientras intentaba «Crea una meta de ahorro de $500.000 para tu próximo viaje»');
+  });
+});
+
 describe('tokens', () => {
   it('resuelve referencias por modo y calcula contraste', () => {
     const p = transferProject('u1');

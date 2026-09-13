@@ -617,7 +617,11 @@ function Funnel({ study, sessions, events }: { study: Study; sessions: Session[]
                   </span>
                   <span className="funnel-num">
                     {s.reached} de {s.started}
-                    {drop > 0 && <em>{drop} se quedaron antes</em>}
+                    {drop > 0 && (
+                      <em>
+                        , {drop} {drop === 1 ? 'se quedó' : 'se quedaron'} antes
+                      </em>
+                    )}
                   </span>
                 </li>
               );

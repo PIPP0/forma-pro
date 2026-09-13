@@ -85,6 +85,7 @@ export function MembersView({ project, role }: { project: Project; role: Role })
           <h2 className="section-title">Invitar</h2>
           <form
             className="row add-row"
+            noValidate
             onSubmit={(e) => {
               e.preventDefault();
               if (invite(project.id, email, newRole)) setEmail('');

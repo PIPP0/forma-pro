@@ -2936,7 +2936,7 @@ dialog.modal::backdrop {
 .funnel-num em {
   color: var(--err);
   font-style: normal;
-  margin-left: 8px;
+  margin-left: 0;
   font-size: 12.5px;
 }
 

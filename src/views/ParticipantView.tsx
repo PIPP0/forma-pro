@@ -19,6 +19,7 @@ export function ParticipantView({ studyId, data }: { studyId: string; data: stri
   const [study, setStudy] = useState<SharedStudy | null>(null);
   const [local, setLocal] = useState(false);
   const [loadError, setLoadError] = useState('');
+  const [run, setRun] = useState(0);
 
   useEffect(() => {
     rememberStudyLink();
@@ -54,7 +55,7 @@ export function ParticipantView({ studyId, data }: { studyId: string; data: stri
         </div>
       </div>
     );
-  return <Flow study={study} local={local} />;
+  return <Flow key={run} study={study} local={local} onRestart={() => setRun((r) => r + 1)} />;
 }
 
 function InstallCard() {
@@ -98,7 +99,7 @@ function SwitchRow({ checked, onChange, label, detail }: { checked: boolean; onC
   );
 }
 
-function Flow({ study, local }: { study: SharedStudy; local: boolean }) {
+function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean; onRestart: () => void }) {
   const p = study.snapshot;
   const [step, setStep] = useState<Step>('intro');
   const [participate, setParticipate] = useState(false);
@@ -411,7 +412,12 @@ function Flow({ study, local }: { study: SharedStudy; local: boolean }) {
       <div className="participant-card stack">
         <h1>¡Gracias por participar!</h1>
         {local ? (
-          <p>Tus respuestas quedaron guardadas. Ya puedes cerrar esta pestaña.</p>
+          <>
+            <p>Tus respuestas quedaron guardadas. Si otra persona va a usar este mismo dispositivo, empieza una sesión nueva.</p>
+            <Button tone="primary" onClick={onRestart}>
+              Iniciar otra sesión
+            </Button>
+          </>
         ) : (
           <>
             <p>Envía tus resultados a quien te invitó. El archivo solo contiene lo que hiciste dentro del prototipo.</p>

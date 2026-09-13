@@ -34,6 +34,7 @@ export function Runner({
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const last = useRef(performance.now());
+  const first = useRef(true);
   const typed = useRef(new Set<string>());
   const content = useRef<HTMLDivElement>(null);
 
@@ -109,12 +110,15 @@ export function Runner({
     const now = performance.now();
     const gap = now - last.current;
     last.current = now;
+    // La primera acción de la tarea incluye leer la instrucción: ese tiempo no es una duda.
+    const wasFirst = first.current;
+    first.current = false;
     const isBack = block?.type === 'navbar' && !!target.closest('button');
     if (!block || !blockMeta(block.type).interactive || block.disabled || (block.type === 'navbar' && !isBack)) {
       emit({ kind: 'misclick', screen: current.id, block: block?.id, ...c });
       return;
     }
-    if (gap > HESITATION_MS) emit({ kind: 'hesitation', screen: current.id, block: block.id, dwell: Math.round(gap), ...c });
+    if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: block.id, dwell: Math.round(gap), ...c });
     if (blockMeta(block.type).field) {
       emit({ kind: 'tap', screen: current.id, block: block.id, ...c });
       if (TOGGLE_TYPES.includes(block.type)) {
