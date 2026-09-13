@@ -1,0 +1,329 @@
+// Modelo central de Forma Pro. Un solo modelo para diseñar, probar y medir.
+
+export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+export type Mode = 'light' | 'dark';
+export type Role = 'owner' | 'editor' | 'viewer';
+
+export const BREAKPOINTS: { id: Breakpoint; label: string; width: number; height: number }[] = [
+  { id: 'mobile', label: 'Móvil', width: 375, height: 760 },
+  { id: 'tablet', label: 'Tablet', width: 768, height: 1024 },
+  { id: 'desktop', label: 'Escritorio', width: 1280, height: 800 },
+];
+
+export const breakpointOf = (id: Breakpoint) => BREAKPOINTS.find((b) => b.id === id)!;
+
+export type BlockType =
+  | 'navbar'
+  | 'heading'
+  | 'text'
+  | 'input'
+  | 'amount'
+  | 'select'
+  | 'checkbox'
+  | 'button'
+  | 'link'
+  | 'listItem'
+  | 'alert'
+  | 'image'
+  | 'divider';
+
+export const BLOCK_TYPES: { type: BlockType; label: string; interactive: boolean; field: boolean }[] = [
+  { type: 'navbar', label: 'Barra superior', interactive: true, field: false },
+  { type: 'heading', label: 'Título', interactive: false, field: false },
+  { type: 'text', label: 'Texto', interactive: false, field: false },
+  { type: 'input', label: 'Campo de texto', interactive: true, field: true },
+  { type: 'amount', label: 'Campo de monto', interactive: true, field: true },
+  { type: 'select', label: 'Selector', interactive: true, field: true },
+  { type: 'checkbox', label: 'Casilla', interactive: true, field: true },
+  { type: 'button', label: 'Botón', interactive: true, field: false },
+  { type: 'link', label: 'Enlace', interactive: true, field: false },
+  { type: 'listItem', label: 'Fila de lista', interactive: true, field: false },
+  { type: 'alert', label: 'Aviso', interactive: false, field: false },
+  { type: 'image', label: 'Imagen', interactive: false, field: false },
+  { type: 'divider', label: 'Separador', interactive: false, field: false },
+];
+
+export const blockMeta = (t: BlockType) => BLOCK_TYPES.find((b) => b.type === t)!;
+
+export type StateName = 'default' | 'hover' | 'pressed' | 'disabled' | 'focus';
+export const STATES: StateName[] = ['default', 'hover', 'pressed', 'disabled', 'focus'];
+export const STATE_LABEL: Record<StateName, string> = {
+  default: 'Reposo',
+  hover: 'Hover',
+  pressed: 'Presionado',
+  disabled: 'Deshabilitado',
+  focus: 'Foco',
+};
+
+export type TypeRole = 'display' | 'title' | 'body' | 'label' | 'caption';
+export const TYPE_ROLES: TypeRole[] = ['display', 'title', 'body', 'label', 'caption'];
+export const TYPE_ROLE_LABEL: Record<TypeRole, string> = {
+  display: 'Display',
+  title: 'Título',
+  body: 'Cuerpo',
+  label: 'Etiqueta',
+  caption: 'Nota',
+};
+
+export type StyleKey = 'bg' | 'fg' | 'border' | 'outline' | 'radius' | 'padY' | 'padX' | 'type';
+export type StyleProps = Partial<Record<StyleKey, string>>;
+export type TokenGroup = 'color' | 'space' | 'radius' | 'type';
+
+export const STYLE_KEYS: { key: StyleKey; label: string; group: TokenGroup }[] = [
+  { key: 'bg', label: 'Fondo', group: 'color' },
+  { key: 'fg', label: 'Texto', group: 'color' },
+  { key: 'border', label: 'Borde', group: 'color' },
+  { key: 'outline', label: 'Anillo de foco', group: 'color' },
+  { key: 'radius', label: 'Radio', group: 'radius' },
+  { key: 'padY', label: 'Relleno vertical', group: 'space' },
+  { key: 'padX', label: 'Relleno horizontal', group: 'space' },
+  { key: 'type', label: 'Rol tipográfico', group: 'type' },
+];
+
+export interface ColorToken {
+  name: string;
+  light: string;
+  dark: string;
+  description?: string;
+}
+export interface SizeToken {
+  name: string;
+  value: number;
+}
+export interface TypeToken {
+  role: TypeRole;
+  size: number;
+  lineHeight: number;
+  weight: number;
+}
+export interface Tokens {
+  fontFamily: string;
+  colors: ColorToken[];
+  space: SizeToken[];
+  radius: SizeToken[];
+  type: TypeToken[];
+}
+
+export type Action = 'none' | 'navigate' | 'back';
+
+export interface Block {
+  id: string;
+  type: BlockType;
+  label: string;
+  detail?: string;
+  target?: string;
+  variant?: string;
+  action?: Action;
+  required?: boolean;
+  disabled?: boolean;
+  options?: string[];
+  value?: string;
+  componentId?: string;
+  overrides?: StyleProps;
+}
+
+export interface Component {
+  id: string;
+  name: string;
+  type: BlockType;
+  variant?: string;
+  states: Record<StateName, StyleProps>;
+}
+
+export interface Screen {
+  id: string;
+  name: string;
+  breakpoint: Breakpoint;
+  variantOf?: string;
+  terminal?: boolean;
+  blocks: Block[];
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  brand: string;
+  business: string;
+  owner: string;
+  version: number;
+  startScreenId: string;
+  tokens: Tokens;
+  screens: Screen[];
+  components: Component[];
+  library?: { releaseId: string; version: string; sourceProjectId: string };
+  createdAt: number;
+  updatedAt: number;
+}
+
+export type Path = (string | number)[];
+
+export type OpInput =
+  | { kind: 'set'; path: Path; value: unknown }
+  | { kind: 'insert'; path: Path; index: number; value: unknown }
+  | { kind: 'remove'; path: Path; index: number }
+  | { kind: 'move'; path: Path; from: number; to: number };
+
+export type Op = OpInput & {
+  id: string;
+  projectId: string;
+  by: string;
+  at: number;
+  label: string;
+  prev?: unknown;
+};
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+}
+
+export interface Membership {
+  id: string;
+  subjectType: 'project';
+  subjectId: string;
+  email: string;
+  role: Role;
+}
+
+export interface ProjectVersion {
+  id: string;
+  projectId: string;
+  label: string;
+  snapshot: Project;
+  createdBy: string;
+  createdAt: number;
+}
+
+export interface LibraryRelease {
+  id: string;
+  libraryId: string; // proyecto fuente de la biblioteca
+  version: string;
+  notes: string;
+  snapshot: { tokens: Tokens; components: Component[] };
+  publishedBy: string;
+  publishedAt: number;
+}
+
+export interface StudyTask {
+  id: string;
+  prompt: string;
+  startScreenId: string;
+  successScreenId: string;
+}
+
+export interface Study {
+  id: string;
+  projectId: string;
+  name: string;
+  tasks: StudyTask[];
+  snapshot: Project;
+  askAudio: boolean;
+  owner: string;
+  status: 'open' | 'closed';
+  example?: boolean;
+  created: number;
+}
+
+export interface TaskFeedback {
+  taskId: string;
+  outcome: 'success' | 'giveup';
+  difficulty?: number; // 1 muy fácil … 5 muy difícil
+  comment?: string;
+  durationMs: number;
+}
+
+export interface Session {
+  id: string;
+  studyId: string;
+  participant: string;
+  device: { breakpoint: Breakpoint; width: number; height: number };
+  consent: { participate: boolean; audio: boolean; at: number };
+  hasAudio?: boolean;
+  feedback: TaskFeedback[];
+  status: 'in_progress' | 'completed' | 'abandoned';
+  source: 'local' | 'import' | 'example';
+  startedAt: number;
+  endedAt?: number;
+}
+
+export type EventKind =
+  | 'task_start'
+  | 'tap'
+  | 'misclick'
+  | 'blocked'
+  | 'navigate'
+  | 'hesitation'
+  | 'input'
+  | 'task_success'
+  | 'task_giveup';
+
+export interface StudyEvent {
+  id: string;
+  sessionId: string;
+  taskId: string;
+  screen: string;
+  block?: string;
+  kind: EventKind;
+  x: number; // 0..1 relativo a la pantalla
+  y: number;
+  bx?: number; // 0..1 relativo al bloque
+  by?: number;
+  dwell?: number;
+  elapsed: number;
+}
+
+export interface Comment {
+  id: string;
+  projectId: string;
+  screenId: string;
+  blockId?: string;
+  author: string;
+  text: string;
+  mentions: string[];
+  at: number;
+  resolved: boolean;
+}
+
+export interface DB {
+  schema: 1;
+  users: User[];
+  currentUserId?: string;
+  projects: Project[];
+  ops: Op[];
+  versions: ProjectVersion[];
+  memberships: Membership[];
+  releases: LibraryRelease[];
+  studies: Study[];
+  sessions: Session[];
+  events: StudyEvent[];
+  comments: Comment[];
+}
+
+export const emptyDb = (): DB => ({
+  schema: 1,
+  users: [],
+  projects: [],
+  ops: [],
+  versions: [],
+  memberships: [],
+  releases: [],
+  studies: [],
+  sessions: [],
+  events: [],
+  comments: [],
+});
+
+/** Pantalla base (la que agrupa variantes) */
+export const baseId = (s: Screen) => s.variantOf ?? s.id;
+
+/** Resuelve la variante de una pantalla para un breakpoint, o la base si no existe. */
+export function screenFor(p: Project, id: string, bp: Breakpoint): Screen | undefined {
+  const base = p.screens.find((s) => s.id === id);
+  const root = base?.variantOf ?? id;
+  return (
+    p.screens.find((s) => baseId(s) === root && s.breakpoint === bp) ??
+    p.screens.find((s) => s.id === root) ??
+    base
+  );
+}
