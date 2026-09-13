@@ -1,8 +1,10 @@
 import { useMemo, useState } from 'react';
 import type { Block, BlockType, Mode, OpInput, Project, Role, StateName, StyleKey } from '../lib/model';
 import { BLOCK_TYPES, STATES, STATE_LABEL, STYLE_KEYS, TYPE_ROLE_LABEL, blockMeta } from '../lib/model';
-import { applyOps } from '../lib/store';
+import { applyOps, saveVersion } from '../lib/store';
 import { can } from '../lib/permissions';
+import { extractSystem, fileToImage, getAiKey, type ExtractedSystem, type ImageInput } from '../lib/ai';
+import { IconClose, IconSparkle, IconUpload } from '../components/icons';
 import { edit, renameTokenOps } from '../lib/ops';
 import { builtInStyle, colorValue, contrast, isRaw, parseRef, refOf, resolve } from '../lib/tokens';
 import { checkProject } from '../lib/flowCheck';
@@ -23,6 +25,7 @@ const ratio = (n: number | null) => (n == null ? 'n/a' : `${String(n).replace('.
 export function SystemView({ project, role }: { project: Project; role: Role }) {
   const [tab, setTab] = useState<Tab>('tokens');
   const [mode, setMode] = useState<Mode>('light');
+  const [aiOpen, setAiOpen] = useState(false);
   const editable = can(role, 'edit');
   return (
     <div className="page page-wide">
@@ -31,17 +34,25 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
           <h1 className="page-title">Sistema de diseño</h1>
           <p className="page-sub">Una sola fuente de verdad. Lo que cambies aquí se refleja al instante en pantallas, prototipos y entrega.</p>
         </div>
-        <Tabs
-          small
-          label="Modo de vista previa"
-          value={mode}
-          onChange={setMode}
-          items={[
-            { id: 'light', label: 'Claro' },
-            { id: 'dark', label: 'Oscuro' },
-          ]}
-        />
+        <div className="row">
+          <Tabs
+            small
+            label="Modo de vista previa"
+            value={mode}
+            onChange={setMode}
+            items={[
+              { id: 'light', label: 'Claro' },
+              { id: 'dark', label: 'Oscuro' },
+            ]}
+          />
+          {editable && (
+            <button type="button" className="btn-ai" onClick={() => setAiOpen(true)}>
+              <IconSparkle size={16} /> Crear sistema con IA
+            </button>
+          )}
+        </div>
       </div>
+      <AiSystemModal p={project} open={aiOpen} onClose={() => setAiOpen(false)} />
       {!editable && <p className="notice">Tu rol es de lectura: puedes revisar el sistema, pero no modificarlo.</p>}
       <Tabs
         label="Secciones del sistema"
@@ -617,6 +628,193 @@ function HealthTab({ p, editable }: { p: Project; editable: boolean }) {
         )}
       </section>
     </>
+  );
+}
+
+/** La IA lee capturas o código y propone tokens y componentes. Nada se aplica hasta confirmar. */
+function AiSystemModal({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
+  const [images, setImages] = useState<ImageInput[]>([]);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [result, setResult] = useState<ExtractedSystem | null>(null);
+  const [mode, setMode] = useState<Mode>('light');
+  const hasKey = !!getAiKey();
+  const preview: Project | null = result ? { ...p, tokens: result.tokens, components: result.components } : null;
+
+  const close = () => {
+    setImages([]);
+    setCode('');
+    setResult(null);
+    setError('');
+    onClose();
+  };
+
+  const addFiles = async (files: FileList | null) => {
+    if (!files?.length) return;
+    setError('');
+    try {
+      const next = await Promise.all([...files].slice(0, 5).map(fileToImage));
+      setImages((imgs) => [...imgs, ...next].slice(0, 5));
+      setResult(null);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const analyze = async () => {
+    setBusy(true);
+    setError('');
+    setResult(null);
+    try {
+      setResult(await extractSystem({ images, code }, p.tokens));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const applyResult = () => {
+    if (!result) return;
+    saveVersion(p.id, 'Antes de crear el sistema con IA', true);
+    const merged = [...p.components];
+    let replaced = 0;
+    let added = 0;
+    for (const c of result.components) {
+      const i = merged.findIndex((m) => m.name.toLowerCase() === c.name.toLowerCase() && m.type === c.type);
+      if (i >= 0) {
+        merged[i] = { ...c, id: merged[i].id };
+        replaced++;
+      } else {
+        merged.push(c);
+        added++;
+      }
+    }
+    if (applyOps(p.id, [edit.project('tokens', result.tokens), edit.project('components', merged)], 'Crear sistema con IA')) {
+      notify(`Aplicaste el sistema: ${added} ${added === 1 ? 'componente nuevo' : 'componentes nuevos'} y ${replaced} ${replaced === 1 ? 'actualizado' : 'actualizados'}. La versión anterior quedó en Historial.`, 'success');
+      close();
+    }
+  };
+
+  return (
+    <Modal
+      open={open}
+      wide
+      title="Crear sistema de diseño con IA"
+      onClose={close}
+      footer={
+        <>
+          <Button onClick={close}>Cancelar</Button>
+          {result ? (
+            <>
+              <Button onClick={() => setResult(null)}>Volver a analizar</Button>
+              <Button tone="primary" onClick={applyResult}>
+                Aplicar al sistema
+              </Button>
+            </>
+          ) : (
+            <Button tone="primary" disabled={busy || !hasKey || (!images.length && !code.trim())} onClick={analyze}>
+              {busy ? 'Analizando…' : 'Analizar con IA'}
+            </Button>
+          )}
+        </>
+      }
+    >
+      {!hasKey && (
+        <p className="notice">
+          Para usar la IA, agrega tu clave de API de Anthropic en <a href={href('/settings')}>Ajustes</a>. Se guarda solo en este navegador.
+        </p>
+      )}
+      {!result && (
+        <>
+          <p className="muted">
+            Sube capturas de tu app, un kit de UI o una página de estilos, o pega código. La IA propone colores para modo claro y oscuro, espaciados, radios y componentes con sus cinco estados, usando solo tokens.
+          </p>
+          <label
+            className="drop"
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              addFiles(e.dataTransfer.files);
+            }}
+          >
+            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="sr-only" onChange={(e) => addFiles(e.target.files)} />
+            <IconUpload size={22} />
+            <strong>Sube o arrastra capturas</strong>
+            <span className="small">PNG, JPG o WebP. Hasta 5 imágenes.</span>
+          </label>
+          {images.length > 0 && (
+            <div className="thumbs">
+              {images.map((img, i) => (
+                <div key={i} className="thumb">
+                  <img src={`data:${img.mediaType};base64,${img.data}`} alt={img.name} />
+                  <button type="button" className="icon-btn thumb-remove" aria-label={`Quitar ${img.name}`} onClick={() => setImages((imgs) => imgs.filter((_, j) => j !== i))}>
+                    <IconClose size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <Field label="O pega código o estilos" hint="CSS, variables, tokens en JSON, HTML o componentes JSX.">
+            <textarea className="input input-code" rows={7} value={code} onChange={(e) => setCode(e.target.value)} placeholder={'.btn-primary { background: #0074C8; border-radius: 12px; }\n.card { border: 1px solid #E3E7EC; padding: 16px; }'} />
+          </Field>
+          <Button
+            size="sm"
+            tone="ghost"
+            onClick={async () => {
+              const t = await pickFile('.css,.scss,.json,.html,.jsx,.tsx,.js,.ts,.txt');
+              if (t != null) setCode(t);
+            }}
+          >
+            Cargar archivo de código
+          </Button>
+        </>
+      )}
+      {error && <p className="error-text">{error}</p>}
+      {result && preview && (
+        <div className="stack">
+          {result.notes && <p>{result.notes}</p>}
+          <div className="row between">
+            <strong>{result.tokens.colors.length} colores</strong>
+            <Tabs
+              small
+              label="Modo de vista previa"
+              value={mode}
+              onChange={setMode}
+              items={[
+                { id: 'light', label: 'Claro' },
+                { id: 'dark', label: 'Oscuro' },
+              ]}
+            />
+          </div>
+          <div className="ai-colors">
+            {result.tokens.colors.map((c) => (
+              <span key={c.name} className="ai-color">
+                <i style={{ background: c[mode] }} />
+                {c.name}
+              </span>
+            ))}
+          </div>
+          <strong>{result.components.length} componentes</strong>
+          <div className="ai-components">
+            {result.components.map((c) => (
+              <div key={c.id} className="ai-component">
+                <header>
+                  <span>{c.name}</span>
+                  <span className="muted">{blockMeta(c.type).label}</span>
+                </header>
+                <div className="state-preview" style={{ background: colorValue(result.tokens, 'background', mode, '#fff') }}>
+                  <BlockView project={preview} block={{ id: `ai-${c.id}`, type: c.type, componentId: c.id, label: '', ...SAMPLE[c.type] } as Block} mode={mode} />
+                </div>
+              </div>
+            ))}
+          </div>
+          {result.dropped > 0 && <p className="muted small">Se descartaron {result.dropped} valores que no correspondían a un token válido.</p>}
+          <p className="muted small">Al aplicar, los componentes con el mismo nombre y tipo se actualizan y conservan sus instancias; los demás se agregan. Antes guardamos una versión para que puedas volver atrás.</p>
+        </div>
+      )}
+    </Modal>
   );
 }
 

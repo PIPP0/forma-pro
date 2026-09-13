@@ -113,6 +113,59 @@ describe('enlace público de estudio', () => {
   });
 });
 
+describe('sistema desde IA', () => {
+  it('convierte la propuesta a tokens y descarta valores que no son tokens', async () => {
+    const { convertSystem } = await import('./ai');
+    const empty = { bg: '', fg: '', border: '', outline: '', radius: '', padY: '', padX: '', type: '' };
+    const p = transferProject('u1');
+    const out = convertSystem(
+      {
+        fontFamily: "'Roboto', sans-serif",
+        colors: [
+          { name: 'primary', light: '#ff0055', dark: '#ff88aa', description: 'Marca' },
+          { name: 'brand violeta', light: '#123', dark: '#456', description: '' },
+        ],
+        space: { xs: 4, sm: 8, md: 12, lg: 20, xl: 24, xxl: 32 },
+        radius: { sm: 4, md: 8, lg: 24 },
+        components: [
+          {
+            name: 'Botón de marca',
+            type: 'button',
+            variant: 'primary',
+            default: { ...empty, bg: 'primary', fg: 'onPrimary', radius: 'lg', padY: 'md', type: 'label' },
+            hover: { ...empty, bg: '#000000' },
+            pressed: empty,
+            disabled: empty,
+            focus: { ...empty, outline: 'focus' },
+          },
+        ],
+        notes: 'Detecté un botón principal.',
+      },
+      p.tokens,
+    );
+    expect(out.tokens.colors.find((c) => c.name === 'primary')?.light).toBe('#FF0055');
+    expect(out.tokens.colors.some((c) => c.name === 'brand violeta')).toBe(false);
+    expect(out.tokens.space.find((s) => s.name === 'lg')?.value).toBe(20);
+    expect(out.tokens.fontFamily).toBe("'Roboto', sans-serif");
+    const btn = out.components[0];
+    expect(btn.states.default.bg).toBe('{color.primary}');
+    expect(btn.states.default.radius).toBe('{radius.lg}');
+    expect(btn.states.focus.outline).toBe('{color.focus}');
+    expect(out.dropped).toBe(2);
+  });
+});
+
+describe('embudo de tarea', () => {
+  it('cuenta cuántas personas llegan a cada pantalla del camino', async () => {
+    const { taskFunnel } = await import('./analysis');
+    const p = transferProject('u1');
+    const { study, sessions, events } = exampleStudy(p, 'u1');
+    const steps = taskFunnel(study, sessions, events, 't1');
+    expect(steps.map((s) => s.screenId)).toEqual(['s-inicio', 's-nueva', 's-confirmacion', 's-creada']);
+    expect(steps.map((s) => s.reached)).toEqual([15, 15, 12, 12]);
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

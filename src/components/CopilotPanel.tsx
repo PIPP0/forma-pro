@@ -3,7 +3,7 @@ import type { Project, Screen } from '../lib/model';
 import { applyOps } from '../lib/store';
 import { edit } from '../lib/ops';
 import { checkProject } from '../lib/flowCheck';
-import { critiqueScreen, generateScreen, getAiKey, proposalToScreen, type Critique, type ScreenProposal, type Turn } from '../lib/ai';
+import { critiqueScreen, fileToImage, generateScreen, getAiKey, proposalToScreen, type Critique, type ImageInput, type ScreenProposal, type Turn } from '../lib/ai';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
 import { ScreenCanvas } from './ScreenCanvas';
@@ -31,6 +31,7 @@ export function CopilotPanel({
   const [turns, setTurns] = useState<Turn[]>(() => conversations.get(project.id) ?? []);
   const [proposal, setProposal] = useState<ScreenProposal | null>(null);
   const [critique, setCritique] = useState<Critique | null>(null);
+  const [image, setImage] = useState<ImageInput | null>(null);
   const preview = useMemo(() => (proposal ? proposalToScreen(project, proposal) : null), [proposal, project]);
 
   if (!getAiKey())
@@ -52,12 +53,15 @@ export function CopilotPanel({
     setBusy(true);
     setError('');
     try {
-      const result = await generateScreen(project, turns, prompt.trim());
-      const next: Turn[] = [...turns, { role: 'user' as const, content: prompt.trim() }, { role: 'assistant' as const, content: JSON.stringify(result) }].slice(-12);
+      const result = await generateScreen(project, turns, prompt.trim(), image ?? undefined);
+      // El historial guarda solo texto para no reenviar imágenes en cada ajuste.
+      const said = image ? `${prompt.trim()} (con la imagen «${image.name}»)` : prompt.trim();
+      const next: Turn[] = [...turns, { role: 'user' as const, content: said }, { role: 'assistant' as const, content: JSON.stringify(result) }].slice(-12);
       conversations.set(project.id, next);
       setTurns(next);
       setProposal(result);
       setPrompt('');
+      setImage(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -97,7 +101,7 @@ export function CopilotPanel({
               {turns
                 .filter((t) => t.role === 'user')
                 .map((t, i) => (
-                  <li key={i}>{t.content}</li>
+                  <li key={i}>{typeof t.content === 'string' ? t.content : 'Mensaje con imagen'}</li>
                 ))}
             </ol>
           )}
@@ -112,6 +116,36 @@ export function CopilotPanel({
               if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate();
             }}
           />
+          <div className="attach-row">
+            <label className="btn btn-default btn-sm">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                className="sr-only"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = '';
+                  if (!f) return;
+                  try {
+                    setImage(await fileToImage(f));
+                  } catch (err) {
+                    setError((err as Error).message);
+                  }
+                }}
+              />
+              Adjuntar captura o boceto
+            </label>
+            {image && (
+              <span className="attach-chip">
+                <img src={`data:${image.mediaType};base64,${image.data}`} alt="" />
+                {image.name}
+                <button type="button" className="link-btn" onClick={() => setImage(null)}>
+                  Quitar
+                </button>
+              </span>
+            )}
+          </div>
+          <p className="muted small">La propuesta usa solo los componentes de tu sistema de diseño.</p>
           <div className="row">
             <Button tone="primary" size="sm" disabled={busy || !prompt.trim()} onClick={generate}>
               {busy ? 'Pensando…' : turns.length ? 'Pedir ajuste' : 'Proponer pantalla'}

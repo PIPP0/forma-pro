@@ -250,6 +250,82 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
   return { total, tasks, themes, quotes };
 }
 
+export interface Overview {
+  sessions: number;
+  completion: number;
+  medianTaskMs: number | null;
+  hesitations: number;
+  misclicksPerSession: number;
+  avgDifficulty: number | null;
+  withAudio: number;
+}
+
+/** Indicadores generales del estudio para el panel de resultados. */
+export function overview(study: Study, allSessions: Session[], allEvents: StudyEvent[], analysis: Analysis): Overview {
+  const sessions = consentedSessions(study, allSessions);
+  const ids = new Set(sessions.map((s) => s.id));
+  const events = allEvents.filter((e) => ids.has(e.sessionId));
+  const started = analysis.tasks.reduce((n, t) => n + t.started, 0);
+  const success = analysis.tasks.reduce((n, t) => n + t.success, 0);
+  const durations = sessions
+    .flatMap((s) => s.feedback.filter((f) => f.outcome === 'success').map((f) => f.durationMs))
+    .sort((a, b) => a - b);
+  const ratings = sessions.flatMap((s) => s.feedback.map((f) => f.difficulty)).filter((d): d is number => typeof d === 'number');
+  return {
+    sessions: sessions.length,
+    completion: started ? success / started : 0,
+    medianTaskMs: durations.length ? durations[Math.floor((durations.length - 1) / 2)] : null,
+    hesitations: events.filter((e) => e.kind === 'hesitation').length,
+    misclicksPerSession: sessions.length ? events.filter((e) => e.kind === 'misclick').length / sessions.length : 0,
+    avgDifficulty: ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : null,
+    withAudio: sessions.filter((s) => s.hasAudio).length,
+  };
+}
+
+export interface FunnelStep {
+  screenId: string;
+  name: string;
+  reached: number;
+  started: number;
+}
+
+/** Embudo del camino más corto de una tarea: cuántas personas llegaron a cada pantalla. */
+export function taskFunnel(study: Study, allSessions: Session[], allEvents: StudyEvent[], taskId: string): FunnelStep[] {
+  const task = study.tasks.find((t) => t.id === taskId);
+  if (!task) return [];
+  const p = study.snapshot;
+  const baseOf = (id: string) => {
+    const s = p.screens.find((x) => x.id === id);
+    return s ? baseId(s) : id;
+  };
+  const g = navGraph(p);
+  const start = baseOf(task.startScreenId);
+  const goal = baseOf(task.successScreenId);
+  const parent = new Map<string, string | null>([[start, null]]);
+  const queue = [start];
+  while (queue.length && !parent.has(goal)) {
+    const cur = queue.shift()!;
+    for (const n of g.get(cur) ?? []) {
+      if (!parent.has(n)) {
+        parent.set(n, cur);
+        queue.push(n);
+      }
+    }
+  }
+  if (!parent.has(goal)) return [];
+  const path: string[] = [];
+  for (let cur: string | null | undefined = goal; cur; cur = parent.get(cur)) path.unshift(cur);
+
+  const ids = new Set(consentedSessions(study, allSessions).map((s) => s.id));
+  const events = allEvents.filter((e) => ids.has(e.sessionId) && e.taskId === taskId);
+  const startedSet = new Set(events.filter((e) => e.kind === 'task_start').map((e) => e.sessionId));
+  return path.map((screenId, i) => {
+    const reached =
+      i === 0 ? startedSet.size : new Set(events.filter((e) => e.kind === 'navigate' && baseOf(e.screen) === screenId && startedSet.has(e.sessionId)).map((e) => e.sessionId)).size;
+    return { screenId, name: screenName(p, screenId), reached, started: startedSet.size };
+  });
+}
+
 /** Datos compactos y trazables para el resumen por IA. */
 export function buildAiDataset(study: Study, sessions: Session[], events: StudyEvent[]) {
   const p = study.snapshot;

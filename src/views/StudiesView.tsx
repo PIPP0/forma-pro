@@ -4,7 +4,7 @@ import { baseId } from '../lib/model';
 import { createStudy, deleteStudy, importResults, setStudyStatus, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
-import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, screenName } from '../lib/analysis';
+import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
 import { download, resultsFile, studyLink, toCsv } from '../lib/share';
 import { getAudio } from '../lib/blobs';
@@ -202,13 +202,15 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
           Agregar tarea
         </Button>
       </fieldset>
-      <label className="check">
-        <input type="checkbox" checked={askAudio} onChange={(e) => setAskAudio(e.target.checked)} />
+      <button type="button" role="switch" aria-checked={askAudio} className="switch-row" onClick={() => setAskAudio((v) => !v)}>
         <span>
-          Pedir grabación de audio
-          <span className="muted"> Se solicita con un consentimiento aparte. Quien participa puede aceptar la prueba y rechazar la grabación.</span>
+          <strong>Grabar audio en el prototipo</strong>
+          <span className="muted small">Quien participa verá un interruptor que le pregunta si quiere grabar. Puede hacer la prueba sin grabar y apagarlo en cualquier momento.</span>
         </span>
-      </label>
+        <span className={`switch ${askAudio ? 'on' : ''}`} aria-hidden="true">
+          <i />
+        </span>
+      </button>
       <p className="muted small">El estudio usa una copia congelada de la versión v{project.version}. Los cambios posteriores al diseño no alteran lo que se prueba.</p>
     </Modal>
   );
@@ -267,11 +269,19 @@ function StudyDetail({ project, role, study }: { project: Project; role: Role; s
           <Button disabled={!link || study.status !== 'open'} onClick={() => window.open(link, '_blank', 'noopener')}>
             Abrir como participante
           </Button>
+          {typeof navigator !== 'undefined' && 'share' in navigator && (
+            <Button
+              disabled={!link || study.status !== 'open'}
+              onClick={() => navigator.share({ title: study.name, text: 'Te invito a probar un prototipo. Toma unos 5 minutos y no necesitas cuenta.', url: link }).catch(() => undefined)}
+            >
+              Compartir
+            </Button>
+          )}
         </div>
       </div>
 
       <p className="notice">
-        El enlace lleva dentro la copia congelada del prototipo. En este navegador, las sesiones aparecen aquí al terminar. Si alguien participa desde otro dispositivo, al final descarga un archivo de resultados que puedes importar con «Importar resultados».
+        El enlace lleva dentro la copia congelada del prototipo y se puede instalar como app en el celular. En este navegador, las sesiones aparecen aquí al terminar. Si alguien participa desde otro dispositivo, al final te envía un archivo de resultados que importas con «Importar resultados».
       </p>
 
       <div className="row toolbar-row">
@@ -305,6 +315,8 @@ function StudyDetail({ project, role, study }: { project: Project; role: Role; s
       {analysis.total === 0 ? (
         <Empty title="Todavía no hay sesiones">Comparte el enlace. Los hallazgos aparecen cuando termina la primera sesión.</Empty>
       ) : (
+        <>
+        <Kpis o={overview(study, sessions, events, analysis)} />
         <div className="study-grid">
           <div>
             <section className="section">
@@ -339,6 +351,8 @@ function StudyDetail({ project, role, study }: { project: Project; role: Role; s
                 </table>
               </div>
             </section>
+
+            <Funnel study={study} sessions={sessions} events={events} />
 
             <section className="section">
               <h2 className="section-title">Hallazgos</h2>
@@ -425,6 +439,7 @@ function StudyDetail({ project, role, study }: { project: Project; role: Role; s
             <HeatmapPanel study={study} events={events} />
           </aside>
         </div>
+        </>
       )}
 
       {openSession && (
@@ -453,6 +468,66 @@ function StudyDetail({ project, role, study }: { project: Project; role: Role; s
         <p>Se eliminarán «{study.name}», sus {sessions.length} sesiones y sus grabaciones. Exporta los resultados antes si quieres conservarlos.</p>
       </Modal>
     </div>
+  );
+}
+
+function Kpis({ o }: { o: Overview }) {
+  const items = [
+    { label: 'Sesiones', value: String(o.sessions), note: o.withAudio ? `${o.withAudio} con audio` : undefined },
+    { label: 'Tareas completadas', value: `${Math.round(o.completion * 100)}%` },
+    { label: 'Mediana por tarea', value: o.medianTaskMs != null ? fmtDuration(o.medianTaskMs) : 'n/a' },
+    { label: 'Dudas detectadas', value: String(o.hesitations) },
+    { label: 'Toques sin acción', value: fmt1(o.misclicksPerSession), note: 'por sesión' },
+    { label: 'Dificultad percibida', value: o.avgDifficulty != null ? fmt1(o.avgDifficulty) : 'n/a', note: 'de 5' },
+  ];
+  return (
+    <dl className="kpis">
+      {items.map((i) => (
+        <div key={i.label}>
+          <dt>{i.label}</dt>
+          <dd>
+            {i.value}
+            {i.note && <span> {i.note}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function Funnel({ study, sessions, events }: { study: Study; sessions: Session[]; events: StudyEvent[] }) {
+  const funnels = study.tasks.map((t) => ({ task: t, steps: taskFunnel(study, sessions, events, t.id) })).filter((f) => f.steps.length > 1);
+  if (!funnels.length) return null;
+  return (
+    <section className="section">
+      <h2 className="section-title">Recorrido por tarea</h2>
+      <p className="muted">Cuántas personas llegaron a cada pantalla del camino más corto hacia el objetivo, y dónde se quedaron.</p>
+      {funnels.map(({ task, steps }) => (
+        <div key={task.id} className="funnel">
+          <h3 className="sub-title">{task.prompt}</h3>
+          <ol>
+            {steps.map((s, i) => {
+              const pct = s.started ? s.reached / s.started : 0;
+              const drop = i > 0 ? steps[i - 1].reached - s.reached : 0;
+              return (
+                <li key={s.screenId}>
+                  <span className="funnel-name">
+                    {String(i + 1).padStart(2, '0')} {s.name}
+                  </span>
+                  <span className="funnel-bar" role="img" aria-label={`${Math.round(pct * 100)}% llegó a ${s.name}`}>
+                    <i style={{ width: `${pct * 100}%` }} />
+                  </span>
+                  <span className="funnel-num">
+                    {s.reached} de {s.started}
+                    {drop > 0 && <em>{drop} se quedaron antes</em>}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      ))}
+    </section>
   );
 }
 

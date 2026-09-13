@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
-import type { Block, BlockType, Issue, Project, Screen } from './aiTypes';
-import { BLOCK_TYPES } from './model';
+import type { Block, BlockType, Component, Issue, Project, Screen, StateName, StyleProps, Tokens } from './aiTypes';
+import { BLOCK_TYPES, STATES, TYPE_ROLES } from './model';
+import { builtInStyle } from './tokens';
 import { uid } from './ids';
 
 // La IA propone, la persona decide: nada de lo que devuelve este módulo se aplica solo.
@@ -26,9 +27,45 @@ export const setAiKey = (k: string) => {
 
 export class AiError extends Error {}
 
+export type TurnContent = string | Anthropic.Beta.BetaContentBlockParam[];
+
 export interface Turn {
   role: 'user' | 'assistant';
-  content: string;
+  content: TurnContent;
+}
+
+export interface ImageInput {
+  data: string;
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif';
+  name: string;
+}
+
+export const imageBlock = (img: ImageInput): Anthropic.Beta.BetaContentBlockParam => ({
+  type: 'image',
+  source: { type: 'base64', media_type: img.mediaType, data: img.data },
+});
+
+/** Lee una imagen, la reduce a un máximo de 1568 px por lado y la deja lista para la API. */
+export async function fileToImage(file: File): Promise<ImageInput> {
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) throw new AiError(`«${file.name}» no es una imagen PNG, JPG, WebP o GIF.`);
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new AiError(`No pudimos leer «${file.name}».`));
+      el.src = url;
+    });
+    const scale = Math.min(1, 1568 / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.naturalWidth * scale);
+    canvas.height = Math.round(img.naturalHeight * scale);
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+    return { data: dataUrl.split(',')[1], mediaType: 'image/jpeg', name: file.name };
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>): Promise<T> {
@@ -37,9 +74,9 @@ async function askJson<T>(system: string, turns: Turn[], schema: Record<string, 
   // El SDK se carga solo cuando alguien usa la IA, para no pesar en la carga inicial.
   const { default: Sdk } = await import('@anthropic-ai/sdk');
   try {
-    const res = await new Sdk({ apiKey, dangerouslyAllowBrowser: true }).beta.messages.create({
+    const stream = new Sdk({ apiKey, dangerouslyAllowBrowser: true }).beta.messages.stream({
       model: AI_MODEL,
-      max_tokens: 16000,
+      max_tokens: 32000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
       thinking: { type: 'adaptive' },
@@ -47,6 +84,7 @@ async function askJson<T>(system: string, turns: Turn[], schema: Record<string, 
       system,
       messages: turns.map((t) => ({ role: t.role, content: t.content })),
     });
+    const res = await stream.finalMessage();
     if (res.stop_reason === 'refusal') throw new AiError('El modelo no pudo responder esta solicitud. Reformúlala e intenta de nuevo.');
     if (res.stop_reason === 'max_tokens') throw new AiError('La respuesta quedó incompleta. Intenta con una solicitud más acotada.');
     const text = res.content
@@ -124,6 +162,153 @@ export async function summarizeResearch(
   return { themes, discardedThemes };
 }
 
+// ---------- Sistema de diseño desde imágenes o código ----------
+
+const COLOR_ROLES = ['background', 'surface', 'subtle', 'onSurface', 'muted', 'border', 'primary', 'primaryHover', 'primaryPressed', 'primarySubtle', 'onPrimary', 'focus', 'danger', 'dangerSubtle', 'success', 'successSubtle'];
+const SPACE_NAMES = ['xs', 'sm', 'md', 'lg', 'xl', 'xxl'] as const;
+const RADIUS_NAMES = ['sm', 'md', 'lg'] as const;
+const STYLE_FIELDS = ['bg', 'fg', 'border', 'outline', 'radius', 'padY', 'padX', 'type'] as const;
+
+export interface ExtractedSystem {
+  tokens: Tokens;
+  components: Component[];
+  notes: string;
+  dropped: number;
+}
+
+type RawStyle = Record<(typeof STYLE_FIELDS)[number], string>;
+interface RawSystem {
+  fontFamily: string;
+  colors: { name: string; light: string; dark: string; description: string }[];
+  space: Record<(typeof SPACE_NAMES)[number], number>;
+  radius: Record<(typeof RADIUS_NAMES)[number], number>;
+  components: ({ name: string; type: BlockType; variant: string } & Record<StateName, RawStyle>)[];
+  notes: string;
+}
+
+const normHex = (v: string) => {
+  const h = v.trim().replace('#', '');
+  if (/^[0-9a-f]{3}$/i.test(h)) return '#' + h.split('').map((c) => c + c).join('').toUpperCase();
+  if (/^[0-9a-f]{6}$/i.test(h)) return '#' + h.toUpperCase();
+  return null;
+};
+
+export async function extractSystem(input: { images: ImageInput[]; code: string }, current: Tokens): Promise<ExtractedSystem> {
+  if (!input.images.length && !input.code.trim()) throw new AiError('Sube al menos una imagen o pega código o estilos.');
+  const style = {
+    type: 'object',
+    properties: Object.fromEntries(STYLE_FIELDS.map((f) => [f, { type: 'string' }])),
+    required: [...STYLE_FIELDS],
+    additionalProperties: false,
+  };
+  const schema = {
+    type: 'object',
+    properties: {
+      fontFamily: { type: 'string' },
+      colors: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { name: { type: 'string' }, light: { type: 'string' }, dark: { type: 'string' }, description: { type: 'string' } },
+          required: ['name', 'light', 'dark', 'description'],
+          additionalProperties: false,
+        },
+      },
+      space: { type: 'object', properties: Object.fromEntries(SPACE_NAMES.map((n) => [n, { type: 'number' }])), required: [...SPACE_NAMES], additionalProperties: false },
+      radius: { type: 'object', properties: Object.fromEntries(RADIUS_NAMES.map((n) => [n, { type: 'number' }])), required: [...RADIUS_NAMES], additionalProperties: false },
+      components: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            type: { type: 'string', enum: BLOCK_TYPES.map((b) => b.type) },
+            variant: { type: 'string' },
+            ...Object.fromEntries(STATES.map((s) => [s, style])),
+          },
+          required: ['name', 'type', 'variant', ...STATES],
+          additionalProperties: false,
+        },
+      },
+      notes: { type: 'string' },
+    },
+    required: ['fontFamily', 'colors', 'space', 'radius', 'components', 'notes'],
+    additionalProperties: false,
+  };
+  const system = [
+    'Eres lead de sistemas de diseño. Extraes un sistema de diseño completo y reutilizable a partir de capturas de interfaz, código o estilos.',
+    `Colores: usa nombres semánticos en camelCase. Incluye siempre estos roles: ${COLOR_ROLES.join(', ')}; puedes sumar colores de marca extra. Valores en hexadecimal #RRGGBB. Si solo ves modo claro, deriva un modo oscuro coherente.`,
+    'Asegura contraste WCAG AA: texto normal 4,5:1 y títulos grandes 3:1, en ambos modos, entre fg y bg de cada estado.',
+    'Espaciado y radios en píxeles. fontFamily como pila CSS con respaldo del sistema.',
+    `Componentes: uno por cada patrón que realmente aparezca en la fuente, mapeado al tipo más cercano de la lista. Para cada estado (${STATES.join(', ')}) define propiedades: bg, fg, border y outline usan el NOMBRE de un color de tu lista (sin #); radius usa sm, md, lg o pill; padY y padX usan ${SPACE_NAMES.join(', ')}; type usa ${TYPE_ROLES.join(', ')}. Deja "" cuando el estado hereda del reposo o la propiedad no aplica. El estado focus debe tener un anillo visible (outline con el color focus).`,
+    'variant: "primary" o "secondary" para botones, "title" o "display" para títulos, o "". Nombres de componentes en español y en singular.',
+    'En notes explica en dos o tres frases qué detectaste y qué supusiste.',
+  ].join('\n');
+
+  const content: Anthropic.Beta.BetaContentBlockParam[] = [
+    ...input.images.map(imageBlock),
+    { type: 'text', text: input.code.trim() ? `Código o estilos de referencia:\n\n${input.code.trim()}` : 'Extrae el sistema de diseño de las capturas adjuntas.' },
+  ];
+  const raw = await askJson<RawSystem>(system, [{ role: 'user', content }], schema);
+  return convertSystem(raw, current);
+}
+
+export function convertSystem(raw: RawSystem, current: Tokens): ExtractedSystem {
+  let dropped = 0;
+  const colors = [...current.colors.map((c) => ({ ...c }))];
+  for (const c of raw.colors ?? []) {
+    const light = normHex(c.light);
+    const dark = normHex(c.dark) ?? light;
+    if (!/^[A-Za-z][A-Za-z0-9]*$/.test(c.name) || !light || !dark) {
+      dropped++;
+      continue;
+    }
+    const existing = colors.find((x) => x.name === c.name);
+    if (existing) Object.assign(existing, { light, dark, description: c.description || existing.description });
+    else colors.push({ name: c.name, light, dark, description: c.description || undefined });
+  }
+  const colorNames = new Set(colors.map((c) => c.name));
+  const space = current.space.map((s) => ({ ...s, value: raw.space?.[s.name as (typeof SPACE_NAMES)[number]] > 0 ? Math.round(raw.space[s.name as (typeof SPACE_NAMES)[number]]) : s.value }));
+  const radius = current.radius.map((r) => ({ ...r, value: raw.radius?.[r.name as (typeof RADIUS_NAMES)[number]] > 0 ? Math.round(raw.radius[r.name as (typeof RADIUS_NAMES)[number]]) : r.value }));
+  const tokens: Tokens = { ...current, fontFamily: raw.fontFamily?.trim() || current.fontFamily, colors, space, radius };
+
+  const toProps = (s: RawStyle | undefined): StyleProps => {
+    const out: StyleProps = {};
+    for (const f of STYLE_FIELDS) {
+      const v = (s?.[f] ?? '').trim();
+      if (!v) continue;
+      if (f === 'bg' || f === 'fg' || f === 'border' || f === 'outline') {
+        if (colorNames.has(v)) out[f] = `{color.${v}}`;
+        else dropped++;
+      } else if (f === 'radius') {
+        if (['sm', 'md', 'lg', 'pill'].includes(v)) out.radius = `{radius.${v}}`;
+        else dropped++;
+      } else if (f === 'padY' || f === 'padX') {
+        if ((SPACE_NAMES as readonly string[]).includes(v)) out[f] = `{space.${v}}`;
+        else dropped++;
+      } else if ((TYPE_ROLES as string[]).includes(v)) out.type = v;
+      else dropped++;
+    }
+    return out;
+  };
+
+  const validTypes = new Set(BLOCK_TYPES.map((b) => b.type));
+  const components: Component[] = (raw.components ?? [])
+    .filter((c) => c.name?.trim() && validTypes.has(c.type))
+    .map((c) => {
+      const base = builtInStyle(c.type, c.variant || undefined);
+      const states = Object.fromEntries(
+        STATES.map((st) => {
+          const props = toProps(c[st]);
+          return [st, st === 'default' ? { ...base.default, ...props } : Object.keys(props).length ? props : base[st]];
+        }),
+      ) as Record<StateName, StyleProps>;
+      return { id: uid('cmp_'), name: c.name.trim(), type: c.type, variant: c.variant || undefined, states };
+    });
+
+  return { tokens, components, notes: raw.notes ?? '', dropped };
+}
+
 // ---------- Copiloto de pantallas ----------
 
 export interface ProposalBlock {
@@ -153,7 +338,7 @@ function projectContext(p: Project) {
   });
 }
 
-export async function generateScreen(project: Project, history: Turn[], prompt: string): Promise<ScreenProposal> {
+export async function generateScreen(project: Project, history: Turn[], prompt: string, image?: ImageInput): Promise<ScreenProposal> {
   const types = BLOCK_TYPES.map((b) => b.type);
   const schema = {
     type: 'object',
@@ -183,13 +368,15 @@ export async function generateScreen(project: Project, history: Turn[], prompt: 
     additionalProperties: false,
   };
   const system = [
-    'Eres copiloto de diseño de producto dentro de Forma Pro. Propones pantallas móviles como una lista vertical de bloques.',
-    'Usa los componentes existentes del sistema (component_id) siempre que el tipo coincida; deja component_id vacío solo si no hay uno adecuado.',
-    'navigate_to debe ser el id de una pantalla existente o vacío. Escribe textos reales y específicos del negocio, en español neutro y en tono conversacional.',
+    'Eres copiloto de diseño de producto dentro de Forma Studio. Propones pantallas móviles como una lista vertical de bloques.',
+    'Regla principal: respeta el sistema de diseño. Usa SIEMPRE un componente existente (component_id) cuando haya uno del mismo tipo; deja component_id vacío solo si el sistema no tiene ese tipo.',
+    'Si la persona adjunta una captura o un boceto, reprodúcelo con los componentes del sistema, no con estilos nuevos.',
+    'La primera pieza suele ser la barra superior (navbar) con la marca. navigate_to debe ser el id de una pantalla existente o vacío. Escribe textos reales y específicos del negocio, en español neutro y en tono conversacional.',
     'Mantén el historial de la conversación: si la persona pide un ajuste, modifica tu propuesta anterior en vez de empezar de cero.',
     `Contexto del proyecto: ${projectContext(project)}`,
   ].join('\n');
-  return askJson<ScreenProposal>(system, [...history, { role: 'user', content: prompt }], schema);
+  const content: TurnContent = image ? [imageBlock(image), { type: 'text', text: prompt }] : prompt;
+  return askJson<ScreenProposal>(system, [...history, { role: 'user', content }], schema);
 }
 
 export function proposalToScreen(project: Project, proposal: ScreenProposal): Screen {
@@ -202,6 +389,11 @@ export function proposalToScreen(project: Project, proposal: ScreenProposal): Sc
     if (pb.required) b.required = true;
     if (pb.options?.length) b.options = pb.options;
     if (pb.component_id && compIds.has(pb.component_id)) b.componentId = pb.component_id;
+    else {
+      // Si la IA no eligió componente, se vincula al primero del sistema con ese tipo.
+      const match = project.components.find((c) => c.type === pb.type && (!pb.variant || !c.variant || c.variant === pb.variant));
+      if (match) b.componentId = match.id;
+    }
     if (pb.navigate_to && screenIds.has(pb.navigate_to)) {
       b.action = 'navigate';
       b.target = pb.navigate_to;
@@ -240,7 +432,7 @@ export async function critiqueScreen(project: Project, screen: Screen, issues: I
   };
   const system = [
     'Eres una product designer senior haciendo una crítica de diseño. Señalas problemas; no reescribes la pantalla.',
-    'Evalúa claridad del contenido, jerarquía, carga cognitiva, prevención de errores y accesibilidad para una app bancaria.',
+    'Evalúa claridad del contenido, jerarquía, carga cognitiva, prevención de errores, accesibilidad y consistencia con el sistema de diseño.',
     'Cada observación debe referirse a un block_id existente (o vacío si es de la pantalla completa) y explicar el problema y su consecuencia para la persona usuaria. Español neutro, frases breves.',
     `Contexto del proyecto: ${projectContext(project)}`,
   ].join('\n');
