@@ -11,6 +11,7 @@ import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
 import { FONT_INTER } from '../lib/seed';
+import { CATEGORIES, entryForComponent, sampleContent } from '../lib/catalog';
 import { ScreenCanvas } from '../components/ScreenCanvas';
 import { Runner } from '../components/Runner';
 import { CopilotPanel } from '../components/CopilotPanel';
@@ -38,41 +39,6 @@ import {
   IconUndo,
 } from '../components/icons';
 
-const DEFAULTS: Record<BlockType, Partial<Block>> = {
-  navbar: { label: 'marca', detail: 'DEMO' },
-  heading: { label: 'Título de la pantalla', variant: 'title', detail: 'Texto de apoyo' },
-  text: { label: 'Texto de apoyo' },
-  balance: { label: 'Saldo disponible', value: '$ 0', detail: 'Cuenta corriente', options: ['•• 0000'] },
-  help: { label: 'Mensaje de ayuda', detail: 'Explica aquí el siguiente paso.' },
-  card: { label: 'Tarjeta', detail: 'Descripción breve' },
-  input: { label: 'Etiqueta del campo', detail: 'Texto de ejemplo' },
-  textarea: { label: 'Comentarios', detail: 'Escribe aquí' },
-  amount: { label: 'Monto', detail: '$ 0' },
-  select: { label: 'Selecciona una opción', options: ['Opción 1', 'Opción 2'] },
-  radio: { label: 'Elige una opción', options: ['Opción 1', 'Opción 2'] },
-  checkbox: { label: 'Acepto las condiciones' },
-  switch: { label: 'Activar recordatorio' },
-  tabs: { label: 'Pestañas', options: ['Primera', 'Segunda'], value: 'Primera' },
-  button: { label: 'Continuar' },
-  link: { label: 'Ver más' },
-  listItem: { label: 'Elemento de la lista', detail: 'Detalle' },
-  tag: { label: 'Nueva' },
-  avatar: { label: 'Francisca Soto', detail: 'Titular' },
-  progress: { label: 'Progreso', detail: '0%', value: '0' },
-  statusIcon: { label: 'Listo' },
-  alert: { label: 'Aviso', detail: 'Detalle del aviso' },
-  image: { label: 'Imagen' },
-  divider: { label: '' },
-  tabBar: { label: 'Navegación principal', options: ['Inicio|wallet', 'Transferir|transfer', 'Más|plus', 'Créditos|credits', 'Inversiones|investments'], value: 'Inicio' },
-  menuList: { label: 'Opciones', options: ['Primera opción|Descripción breve|info', 'Segunda opción|Descripción breve|info'] },
-  accountCard: { label: 'Cuenta Corriente', value: '$ 0', detail: 'Saldo disponible', linkLabel: 'Más detalles' },
-  creditCard: { label: 'Tarjeta Visa', detail: 'Titular **** 0000', value: 'VISA', options: ['Utilizado|$ 0', 'Disponible|$ 0'], linkLabel: 'Ver datos' },
-  carousel: { label: 'Destacados', variant: 'promo', options: ['gift|Beneficio **destacado**', 'card|Otra **promoción**'] },
-  financeCard: { label: 'Resumen', detail: 'Este mes', value: 'donut', options: ['Gasto total|$ 0|up', 'Transferencias|$ 0'], linkLabel: 'Ver detalle' },
-  rating: { label: '¿Cómo evaluarías esta experiencia?', required: true },
-  iconGrid: { label: 'Accesos', options: ['Inicio|wallet', 'Transferir|transfer', 'Créditos|credits', 'Inversiones|investments'] },
-};
-
 const OPTION_HINT: Partial<Record<BlockType, string>> = {
   tabBar: 'Una por línea: Etiqueta|ícono. Ícono «plus» para el botón central.',
   menuList: 'Una por línea: Título|Subtítulo|ícono.',
@@ -83,8 +49,9 @@ const OPTION_HINT: Partial<Record<BlockType, string>> = {
   iconGrid: 'Una por línea: Etiqueta|ícono.',
 };
 
-function newBlock(type: BlockType, componentId?: string, variant?: string): Block {
-  return { id: uid('b_'), type, ...clone(DEFAULTS[type]), ...(variant ? { variant } : {}), ...(componentId ? { componentId } : {}) } as Block;
+/** Bloque nuevo con el contenido de ejemplo de su patrón y variante (el mismo de las vistas previas del sistema). */
+function newBlock(type: BlockType, componentId?: string, variant?: string, brand?: string): Block {
+  return { id: uid('b_'), type, ...sampleContent(type, variant, brand), ...(variant ? { variant } : {}), ...(componentId ? { componentId } : {}) } as Block;
 }
 
 const VARIANTS: Partial<Record<BlockType, { v: string; l: string }[]>> = {
@@ -179,6 +146,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [zoom, setZoom] = useState(0.75);
   const [guardOpen, setGuardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [drag, setDrag] = useState<string>();
+  const [dropOn, setDropOn] = useState<string>();
   const scroller = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -209,7 +178,16 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   };
 
   const addScreen = () => {
-    const s: Screen = { id: uid('s_'), name: 'Nueva pantalla', breakpoint: 'mobile', blocks: [newBlock('navbar'), newBlock('heading', project.components.find((c) => c.type === 'heading')?.id, 'title')] };
+    const nav = project.components.find((c) => c.type === 'navbar' && c.variant === 'title') ?? project.components.find((c) => c.type === 'navbar');
+    const navBlock = newBlock('navbar', nav?.id, nav?.variant, project.brand);
+    if (nav?.variant === 'title') Object.assign(navBlock, { label: 'Nueva pantalla', value: undefined, detail: undefined });
+    const heading = project.components.find((c) => c.type === 'heading' && c.variant !== 'display');
+    const s: Screen = {
+      id: uid('s_'),
+      name: 'Nueva pantalla',
+      breakpoint: 'mobile',
+      blocks: [navBlock, { ...newBlock('heading', heading?.id, 'title', project.brand), label: 'Título de la pantalla', detail: 'Texto de apoyo' }],
+    };
     const ops = [edit.addScreen(project, s)];
     if (!project.screens.some((x) => x.id === project.startScreenId)) ops.push(edit.project('startScreenId', s.id));
     if (apply(ops, 'Agregar pantalla')) {
@@ -270,8 +248,27 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     if (apply(ops, `Eliminar «${screen.name}»${targets.length > 1 ? ' y sus variantes' : ''}`)) select(screen.variantOf ?? project.startScreenId);
   };
 
+  const duplicateScreen = () => {
+    const base = project.screens.find((s) => s.id === baseId(screen))!;
+    const copy: Screen = { ...clone(base), id: uid('s_'), name: `${base.name} (copia)`, blocks: base.blocks.map((b) => ({ ...clone(b), id: uid('b_') })) };
+    const index = project.screens.findIndex((s) => s.id === base.id) + 1;
+    if (apply([edit.addScreen(project, copy, index)], `Duplicar «${base.name}»`)) {
+      setBp(copy.breakpoint);
+      select(copy.id);
+    }
+  };
+
+  const moveInTree = (fromId?: string, toId?: string) => {
+    const from = screen.blocks.findIndex((b) => b.id === fromId);
+    const to = screen.blocks.findIndex((b) => b.id === toId);
+    if (from < 0 || to < 0 || from === to) return;
+    apply([edit.moveBlock(project, screen.id, from, to)], 'Mover bloque');
+  };
+
   const insertBlock = (b: Block) => {
-    const i = block ? screen.blocks.findIndex((x) => x.id === block.id) + 1 : screen.blocks.length;
+    let i = block ? screen.blocks.findIndex((x) => x.id === block.id) + 1 : screen.blocks.length;
+    // La barra inferior queda siempre al final: lo nuevo entra antes de ella.
+    if (b.type !== 'tabBar' && screen.blocks[i - 1]?.type === 'tabBar') i -= 1;
     if (apply([edit.addBlock(project, screen.id, b, i)], `Agregar ${blockMeta(b.type).label.toLowerCase()} en «${screen.name}»`)) {
       setBlockId(b.id);
       setPanel('props');
@@ -335,8 +332,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
               {bases.map((s, i) => {
                 const open = baseId(screen) === s.id;
                 const shown = open ? screen : s;
-                const blocks = shown.blocks.filter((b) => b.type !== 'navbar' && b.type !== 'divider');
-                if (!match(s.name) && !blocks.some((b) => match(b.label))) return null;
+                const blocks = shown.blocks;
+                const blockName = (b: Block) => plainText(b.label) || blockMeta(b.type).label;
+                if (!match(s.name) && !blocks.some((b) => match(blockName(b)))) return null;
                 return (
                   <div key={s.id}>
                     <button
@@ -364,20 +362,43 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                     {open && (
                       <div className="tree-children">
                         {blocks
-                          .filter((b) => match(s.name) || match(b.label))
+                          .filter((b) => match(s.name) || match(blockName(b)))
                           .map((b) => (
                             <button
                               key={b.id}
                               type="button"
-                              className="tree-row tree-block"
+                              className={`tree-row tree-block ${dropOn === b.id && drag && drag !== b.id ? 'drop-target' : ''} ${drag === b.id ? 'dragging' : ''}`}
                               aria-current={blockId === b.id}
+                              draggable={editable}
+                              title={editable ? 'Arrastra para reordenar' : undefined}
+                              onDragStart={(e) => {
+                                setDrag(b.id);
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('text/plain', b.id);
+                              }}
+                              onDragOver={(e) => {
+                                if (!drag) return;
+                                e.preventDefault();
+                                setDropOn(b.id);
+                              }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                moveInTree(drag, b.id);
+                                setDrag(undefined);
+                                setDropOn(undefined);
+                              }}
+                              onDragEnd={() => {
+                                setDrag(undefined);
+                                setDropOn(undefined);
+                              }}
                               onClick={() => {
                                 setBlockId(b.id);
                                 setPanel('props');
                               }}
                             >
                               <IconDiamond size={14} />
-                              <span className="tree-name">{plainText(b.label) || blockMeta(b.type).label}</span>
+                              <span className="tree-name">{blockName(b)}</span>
+                              <span className="tree-type">{blockMeta(b.type).label}</span>
                             </button>
                           ))}
                         {project.screens
@@ -398,6 +419,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                               <span className="tree-name">Variante {BREAKPOINTS.find((b) => b.id === v.breakpoint)!.label.toLowerCase()}</span>
                             </button>
                           ))}
+                        {editable && blocks.length > 1 && <span className="tree-hint">Arrastra para reordenar, o Alt + ↑ ↓</span>}
                       </div>
                     )}
                   </div>
@@ -420,25 +442,38 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <span>BIBLIOTECA DEL PROYECTO</span>
                 <span>{project.components.length}</span>
               </div>
-              {project.components
-                .filter((c) => match(c.name))
-                .map((c) => (
-                  <div key={c.id} className="lib-row">
-                    <IconDiamond size={16} />
-                    <span className="lib-name">{c.name}</span>
-                    {editable && (
-                      <button type="button" className="lib-add" aria-label={`Agregar ${c.name} a ${screen.name}`} title={`Agregar a «${screen.name}»`} onClick={() => insertBlock(newBlock(c.type, c.id, c.variant))}>
-                        <IconPlus size={15} />
-                      </button>
-                    )}
+              {CATEGORIES.map((cat) => {
+                const items = project.components.filter((c) => entryForComponent(c).category === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
+                if (!items.length) return null;
+                return (
+                  <div key={cat.id} className="lib-group">
+                    <div className="lib-sub">{cat.label}</div>
+                    {items.map((c) => (
+                      <div key={c.id} className="lib-row" title={entryForComponent(c).summary}>
+                        <IconDiamond size={16} />
+                        <span className="lib-name">{c.name}</span>
+                        {editable && (
+                          <button
+                            type="button"
+                            className="lib-add"
+                            aria-label={`Agregar ${c.name} a ${screen.name}`}
+                            title={`Agregar a «${screen.name}»`}
+                            onClick={() => insertBlock(newBlock(c.type, c.id, c.variant, project.brand))}
+                          >
+                            <IconPlus size={15} />
+                          </button>
+                        )}
+                      </div>
+                    ))}
                   </div>
-                ))}
+                );
+              })}
               {editable && (
                 <details className="loose">
                   <summary>Bloques sueltos, sin componente</summary>
                   <div className="palette">
                     {BLOCK_TYPES.filter((t) => match(t.label)).map((t) => (
-                      <button key={t.type} type="button" className="chip chip-quiet" onClick={() => insertBlock(newBlock(t.type))}>
+                      <button key={t.type} type="button" className="chip chip-quiet" onClick={() => insertBlock(newBlock(t.type, undefined, undefined, project.brand))}>
                         {t.label}
                       </button>
                     ))}
@@ -665,7 +700,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             (block ? (
               <BlockProps key={block.id} project={project} screen={screen} block={block} editable={editable} onSelect={setBlockId} />
             ) : (
-              <ScreenProps key={screen.id} project={project} screen={screen} editable={editable} onDelete={deleteScreen} onAdd={insertBlock} />
+              <ScreenProps key={screen.id} project={project} screen={screen} editable={editable} onDelete={deleteScreen} onDuplicate={duplicateScreen} onAdd={insertBlock} />
             ))}
           {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
           {panel === 'ai' && (
@@ -735,17 +770,21 @@ function GlobalTokens({ project, editable }: { project: Project; editable: boole
   return (
     <>
       {pi >= 0 && (
-        <Field label="Color principal">
-          <ColorCell
-            value={t.colors[pi].light}
-            disabled={!editable}
-            label="Color principal"
-            onCommit={(v) => {
-              if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim())) applyOps(project.id, [edit.token('colors', pi, 'light', v.trim().toUpperCase())], 'Cambiar color principal');
-              else notify('Usa un color hexadecimal, por ejemplo #0074C8.', 'error');
-            }}
-          />
-        </Field>
+        <div className="grid-2">
+          {(['light', 'dark'] as const).map((m) => (
+            <Field key={m} label={m === 'light' ? 'Principal, claro' : 'Principal, oscuro'}>
+              <ColorCell
+                value={t.colors[pi][m]}
+                disabled={!editable}
+                label={`Color principal en modo ${m === 'light' ? 'claro' : 'oscuro'}`}
+                onCommit={(v) => {
+                  if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim())) applyOps(project.id, [edit.token('colors', pi, m, v.trim().toUpperCase())], `Cambiar color principal (${m === 'light' ? 'claro' : 'oscuro'})`);
+                  else notify('Usa un color hexadecimal, por ejemplo #0074C8.', 'error');
+                }}
+              />
+            </Field>
+          ))}
+        </div>
       )}
       <div className="grid-2">
         {ri >= 0 && (
@@ -772,7 +811,21 @@ function GlobalTokens({ project, editable }: { project: Project; editable: boole
   );
 }
 
-function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: Project; screen: Screen; editable: boolean; onDelete: () => void; onAdd: (b: Block) => void }) {
+function ScreenProps({
+  project,
+  screen,
+  editable,
+  onDelete,
+  onDuplicate,
+  onAdd,
+}: {
+  project: Project;
+  screen: Screen;
+  editable: boolean;
+  onDelete: () => void;
+  onDuplicate: () => void;
+  onAdd: (b: Block) => void;
+}) {
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
   const setProject = (key: 'tagline' | 'summary' | 'flowName' | 'footnote', label: string) => (v: string) => apply([edit.project(key, v.trim() || undefined)], `Cambiar ${label}`);
@@ -835,6 +888,11 @@ function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: 
           </Field>
         )}
         <div className="row">
+          {!screen.variantOf && (
+            <Button size="sm" disabled={!editable} onClick={onDuplicate}>
+              Duplicar pantalla
+            </Button>
+          )}
           {base.id !== project.startScreenId && (
             <Button size="sm" disabled={!editable} onClick={() => apply([edit.project('startScreenId', base.id)], `Usar «${base.name}» como inicio`)}>
               Usar como inicio
@@ -845,7 +903,18 @@ function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: 
           </Button>
         </div>
       </Section>
-      <Section title="Lienzo del flujo">
+      <Section title="Proyecto y lienzo">
+        <Field label="Nombre del proyecto">
+          <CommitInput value={project.name} disabled={!editable} onCommit={(v) => v.trim() && apply([edit.project('name', v.trim())], `Renombrar proyecto a «${v.trim()}»`)} />
+        </Field>
+        <div className="grid-2">
+          <Field label="Marca">
+            <CommitInput value={project.brand} disabled={!editable} onCommit={(v) => v.trim() && apply([edit.project('brand', v.trim())], 'Cambiar la marca')} />
+          </Field>
+          <Field label="Negocio">
+            <CommitInput value={project.business} disabled={!editable} onCommit={(v) => apply([edit.project('business', v.trim())], 'Cambiar el negocio')} />
+          </Field>
+        </div>
         <Field label="Titular">
           <CommitInput value={project.tagline ?? ''} disabled={!editable} onCommit={setProject('tagline', 'titular del flujo')} />
         </Field>
@@ -866,7 +935,7 @@ function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: 
         <Section title={`Agregar a «${screen.name}»`}>
           <div className="palette">
             {project.components.map((c) => (
-              <button key={c.id} type="button" className="chip" onClick={() => onAdd(newBlock(c.type, c.id, c.variant))}>
+              <button key={c.id} type="button" className="chip" onClick={() => onAdd(newBlock(c.type, c.id, c.variant, project.brand))}>
                 {c.name}
               </button>
             ))}
@@ -905,10 +974,24 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
   };
   const optionTypes: BlockType[] = ['select', 'radio', 'tabs', 'tabBar', 'menuList', 'accountCard', 'creditCard', 'carousel', 'financeCard', 'iconGrid'];
   const linkTypes: BlockType[] = ['accountCard', 'creditCard', 'financeCard'];
-  const keys = optionKeys(block.type, comp?.variant ?? block.variant, block.options);
+  const variant = comp?.variant ?? block.variant;
+  const keys = optionKeys(block.type, variant, block.options);
   const keyLabel = (k: string) => ({ menu: 'Menú', qr: 'Código QR', bell: 'Notificaciones', right: 'Ícono derecho' })[k] ?? plainText(k);
   const alignTypes: BlockType[] = ['heading', 'text', 'link'];
-  const hasAction = meta.interactive && !meta.field;
+  // En los contenedores cada opción navega por separado: no hay una acción para todo el bloque.
+  const hasAction = meta.interactive && !meta.field && !['tabBar', 'menuList', 'carousel', 'iconGrid'].includes(block.type) && !(block.type === 'navbar' && variant === 'app');
+  const valueText =
+    block.type === 'listItem'
+      ? variant === 'notification'
+        ? 'Estado: escribe «read» si ya se leyó'
+        : variant === 'icon'
+          ? 'Ícono (ej: coin, card, info)'
+          : undefined
+      : block.type === 'navbar' && variant !== 'title'
+        ? undefined
+        : block.type === 'menuList' && variant
+          ? undefined
+          : valueLabel[block.type];
 
   return (
     <>
@@ -928,13 +1011,6 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
       </div>
 
       <Section title="Contenido">
-        <Field label="Nombre de pantalla">
-          <CommitInput
-            value={screen.name}
-            disabled={!editable}
-            onCommit={(v) => v.trim() && applyOps(project.id, project.screens.filter((s) => baseId(s) === base.id).map((s) => edit.screen(project, s.id, 'name', v.trim())), `Renombrar pantalla a «${v.trim()}»`)}
-          />
-        </Field>
         {block.type !== 'divider' && (
           <Field label="Texto principal">
             <CommitInput multiline value={block.label} disabled={!editable} onCommit={(v) => set('label', v)} />
@@ -945,8 +1021,8 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
             <CommitInput multiline value={block.detail ?? ''} disabled={!editable} onCommit={(v) => set('detail', v || undefined)} />
           </Field>
         )}
-        {valueLabel[block.type] && (
-          <Field label={valueLabel[block.type]!}>
+        {valueText && (
+          <Field label={valueText}>
             <CommitInput value={block.value ?? ''} disabled={!editable} onCommit={(v) => set('value', v || undefined)} />
           </Field>
         )}
@@ -1063,7 +1139,7 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
                   }}
                 >
                   <option value="">No navega</option>
-                  {bases.map((s) => (
+                  {bases.filter((s) => s.id !== base.id).map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}
                     </option>

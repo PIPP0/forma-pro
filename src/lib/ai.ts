@@ -45,6 +45,27 @@ export const imageBlock = (img: ImageInput): Anthropic.Beta.BetaContentBlockPara
   source: { type: 'base64', media_type: img.mediaType, data: img.data },
 });
 
+export interface PdfInput {
+  data: string;
+  name: string;
+}
+
+export const pdfBlock = (pdf: PdfInput): Anthropic.Beta.BetaContentBlockParam => ({
+  type: 'document',
+  source: { type: 'base64', media_type: 'application/pdf', data: pdf.data },
+  title: pdf.name,
+});
+
+/** Lee un PDF para la IA: la API acepta documentos de hasta 32 MB y 100 páginas. */
+export async function fileToPdf(file: File): Promise<PdfInput> {
+  if (file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name)) throw new AiError(`«${file.name}» no es un PDF.`);
+  if (file.size > 20 * 1024 * 1024) throw new AiError(`«${file.name}» pesa más de 20 MB. Exporta solo las páginas del sistema de diseño.`);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return { data: btoa(bin), name: file.name };
+}
+
 /** Lee una imagen, la reduce a un máximo de 1568 px por lado y la deja lista para la API. */
 export async function fileToImage(file: File): Promise<ImageInput> {
   if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) throw new AiError(`«${file.name}» no es una imagen PNG, JPG, WebP o GIF.`);
@@ -193,8 +214,8 @@ const normHex = (v: string) => {
   return null;
 };
 
-export async function extractSystem(input: { images: ImageInput[]; code: string }, current: Tokens): Promise<ExtractedSystem> {
-  if (!input.images.length && !input.code.trim()) throw new AiError('Sube al menos una imagen o pega código o estilos.');
+export async function extractSystem(input: { images: ImageInput[]; code: string; pdfs?: PdfInput[] }, current: Tokens): Promise<ExtractedSystem> {
+  if (!input.images.length && !input.code.trim() && !input.pdfs?.length) throw new AiError('Sube al menos un PDF, una imagen o pega código o estilos.');
   const style = {
     type: 'object',
     properties: Object.fromEntries(STYLE_FIELDS.map((f) => [f, { type: 'string' }])),
@@ -236,7 +257,7 @@ export async function extractSystem(input: { images: ImageInput[]; code: string 
     additionalProperties: false,
   };
   const system = [
-    'Eres lead de sistemas de diseño. Extraes un sistema de diseño completo y reutilizable a partir de capturas de interfaz, código o estilos.',
+    'Eres lead de sistemas de diseño. Extraes un sistema de diseño completo y reutilizable a partir de guías de marca en PDF, capturas de interfaz, código o estilos.',
     `Colores: usa nombres semánticos en camelCase. Incluye siempre estos roles: ${COLOR_ROLES.join(', ')}; puedes sumar colores de marca extra. Valores en hexadecimal #RRGGBB. Si solo ves modo claro, deriva un modo oscuro coherente.`,
     'Asegura contraste WCAG AA: texto normal 4,5:1 y títulos grandes 3:1, en ambos modos, entre fg y bg de cada estado.',
     'Espaciado y radios en píxeles. fontFamily como pila CSS con respaldo del sistema.',
@@ -246,8 +267,12 @@ export async function extractSystem(input: { images: ImageInput[]; code: string 
   ].join('\n');
 
   const content: Anthropic.Beta.BetaContentBlockParam[] = [
+    ...(input.pdfs ?? []).map(pdfBlock),
     ...input.images.map(imageBlock),
-    { type: 'text', text: input.code.trim() ? `Código o estilos de referencia:\n\n${input.code.trim()}` : 'Extrae el sistema de diseño de las capturas adjuntas.' },
+    {
+      type: 'text',
+      text: input.code.trim() ? `Código o estilos de referencia:\n\n${input.code.trim()}` : 'Extrae el sistema de diseño de los documentos y capturas adjuntos.',
+    },
   ];
   const raw = await askJson<RawSystem>(system, [{ role: 'user', content }], schema);
   return convertSystem(raw, current);

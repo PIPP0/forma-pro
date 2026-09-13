@@ -3,6 +3,7 @@ import type { Project } from '../lib/model';
 import { createProject, currentUser, deleteProject, projectsFor, useDb } from '../lib/store';
 import { ROLE_LABEL, can, roleFor } from '../lib/permissions';
 import { go, href } from '../lib/router';
+import { CATALOG } from '../lib/catalog';
 import { Badge, Button, Empty, Field, Modal, timeAgo } from '../components/ui';
 
 export function ProjectsView() {
@@ -121,21 +122,21 @@ export function ProjectsView() {
             <input type="radio" name="tpl" checked={template === 'blank'} onChange={() => setTemplate('blank')} />
             <span>
               <strong>En blanco</strong>
-              <span className="muted"> Sistema base de tokens y componentes, y una pantalla vacía.</span>
+              <span className="muted"> Biblioteca completa de {CATALOG.length} componentes y una pantalla vacía.</span>
             </span>
           </label>
           <label className="check">
             <input type="radio" name="tpl" checked={template === 'transfer'} onChange={() => setTemplate('transfer')} />
             <span>
               <strong>Flujo de ahorro</strong>
-              <span className="muted"> Cinco pantallas conectadas y 19 componentes del sistema.</span>
+              <span className="muted"> Cinco pantallas conectadas y la biblioteca completa de {CATALOG.length} componentes.</span>
             </span>
           </label>
           <label className="check">
             <input type="radio" name="tpl" checked={template === 'bancoNew'} onChange={() => setTemplate('bancoNew')} />
             <span>
               <strong>Banco New · app móvil</strong>
-              <span className="muted"> 19 pantallas de banca (cuentas, tarjetas, transferencias, créditos, inversiones y encuesta) con 34 componentes.</span>
+              <span className="muted"> 19 pantallas de banca (cuentas, tarjetas, transferencias, créditos, inversiones y encuesta) y la biblioteca completa.</span>
             </span>
           </label>
         </fieldset>

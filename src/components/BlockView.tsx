@@ -1,4 +1,5 @@
-import { useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
+import { loadFont } from '../lib/fonts';
 import type { Block, Mode, Project, StateName } from '../lib/model';
 import { effectiveStyle, findComponent, grayTokens, resolve, toCss, typeToken } from '../lib/tokens';
 import { AppIcon, BrandMark, IconArrowLeft, IconArrowUpRight, IconBell, IconCheck, IconChevronRight, IconInfo, IconTarget, IconWallet } from './icons';
@@ -53,6 +54,7 @@ const srOnly: CSSProperties = { position: 'absolute', width: 1, height: 1, overf
 export function BlockView({ project: source, block: b, mode, wireframe: grayscale, forceState, live, value, checked, error, onValue, pendingRequired }: BlockViewProps) {
   // El wireframe es la misma pantalla en escala de grises, como en Forma Studio.
   const p = useMemo(() => (grayscale ? { ...source, tokens: grayTokens(source.tokens) } : source), [grayscale, source]);
+  useEffect(() => loadFont(source.tokens.fontFamily), [source.tokens.fontFamily]);
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [focus, setFocus] = useState(false);

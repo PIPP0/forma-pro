@@ -1,12 +1,12 @@
 import type { Block, BlockType, Component, Project, Screen, Session, Study, StudyEvent, TaskFeedback, Tokens } from './model';
-import { builtInStyle } from './tokens';
+import { completeSystem, ensureColors } from './catalog';
 import { mulberry32, uid } from './ids';
 import { clone } from './ops';
 
 export const FONT_INTER = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
 
 export function baseTokens(): Tokens {
-  return {
+  return ensureColors({
     fontFamily: FONT_INTER,
     colors: [
       { name: 'background', light: '#FFFFFF', dark: '#0E1318', description: 'Fondo de pantalla' },
@@ -23,7 +23,7 @@ export function baseTokens(): Tokens {
       { name: 'focus', light: '#E0A100', dark: '#FFC940', description: 'Anillo de foco' },
       { name: 'danger', light: '#C62828', dark: '#FF8A80' },
       { name: 'dangerSubtle', light: '#FDECEC', dark: '#3A1F1E' },
-      { name: 'success', light: '#1E8E5A', dark: '#6FD69C' },
+      { name: 'success', light: '#1B7F50', dark: '#6FD69C' },
       { name: 'successSubtle', light: '#E6F6EE', dark: '#173327' },
     ],
     space: [
@@ -47,39 +47,12 @@ export function baseTokens(): Tokens {
       { role: 'label', size: 14, lineHeight: 20, weight: 600 },
       { role: 'caption', size: 12, lineHeight: 16, weight: 500 },
     ],
-  };
+  });
 }
 
-const comp = (id: string, name: string, type: BlockType, variant?: string): Component => ({
-  id,
-  name,
-  type,
-  variant,
-  states: builtInStyle(type, variant),
-});
-
+/** La biblioteca completa del catálogo, con los identificadores de siempre para los componentes base. */
 export function baseComponents(): Component[] {
-  return [
-    comp('cmp-btn-primary', 'Botón', 'button', 'primary'),
-    comp('cmp-btn-secondary', 'Botón secundario', 'button', 'secondary'),
-    comp('cmp-input', 'Campo de texto', 'input'),
-    comp('cmp-textarea', 'Área de texto', 'textarea'),
-    comp('cmp-amount', 'Campo de monto', 'amount'),
-    comp('cmp-select', 'Selector', 'select'),
-    comp('cmp-checkbox', 'Casilla', 'checkbox'),
-    comp('cmp-radio', 'Opciones', 'radio'),
-    comp('cmp-switch', 'Interruptor', 'switch'),
-    comp('cmp-card', 'Tarjeta', 'card'),
-    comp('cmp-heading', 'Título', 'heading', 'title'),
-    comp('cmp-help', 'Mensaje de ayuda', 'help'),
-    comp('cmp-balance', 'Saldo', 'balance'),
-    comp('cmp-tag', 'Etiqueta', 'tag'),
-    comp('cmp-avatar', 'Avatar', 'avatar'),
-    comp('cmp-progress', 'Progreso', 'progress'),
-    comp('cmp-list', 'Lista', 'listItem'),
-    comp('cmp-tabs', 'Pestañas', 'tabs'),
-    comp('cmp-alert', 'Aviso', 'alert'),
-  ];
+  return completeSystem({ tokens: baseTokens(), components: [] as Component[] } as Project).components;
 }
 
 const b = (id: string, type: BlockType, label: string, extra: Partial<Block> = {}): Block => ({ id, type, label, ...extra });

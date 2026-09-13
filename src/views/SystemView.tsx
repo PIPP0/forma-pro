@@ -1,23 +1,24 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type { Block, BlockType, Mode, OpInput, Project, Role, StateName, StyleKey } from '../lib/model';
-import { BLOCK_TYPES, STATES, STATE_LABEL, STYLE_KEYS, TYPE_ROLE_LABEL, blockMeta } from '../lib/model';
-import { applyOps, releasesFor, saveVersion, useDb } from '../lib/store';
+import type { Mode, OpInput, Project, Role, StyleKey } from '../lib/model';
+import { STATES, STYLE_KEYS, TYPE_ROLE_LABEL, blockMeta } from '../lib/model';
+import { applyOps, releasesFor, useDb } from '../lib/store';
 import { can } from '../lib/permissions';
-import { extractSystem, fileToImage, getAiKey, type ExtractedSystem, type ImageInput } from '../lib/ai';
 import { download } from '../lib/share';
 import { FONT_INTER } from '../lib/seed';
-import { IconCheck, IconClose, IconDiamond, IconDownload, IconUpload } from '../components/icons';
+import { IconCheck, IconChevronDown, IconDiamond, IconDownload, IconUpload } from '../components/icons';
 import { edit, renameTokenOps } from '../lib/ops';
-import { builtInStyle, colorValue, contrast, exportCss, exportStyleDictionary, isRaw, parseRef, refOf, resolve } from '../lib/tokens';
+import { colorValue, contrast, exportCss, exportStyleDictionary, isRaw, parseRef, refOf, resolve } from '../lib/tokens';
 import { checkProject } from '../lib/flowCheck';
 import { adoption, tokenUses } from '../lib/metrics';
-import { importTokens, type TokenImport } from '../lib/importer';
 import { notify } from '../lib/toast';
-import { uid } from '../lib/ids';
 import { href } from '../lib/router';
-import { BlockView } from '../components/BlockView';
-import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
-import { Badge, Button, CopyButton, Empty, Field, Modal, PageHead, Tabs, pickFile } from '../components/ui';
+import { CATEGORIES, coverage, entryForComponent } from '../lib/catalog';
+import { exportDtcg, exportSystemJson, exportTailwind } from '../lib/systemIO';
+import { ColorCell, CommitInput, CommitNumber } from '../components/inputs';
+import { Badge, Button, CopyButton, Field, PageHead, Tabs } from '../components/ui';
+import { ComponentStudio } from '../components/ComponentStudio';
+import { ImportSystemModal } from '../components/ImportSystemModal';
+import { SystemDoc } from '../components/SystemDoc';
 
 type Tab = 'foundations' | 'components' | 'docs';
 
@@ -43,6 +44,10 @@ const COLOR_LABEL: Record<string, string> = {
   warning: 'Advertencia',
   danger: 'Error',
   dangerSubtle: 'Error suave',
+  star: 'Calificación',
+  cardDark: 'Tarjeta oscura',
+  cardDarkEnd: 'Tarjeta oscura, degradado',
+  onDark: 'Texto sobre oscuro',
 };
 const colorLabel = (name: string) => COLOR_LABEL[name] ?? name;
 
@@ -53,48 +58,15 @@ const FONTS = [
   { label: 'Monoespaciada', value: "'JetBrains Mono', ui-monospace, monospace" },
 ];
 
-const DOC: Record<BlockType, string> = {
-  navbar: 'Encabezado de cada pantalla con la marca y, si corresponde, la acción de volver.',
-  heading: 'Título de la pantalla. Uno por pantalla, con texto de apoyo opcional.',
-  text: 'Explicaciones breves. Úsalo para contexto, no para acciones.',
-  balance: 'Muestra un saldo o monto destacado con su cuenta de referencia.',
-  help: 'Ayuda contextual antes de una decisión: tranquiliza o aclara el siguiente paso.',
-  card: 'Agrupa una opción navegable con ícono, título y descripción.',
-  input: 'Texto corto. Siempre con etiqueta visible y ejemplo dentro del campo.',
-  textarea: 'Texto largo, como comentarios o motivos.',
-  amount: 'Montos de dinero con formato automático.',
-  select: 'Elegir una opción entre muchas.',
-  radio: 'Elegir una opción entre pocas, todas visibles.',
-  checkbox: 'Aceptar condiciones o activar una opción independiente.',
-  switch: 'Encender o apagar una preferencia con efecto inmediato.',
-  tabs: 'Cambiar entre vistas de un mismo contenido.',
-  button: 'La acción principal o secundaria de la pantalla. Una principal por pantalla.',
-  link: 'Acciones terciarias o navegación dentro del texto.',
-  listItem: 'Filas de una lista, como contactos o movimientos.',
-  tag: 'Estado o categoría breve de un elemento.',
-  avatar: 'Identifica a una persona con sus iniciales.',
-  progress: 'Avance hacia una meta o paso de un proceso.',
-  statusIcon: 'Confirma visualmente el resultado de una acción.',
-  alert: 'Mensaje de éxito o error después de una acción.',
-  image: 'Ilustración o foto de apoyo.',
-  divider: 'Separa grupos de contenido.',
-  tabBar: 'Navegación principal fija abajo. Cada opción lleva a una sección y marca la actual.',
-  menuList: 'Tarjeta con opciones navegables: título, descripción e ícono por fila.',
-  accountCard: 'Saldo de una cuenta o resumen con filas de detalle y enlace al pie.',
-  creditCard: 'Tarjeta de crédito con cupos utilizados y disponibles.',
-  carousel: 'Contactos frecuentes, promociones o productos destacados en fila deslizable.',
-  financeCard: 'Resumen financiero con gráfico y métricas clave.',
-  rating: 'Calificación de 1 a 5 estrellas para encuestas de satisfacción.',
-  iconGrid: 'Accesos rápidos en grilla de íconos.',
-};
-
 export function SystemView({ project, role }: { project: Project; role: Role }) {
   const db = useDb();
   const [tab, setTab] = useState<Tab>('foundations');
   const [mode, setMode] = useState<Mode>('light');
-  const [aiOpen, setAiOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const editable = can(role, 'edit');
   const libVersion = project.library?.version ?? releasesFor(db, project.id)[0]?.version;
+  const cov = coverage(project);
   const fileSlug = project.name
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
@@ -106,21 +78,20 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
       <PageHead
         eyebrow="BIBLIOTECA DEL PROYECTO"
         title="Un sistema completo. Una sola fuente de verdad."
-        sub="Fundamentos, tokens, componentes, estados e interacciones compartidos."
+        sub="Fundamentos, tokens, componentes, estados e interacciones compartidos. Importa el sistema de tu equipo o expórtalo para desarrollo, Figma y documentación."
         actions={
           <>
-            <Button onClick={() => download(`${fileSlug}-tokens.json`, exportStyleDictionary(project.tokens))}>
-              <IconDownload size={17} /> JSON
-            </Button>
+            <ExportMenu p={project} slug={fileSlug} onPrint={() => setPrinting(true)} />
             {editable && (
-              <Button tone="primary" onClick={() => setAiOpen(true)}>
-                <IconUpload size={17} /> Importar referencia
+              <Button tone="primary" onClick={() => setImportOpen(true)}>
+                <IconUpload size={17} /> Importar sistema
               </Button>
             )}
           </>
         }
       />
-      <AiSystemModal p={project} open={aiOpen} onClose={() => setAiOpen(false)} />
+      <ImportSystemModal p={project} open={importOpen} onClose={() => setImportOpen(false)} />
+      {printing && <SystemDoc p={project} onDone={() => setPrinting(false)} />}
 
       <section className="card lib-hero">
         <span className="icon-tile lg">
@@ -140,6 +111,9 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
           </li>
           <li>
             <IconCheck size={15} /> {project.components.length} componentes
+          </li>
+          <li>
+            <IconCheck size={15} /> {cov.covered} de {cov.total} patrones del catálogo
           </li>
           <li>
             <IconCheck size={15} /> {STATES.length} estados interactivos
@@ -173,13 +147,66 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
         />
       </div>
 
-      {tab === 'foundations' && <FoundationsTab p={project} editable={editable} mode={mode} />}
+      {tab === 'foundations' && <FoundationsTab p={project} editable={editable} mode={mode} onImport={() => setImportOpen(true)} />}
       {tab === 'components' && (
         <section className="card system-panel">
-          <ComponentsTab p={project} editable={editable} mode={mode} />
+          <ComponentStudio p={project} editable={editable} mode={mode} />
         </section>
       )}
       {tab === 'docs' && <DocsTab p={project} editable={editable} />}
+    </div>
+  );
+}
+
+function ExportMenu({ p, slug, onPrint }: { p: Project; slug: string; onPrint: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+
+  const items = [
+    { label: 'Sistema completo', note: 'JSON de Forma con tokens y componentes. Se importa tal cual en otro proyecto.', run: () => download(`${slug}-sistema.json`, exportSystemJson(p)) },
+    { label: 'Tokens para Figma', note: 'W3C Design Tokens, compatible con Tokens Studio y Style Dictionary 4.', run: () => download(`${slug}-tokens.dtcg.json`, exportDtcg(p.tokens)) },
+    { label: 'Variables CSS', note: 'Modo claro y oscuro con [data-theme="dark"].', run: () => download(`${slug}-tokens.css`, exportCss(p.tokens), 'text/css') },
+    { label: 'Tailwind', note: 'tailwind.config.js conectado a las variables CSS.', run: () => download('tailwind.config.js', exportTailwind(p.tokens), 'text/javascript') },
+    { label: 'Style Dictionary', note: 'Formato clásico con value y comment.', run: () => download(`${slug}-tokens.json`, exportStyleDictionary(p.tokens)) },
+    { label: 'Documentación en PDF', note: 'Colores, tipografía y cada componente con su guía. Elige «Guardar como PDF».', run: onPrint },
+  ];
+
+  return (
+    <div className="export-menu" ref={ref}>
+      <Button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <IconDownload size={17} /> Exportar <IconChevronDown size={14} />
+      </Button>
+      {open && (
+        <div className="menu" role="menu">
+          {items.map((it) => (
+            <button
+              key={it.label}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                it.run();
+              }}
+            >
+              <strong>{it.label}</strong>
+              <span>{it.note}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -251,7 +278,7 @@ function TokenSlider({ label, value, min, max, disabled, onCommit }: { label: st
   );
 }
 
-function FoundationsTab({ p, editable, mode }: { p: Project; editable: boolean; mode: Mode }) {
+function FoundationsTab({ p, editable, mode, onImport }: { p: Project; editable: boolean; mode: Mode; onImport: () => void }) {
   const t = p.tokens;
   const display = t.type.find((x) => x.role === 'display');
   const body = t.type.find((x) => x.role === 'body');
@@ -341,7 +368,7 @@ function FoundationsTab({ p, editable, mode }: { p: Project; editable: boolean; 
       <section className="card found-card found-wide">
         <details className="found-more">
           <summary>Editar todos los tokens: nombres, modo oscuro, espaciado, radios e importación</summary>
-          <TokensTab p={p} editable={editable} />
+          <TokensTab p={p} editable={editable} onImport={onImport} />
         </details>
       </section>
     </div>
@@ -350,36 +377,45 @@ function FoundationsTab({ p, editable, mode }: { p: Project; editable: boolean; 
 
 function DocsTab({ p, editable }: { p: Project; editable: boolean }) {
   const instances = (id: string) => p.screens.reduce((n, s) => n + s.blocks.filter((b) => b.componentId === id).length, 0);
+  const groups = CATEGORIES.map((cat) => ({ cat, items: p.components.filter((c) => entryForComponent(c).category === cat.id) })).filter((g) => g.items.length);
   return (
     <div className="found-grid">
+      {groups.map(({ cat, items }, gi) => (
+        <section key={cat.id} className="card found-card found-wide">
+          <CardHead n={String(gi + 1).padStart(2, '0')} title={cat.label} hint={`${items.length} ${items.length === 1 ? 'componente' : 'componentes'}`} />
+          <ul className="doc-list">
+            {items.map((c) => {
+              const e = entryForComponent(c);
+              const n = instances(c.id);
+              return (
+                <li key={c.id}>
+                  <IconDiamond size={16} />
+                  <span className="doc-text">
+                    <strong>{c.name}</strong>
+                    <span>{e.summary}</span>
+                    <span className="doc-use">
+                      <b>Úsalo para:</b> {e.use[0]} <b>Evítalo:</b> {e.avoid[0]}
+                    </span>
+                  </span>
+                  <span className="muted small nowrap">
+                    {n} {n === 1 ? 'uso' : 'usos'}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
       <section className="card found-card found-wide">
-        <CardHead n="01" title="Guía de componentes" hint="Cuándo usar cada pieza del sistema." />
-        <ul className="doc-list">
-          {p.components.map((c) => (
-            <li key={c.id}>
-              <IconDiamond size={16} />
-              <span className="doc-text">
-                <strong>{c.name}</strong>
-                <span>{DOC[c.type]}</span>
-              </span>
-              <span className="muted small nowrap">
-                {instances(c.id)} {instances(c.id) === 1 ? 'uso' : 'usos'}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section className="card found-card found-wide">
-        <CardHead n="02" title="Salud del sistema" hint="Contraste, foco, adopción y sobrescrituras." />
+        <CardHead n={String(groups.length + 1).padStart(2, '0')} title="Salud del sistema" hint="Contraste, foco, adopción y sobrescrituras." />
         <HealthTab p={p} editable={editable} />
       </section>
     </div>
   );
 }
 
-function TokensTab({ p, editable }: { p: Project; editable: boolean }) {
+function TokensTab({ p, editable, onImport }: { p: Project; editable: boolean; onImport: () => void }) {
   const [newColor, setNewColor] = useState('');
-  const [importOpen, setImportOpen] = useState(false);
   const apply = (ops: OpInput[], label: string) => applyOps(p.id, ops, label);
 
   const rename = (group: 'color' | 'space' | 'radius', names: string[], from: string, to: string) => {
@@ -406,7 +442,7 @@ function TokensTab({ p, editable }: { p: Project; editable: boolean }) {
         <div className="section-head">
           <h2 className="section-title">Color</h2>
           {editable && (
-            <Button size="sm" onClick={() => setImportOpen(true)}>
+            <Button size="sm" onClick={onImport}>
               Importar tokens
             </Button>
           )}
@@ -431,13 +467,7 @@ function TokensTab({ p, editable }: { p: Project; editable: boolean }) {
                 return (
                   <tr key={c.name}>
                     <td>
-                      <CommitInput
-                        className="input input-code"
-                        value={c.name}
-                        disabled={!editable}
-                        aria-label={`Nombre del token ${c.name}`}
-                        onCommit={(v) => rename('color', colorNames, c.name, v)}
-                      />
+                      <CommitInput className="input input-code" value={c.name} disabled={!editable} aria-label={`Nombre del token ${c.name}`} onCommit={(v) => rename('color', colorNames, c.name, v)} />
                       {c.description && <div className="cell-note">{c.description}</div>}
                     </td>
                     <td>
@@ -493,17 +523,10 @@ function TokensTab({ p, editable }: { p: Project; editable: boolean }) {
 
       <section className="section">
         <h2 className="section-title">Familia tipográfica</h2>
-        <Field label="Pila de fuentes (font-family)" hint="Incluye siempre fuentes de respaldo del sistema.">
-          <CommitInput
-            className="input input-code"
-            value={p.tokens.fontFamily}
-            disabled={!editable}
-            onCommit={(v) => v.trim() && apply([{ kind: 'set', path: ['tokens', 'fontFamily'], value: v.trim() }], 'Cambiar familia tipográfica')}
-          />
+        <Field label="Pila de fuentes (font-family)" hint="Incluye siempre fuentes de respaldo del sistema. Las fuentes de Google Fonts se cargan solas.">
+          <CommitInput className="input input-code" value={p.tokens.fontFamily} disabled={!editable} onCommit={(v) => v.trim() && apply([{ kind: 'set', path: ['tokens', 'fontFamily'], value: v.trim() }], 'Cambiar familia tipográfica')} />
         </Field>
       </section>
-
-      <ImportTokensModal p={p} open={importOpen} onClose={() => setImportOpen(false)} />
     </>
   );
 }
@@ -550,13 +573,7 @@ function SizeTokens({
                 <td>
                   <CommitNumber value={s.value} label={`Valor de ${s.name}`} disabled={!editable} onCommit={(n) => applyOps(p.id, [edit.token(group, i, 'value', n)], `Cambiar ${group === 'space' ? 'espacio' : 'radio'} ${s.name}`)} />
                 </td>
-                <td>
-                  {group === 'space' ? (
-                    <span className="space-bar" style={{ width: Math.min(s.value, 64) }} />
-                  ) : (
-                    <span className="radius-box" style={{ borderTopLeftRadius: Math.min(s.value, 24) }} />
-                  )}
-                </td>
+                <td>{group === 'space' ? <span className="space-bar" style={{ width: Math.min(s.value, 64) }} /> : <span className="radius-box" style={{ borderTopLeftRadius: Math.min(s.value, 24) }} />}</td>
                 <td>{uses}</td>
                 <td className="t-right">
                   {editable && (
@@ -617,13 +634,7 @@ function TypeTab({ p, editable, mode }: { p: Project; editable: boolean; mode: M
                   <CommitNumber value={t.size} min={8} label={`Tamaño de ${t.role}`} disabled={!editable} onCommit={(n) => applyOps(p.id, [edit.token('type', i, 'size', n)], `Cambiar tamaño ${TYPE_ROLE_LABEL[t.role]}`)} />
                 </td>
                 <td>
-                  <CommitNumber
-                    value={t.lineHeight}
-                    min={8}
-                    label={`Interlineado de ${t.role}`}
-                    disabled={!editable}
-                    onCommit={(n) => applyOps(p.id, [edit.token('type', i, 'lineHeight', n)], `Cambiar interlineado ${TYPE_ROLE_LABEL[t.role]}`)}
-                  />
+                  <CommitNumber value={t.lineHeight} min={8} label={`Interlineado de ${t.role}`} disabled={!editable} onCommit={(n) => applyOps(p.id, [edit.token('type', i, 'lineHeight', n)], `Cambiar interlineado ${TYPE_ROLE_LABEL[t.role]}`)} />
                 </td>
                 <td>
                   <select
@@ -641,205 +652,13 @@ function TypeTab({ p, editable, mode }: { p: Project; editable: boolean; mode: M
                   </select>
                 </td>
                 <td style={{ background: colorValue(p.tokens, 'background', mode, '#fff') }}>
-                  <div
-                    style={{
-                      fontFamily: p.tokens.fontFamily,
-                      fontSize: t.size,
-                      lineHeight: `${t.lineHeight}px`,
-                      fontWeight: t.weight,
-                      color: colorValue(p.tokens, 'onSurface', mode, '#111'),
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    Transfiere en segundos
-                  </div>
+                  <div style={{ fontFamily: p.tokens.fontFamily, fontSize: t.size, lineHeight: `${t.lineHeight}px`, fontWeight: t.weight, color: colorValue(p.tokens, 'onSurface', mode, '#111'), whiteSpace: 'nowrap' }}>Transfiere en segundos</div>
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </section>
-  );
-}
-
-const SAMPLE: Partial<Record<BlockType, Partial<Block>>> = {
-  button: { label: 'Continuar' },
-  input: { label: 'Nombre', detail: 'Escribe tu nombre' },
-  amount: { label: 'Monto', detail: '$0' },
-  select: { label: 'Cuenta de origen', options: ['Cuenta vista'] },
-  listItem: { label: 'Martina Rojas', detail: 'BancoEstado', action: 'navigate' },
-  alert: { label: 'Transferencia enviada', detail: 'Llegará en minutos.' },
-  link: { label: 'Ver detalle' },
-  checkbox: { label: 'Guardar como favorito' },
-  navbar: { label: 'Transferir', action: 'back' },
-  heading: { label: 'Título de pantalla' },
-  text: { label: 'Texto de apoyo' },
-  image: { label: 'Imagen' },
-  divider: { label: '' },
-};
-
-function ComponentsTab({ p, editable, mode }: { p: Project; editable: boolean; mode: Mode }) {
-  const [sel, setSel] = useState(p.components[0]?.id);
-  const [state, setState] = useState<StateName>('default');
-  const [newOpen, setNewOpen] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<BlockType>('button');
-  const c = p.components.find((x) => x.id === sel) ?? p.components[0];
-
-  const instances = (id: string) => p.screens.reduce((n, s) => n + s.blocks.filter((b) => b.componentId === id).length, 0);
-  const overridden = c
-    ? p.screens.flatMap((s) => s.blocks.filter((b) => b.componentId === c.id && Object.values(b.overrides ?? {}).some(Boolean)).map((b) => ({ s, b })))
-    : [];
-
-  const create = () => {
-    const name = newName.trim();
-    if (!name) return notify('Ponle un nombre al componente.', 'error');
-    const comp = { id: uid('cmp_'), name, type: newType, states: builtInStyle(newType) };
-    if (applyOps(p.id, [edit.addComponent(p, comp)], `Crear componente «${name}»`)) {
-      setSel(comp.id);
-      setNewOpen(false);
-      setNewName('');
-    }
-  };
-
-  return (
-    <section className="section split">
-      <div className="split-list">
-        <div className="sl-head">
-          <strong>{p.components.length} componentes</strong>
-          {editable && (
-            <Button size="sm" onClick={() => setNewOpen(true)}>
-              Nuevo
-            </Button>
-          )}
-        </div>
-        {p.components.map((x) => (
-          <button key={x.id} type="button" className="sl-item" aria-current={x.id === c?.id} onClick={() => setSel(x.id)}>
-            <span>{x.name}</span>
-            <span className="muted small">{instances(x.id)}</span>
-          </button>
-        ))}
-      </div>
-
-      {!c ? (
-        <Empty title="Sin componentes">Crea el primero para que tus pantallas hereden estilos y estados desde un maestro.</Empty>
-      ) : (
-        <div className="stack-lg" key={c.id}>
-          <div className="row between">
-            <div className="stack-xs">
-              <CommitInput
-                className="input input-title"
-                value={c.name}
-                disabled={!editable}
-                aria-label="Nombre del componente"
-                onCommit={(v) => v.trim() && applyOps(p.id, [edit.component(p, c.id, 'name', v.trim())], `Renombrar componente a «${v.trim()}»`)}
-              />
-              <span className="muted">
-                {blockMeta(c.type).label}, {instances(c.id)} {instances(c.id) === 1 ? 'instancia' : 'instancias'} en pantallas
-              </span>
-            </div>
-            {editable && (
-              <Button
-                size="sm"
-                tone="danger"
-                disabled={instances(c.id) > 0}
-                title={instances(c.id) > 0 ? 'Tiene instancias: desvincúlalas primero' : undefined}
-                onClick={() => applyOps(p.id, [edit.removeComponent(p, c.id)], `Eliminar componente «${c.name}»`)}
-              >
-                Eliminar componente
-              </Button>
-            )}
-          </div>
-
-          <div className="table-wrap">
-            <div className="state-grid">
-              {STATES.map((st) => (
-                <div key={st} className={`state-cell ${st === state ? 'current' : ''}`}>
-                  <h4>
-                    <button type="button" className="link-btn" onClick={() => setState(st)}>
-                      {STATE_LABEL[st]}
-                    </button>
-                  </h4>
-                  <div className="state-preview" style={{ background: colorValue(p.tokens, 'background', mode, '#fff') }}>
-                    <BlockView project={p} block={{ id: `preview-${st}`, type: c.type, componentId: c.id, label: '', ...SAMPLE[c.type] } as Block} mode={mode} forceState={st} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <div className="row between">
-              <h3 className="sub-title">Propiedades del estado {STATE_LABEL[state].toLowerCase()}</h3>
-              <Tabs small label="Estado a editar" value={state} onChange={setState} items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))} />
-            </div>
-            {state !== 'default' && <p className="muted small">Lo que dejes en «Hereda» toma el valor del estado en reposo.</p>}
-            <div className="picker-grid">
-              {STYLE_KEYS.map((k) => (
-                <ValuePicker
-                  key={k.key}
-                  tokens={p.tokens}
-                  group={k.group}
-                  label={k.label}
-                  disabled={!editable}
-                  value={c.states[state]?.[k.key]}
-                  inherited={state !== 'default' ? c.states.default[k.key] : undefined}
-                  onChange={(v) => applyOps(p.id, [edit.componentState(p, c.id, state, k.key, v)], `Editar «${c.name}» (${STATE_LABEL[state].toLowerCase()})`)}
-                />
-              ))}
-            </div>
-          </div>
-
-          {overridden.length > 0 && (
-            <div>
-              <h3 className="sub-title">Instancias que sobrescriben este componente</h3>
-              <ul className="plain-list">
-                {overridden.map(({ s, b }) => (
-                  <li key={b.id}>
-                    <a href={href(`/p/${p.id}/screens?s=${s.id}`)}>
-                      «{b.label}» en «{s.name}»
-                    </a>{' '}
-                    <span className="muted">
-                      {Object.entries(b.overrides ?? {})
-                        .filter(([, v]) => v)
-                        .map(([k, v]) => `${STYLE_KEYS.find((x) => x.key === k)?.label.toLowerCase()}: ${parseRef(v)?.name ?? v}`)
-                        .join(', ')}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-
-      <Modal
-        open={newOpen}
-        title="Nuevo componente"
-        onClose={() => setNewOpen(false)}
-        footer={
-          <>
-            <Button onClick={() => setNewOpen(false)}>Cancelar</Button>
-            <Button tone="primary" onClick={create}>
-              Crear componente
-            </Button>
-          </>
-        }
-      >
-        <Field label="Nombre">
-          <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ej: Botón de peligro" autoFocus />
-        </Field>
-        <Field label="Tipo de bloque" hint="Parte con los estilos base de ese tipo, con sus cinco estados.">
-          <select value={newType} onChange={(e) => setNewType(e.target.value as BlockType)}>
-            {BLOCK_TYPES.map((t) => (
-              <option key={t.type} value={t.type}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </Field>
-      </Modal>
     </section>
   );
 }
@@ -932,274 +751,5 @@ function HealthTab({ p, editable }: { p: Project; editable: boolean }) {
         )}
       </section>
     </>
-  );
-}
-
-/** La IA lee capturas o código y propone tokens y componentes. Nada se aplica hasta confirmar. */
-function AiSystemModal({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
-  const [images, setImages] = useState<ImageInput[]>([]);
-  const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [result, setResult] = useState<ExtractedSystem | null>(null);
-  const [mode, setMode] = useState<Mode>('light');
-  const hasKey = !!getAiKey();
-  const preview: Project | null = result ? { ...p, tokens: result.tokens, components: result.components } : null;
-
-  const close = () => {
-    setImages([]);
-    setCode('');
-    setResult(null);
-    setError('');
-    onClose();
-  };
-
-  const addFiles = async (files: FileList | null) => {
-    if (!files?.length) return;
-    setError('');
-    try {
-      const next = await Promise.all([...files].slice(0, 5).map(fileToImage));
-      setImages((imgs) => [...imgs, ...next].slice(0, 5));
-      setResult(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-
-  const analyze = async () => {
-    setBusy(true);
-    setError('');
-    setResult(null);
-    try {
-      setResult(await extractSystem({ images, code }, p.tokens));
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const applyResult = () => {
-    if (!result) return;
-    saveVersion(p.id, 'Antes de crear el sistema con IA', true);
-    const merged = [...p.components];
-    let replaced = 0;
-    let added = 0;
-    for (const c of result.components) {
-      const i = merged.findIndex((m) => m.name.toLowerCase() === c.name.toLowerCase() && m.type === c.type);
-      if (i >= 0) {
-        merged[i] = { ...c, id: merged[i].id };
-        replaced++;
-      } else {
-        merged.push(c);
-        added++;
-      }
-    }
-    if (applyOps(p.id, [edit.project('tokens', result.tokens), edit.project('components', merged)], 'Crear sistema con IA')) {
-      notify(`Aplicaste el sistema: ${added} ${added === 1 ? 'componente nuevo' : 'componentes nuevos'} y ${replaced} ${replaced === 1 ? 'actualizado' : 'actualizados'}. La versión anterior quedó en Historial.`, 'success');
-      close();
-    }
-  };
-
-  return (
-    <Modal
-      open={open}
-      wide
-      title="Importar referencia"
-      onClose={close}
-      footer={
-        <>
-          <Button onClick={close}>Cancelar</Button>
-          {result ? (
-            <>
-              <Button onClick={() => setResult(null)}>Volver a analizar</Button>
-              <Button tone="primary" onClick={applyResult}>
-                Aplicar al sistema
-              </Button>
-            </>
-          ) : (
-            <Button tone="primary" disabled={busy || !hasKey || (!images.length && !code.trim())} onClick={analyze}>
-              {busy ? 'Analizando…' : 'Analizar con IA'}
-            </Button>
-          )}
-        </>
-      }
-    >
-      {!hasKey && (
-        <p className="notice">
-          Para usar la IA, agrega tu clave de API de Anthropic en <a href={href('/settings')}>Ajustes</a>. Se guarda solo en este navegador.
-        </p>
-      )}
-      {!result && (
-        <>
-          <p className="muted">
-            Sube capturas de tu app, un kit de UI o una página de estilos, o pega código. La IA propone colores para modo claro y oscuro, espaciados, radios y componentes con sus cinco estados, usando solo tokens.
-          </p>
-          <label
-            className="drop"
-            onDragOver={(e) => e.preventDefault()}
-            onDrop={(e) => {
-              e.preventDefault();
-              addFiles(e.dataTransfer.files);
-            }}
-          >
-            <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple className="sr-only" onChange={(e) => addFiles(e.target.files)} />
-            <IconUpload size={22} />
-            <strong>Sube o arrastra capturas</strong>
-            <span className="small">PNG, JPG o WebP. Hasta 5 imágenes.</span>
-          </label>
-          {images.length > 0 && (
-            <div className="thumbs">
-              {images.map((img, i) => (
-                <div key={i} className="thumb">
-                  <img src={`data:${img.mediaType};base64,${img.data}`} alt={img.name} />
-                  <button type="button" className="icon-btn thumb-remove" aria-label={`Quitar ${img.name}`} onClick={() => setImages((imgs) => imgs.filter((_, j) => j !== i))}>
-                    <IconClose size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <Field label="O pega código o estilos" hint="CSS, variables, tokens en JSON, HTML o componentes JSX.">
-            <textarea className="input input-code" rows={7} value={code} onChange={(e) => setCode(e.target.value)} placeholder={'.btn-primary { background: #0074C8; border-radius: 12px; }\n.card { border: 1px solid #E3E7EC; padding: 16px; }'} />
-          </Field>
-          <Button
-            size="sm"
-            tone="ghost"
-            onClick={async () => {
-              const t = await pickFile('.css,.scss,.json,.html,.jsx,.tsx,.js,.ts,.txt');
-              if (t != null) setCode(t);
-            }}
-          >
-            Cargar archivo de código
-          </Button>
-        </>
-      )}
-      {error && <p className="error-text">{error}</p>}
-      {result && preview && (
-        <div className="stack">
-          {result.notes && <p>{result.notes}</p>}
-          <div className="row between">
-            <strong>{result.tokens.colors.length} colores</strong>
-            <Tabs
-              small
-              label="Modo de vista previa"
-              value={mode}
-              onChange={setMode}
-              items={[
-                { id: 'light', label: 'Claro' },
-                { id: 'dark', label: 'Oscuro' },
-              ]}
-            />
-          </div>
-          <div className="ai-colors">
-            {result.tokens.colors.map((c) => (
-              <span key={c.name} className="ai-color">
-                <i style={{ background: c[mode] }} />
-                {c.name}
-              </span>
-            ))}
-          </div>
-          <strong>{result.components.length} componentes</strong>
-          <div className="ai-components">
-            {result.components.map((c) => (
-              <div key={c.id} className="ai-component">
-                <header>
-                  <span>{c.name}</span>
-                  <span className="muted">{blockMeta(c.type).label}</span>
-                </header>
-                <div className="state-preview" style={{ background: colorValue(result.tokens, 'background', mode, '#fff') }}>
-                  <BlockView project={preview} block={{ id: `ai-${c.id}`, type: c.type, componentId: c.id, label: '', ...SAMPLE[c.type] } as Block} mode={mode} />
-                </div>
-              </div>
-            ))}
-          </div>
-          {result.dropped > 0 && <p className="muted small">Se descartaron {result.dropped} valores que no correspondían a un token válido.</p>}
-          <p className="muted small">Al aplicar, los componentes con el mismo nombre y tipo se actualizan y conservan sus instancias; los demás se agregan. Antes guardamos una versión para que puedas volver atrás.</p>
-        </div>
-      )}
-    </Modal>
-  );
-}
-
-function ImportTokensModal({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
-  const [text, setText] = useState('');
-  const [result, setResult] = useState<TokenImport | null>(null);
-  const [error, setError] = useState('');
-
-  const review = (value = text) => {
-    try {
-      setResult(importTokens(value, p.tokens));
-      setError('');
-    } catch (e) {
-      setResult(null);
-      setError((e as Error).message);
-    }
-  };
-
-  const close = () => {
-    setText('');
-    setResult(null);
-    setError('');
-    onClose();
-  };
-
-  return (
-    <Modal
-      open={open}
-      wide
-      title="Importar tokens desde código"
-      onClose={close}
-      footer={
-        <>
-          <Button onClick={close}>Cancelar</Button>
-          <Button
-            tone="primary"
-            disabled={!result}
-            onClick={() => {
-              if (result && applyOps(p.id, [edit.project('tokens', result.tokens)], 'Importar tokens')) {
-                notify(`Importaste ${result.summary.join(', ')}.`, 'success');
-                close();
-              }
-            }}
-          >
-            Aplicar tokens
-          </Button>
-        </>
-      }
-    >
-      <p className="muted">Acepta JSON (Style Dictionary, tokens de diseño o un objeto plano) y variables CSS, incluido un bloque [data-theme="dark"] para el modo oscuro.</p>
-      <textarea
-        className="input input-code"
-        rows={10}
-        aria-label="Contenido de tokens"
-        placeholder={':root {\n  --color-primary: #1646C8;\n  --space-lg: 16px;\n}\n[data-theme="dark"] {\n  --color-primary: #7D9CFF;\n}'}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          setResult(null);
-        }}
-      />
-      <div className="row">
-        <Button size="sm" onClick={() => review()}>
-          Revisar cambios
-        </Button>
-        <Button
-          size="sm"
-          tone="ghost"
-          onClick={async () => {
-            const t = await pickFile('.json,.css,.txt');
-            if (t != null) {
-              setText(t);
-              review(t);
-            }
-          }}
-        >
-          Cargar archivo
-        </Button>
-      </div>
-      {error && <p className="error-text">{error}</p>}
-      {result && <p className="ok-text">Listo para aplicar: {result.summary.join(', ')}. Puedes deshacerlo después.</p>}
-    </Modal>
   );
 }

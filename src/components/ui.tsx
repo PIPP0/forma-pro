@@ -30,6 +30,7 @@ export function Modal({
   children,
   footer,
   wide,
+  xl,
 }: {
   open: boolean;
   title: string;
@@ -37,6 +38,7 @@ export function Modal({
   children: ReactNode;
   footer?: ReactNode;
   wide?: boolean;
+  xl?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   useEffect(() => {
@@ -48,7 +50,7 @@ export function Modal({
   return (
     <dialog
       ref={ref}
-      className={`modal ${wide ? 'modal-wide' : ''}`}
+      className={`modal ${wide || xl ? 'modal-wide' : ''} ${xl ? 'modal-xl' : ''}`}
       onCancel={(e) => {
         e.preventDefault();
         onClose();

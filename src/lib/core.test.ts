@@ -185,7 +185,9 @@ describe('plantilla Banco New', () => {
     expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
     expect(issues.filter((i) => i.message.includes('no es alcanzable') || i.message.includes('callejón'))).toEqual([]);
     expect(p.screens.length).toBe(19);
-    expect(p.components.length).toBe(34);
+    const { CATALOG, coverage } = await import('./catalog');
+    expect(coverage(p).covered).toBe(CATALOG.length);
+    expect(p.components.some((c) => c.id === 'cmp-bn-appbar')).toBe(true);
     const ids = new Set(p.screens.map((s) => s.id));
     for (const s of p.screens) for (const b of s.blocks) for (const target of Object.values(b.optionTargets ?? {})) expect(ids.has(target)).toBe(true);
   });
@@ -240,6 +242,117 @@ describe('hoja inferior', () => {
     expect(fixed.sheetOver).toBe('s-bn-inicio');
     expect(fixed.blocks.some((b) => b.id === 'bn-ac-texto')).toBe(false);
     expect(migrate(once)).toBe(once);
+  });
+});
+
+describe('biblioteca completa en cada proyecto', () => {
+  it('las tres plantillas cubren el catálogo sin errores del guardarraíl', async () => {
+    const { CATALOG, coverage } = await import('./catalog');
+    const { bancoNewProject } = await import('./seedBancoNew');
+    const { blankProject } = await import('./seed');
+    for (const p of [blankProject('u1', 'En blanco', ''), transferProject('u1'), bancoNewProject('u1')]) {
+      expect(coverage(p).covered).toBe(CATALOG.length);
+      expect(checkProject(p).filter((i) => i.severity === 'error')).toEqual([]);
+    }
+  });
+
+  it('completa un proyecto antiguo sin tocar lo existente, sin errores de contraste y una sola vez', async () => {
+    const { completeSystem, CATALOG } = await import('./catalog');
+    const old = clone(transferProject('u1'));
+    old.components = old.components.slice(0, 2);
+    old.tokens.colors = old.tokens.colors
+      .filter((c) => !['star', 'cardDark', 'cardDarkEnd', 'onDark', 'warning'].includes(c.name))
+      .map((c) => (c.name === 'success' ? { ...c, light: '#1E8E5A' } : c));
+    const once = completeSystem(old);
+    expect(once.components.slice(0, 2)).toEqual(old.components);
+    expect(once.components).toHaveLength(CATALOG.length);
+    expect(once.tokens.colors.some((c) => c.name === 'cardDark')).toBe(true);
+    expect(checkProject(once).filter((i) => i.severity === 'error')).toEqual([]);
+    expect(completeSystem(once)).toBe(once);
+  });
+
+  it('cada patrón trae guía completa y contenido para su vista previa', async () => {
+    const { CATALOG, sampleContent } = await import('./catalog');
+    for (const e of CATALOG) {
+      expect(e.summary && e.use.length && e.avoid.length && e.anatomy.length && e.a11y).toBeTruthy();
+      if (e.type !== 'divider') expect(sampleContent(e.type, e.variant, 'Marca').label).toBeTruthy();
+    }
+    expect(new Set(CATALOG.map((e) => e.key)).size).toBe(CATALOG.length);
+    expect(sampleContent('navbar', 'app', 'New').label).toBe('New');
+  });
+});
+
+describe('importar sistemas', () => {
+  it('lee variables CSS con modo oscuro, SCSS y selectores', async () => {
+    const { candidatesFromText } = await import('./systemIO');
+    const c = candidatesFromText(
+      'tokens.css',
+      ':root { --color-primary: #0074c8; --radius-lg: 16px; font-family: "Roboto", sans-serif; }\n[data-theme="dark"] { --color-primary: #5AB0F0; }\n.btn-danger { background: #C62828; }',
+    );
+    const primary = c.colors.find((x) => x.name === 'primary')!;
+    expect(primary.hex).toBe('#0074C8');
+    expect(primary.dark).toBe('#5AB0F0');
+    expect(c.colors.some((x) => x.hex === '#C62828' && x.name === 'btnDanger')).toBe(true);
+    expect(c.radius).toContain(16);
+    expect(c.fonts).toContain('Roboto');
+    const s = candidatesFromText('vars.scss', '$brand-primary: #FF0055;\n$text-muted: #666666;');
+    expect(s.colors.find((x) => x.name === 'brandPrimary')?.hex).toBe('#FF0055');
+  });
+
+  it('lee tailwind.config, W3C Design Tokens y el sistema exportado de Forma', async () => {
+    const { candidatesFromText, exportDtcg, exportSystemJson, exportTailwind } = await import('./systemIO');
+    const tw = candidatesFromText(
+      'tailwind.config.js',
+      "module.exports = { theme: { extend: { colors: { primary: { DEFAULT: '#1A66CC', 600: '#1554A6' }, danger: '#D0343A' }, fontFamily: { sans: ['Overpass', 'sans-serif'] }, borderRadius: { lg: '1rem' } } } }",
+    );
+    expect(tw.colors.find((x) => x.name === 'primary')?.hex).toBe('#1A66CC');
+    expect(tw.colors.find((x) => x.name === 'primary600')?.hex).toBe('#1554A6');
+    expect(tw.fonts).toContain('Overpass');
+    expect(tw.radius).toContain(16);
+    const tokens = transferProject('u1').tokens;
+    const dtcg = candidatesFromText('tokens.json', exportDtcg(tokens));
+    expect(dtcg.colors.find((x) => x.name === 'primary')?.hex).toBe('#0074C8');
+    expect(dtcg.colors.find((x) => x.name === 'primary')?.dark).toBe('#5AB0F0');
+    expect(dtcg.fonts).toContain('Inter');
+    const sys = candidatesFromText('sistema.json', exportSystemJson(transferProject('u1')));
+    expect(sys.system?.components.length).toBeGreaterThan(40);
+    expect(exportTailwind(tokens)).toContain('var(--color-primary)');
+  });
+
+  it('propone roles y deriva estados y modo oscuro con contraste', async () => {
+    const { buildTokens, suggestMapping } = await import('./systemIO');
+    const current = transferProject('u1').tokens;
+    const mapping = suggestMapping(
+      [
+        { hex: '#E4002B', name: 'Rojo marca', count: 3 },
+        { hex: '#111827', count: 9 },
+        { hex: '#FFFFFF', count: 20 },
+        { hex: '#16A34A', count: 2 },
+      ],
+      current,
+    );
+    expect(mapping.primary).toBe('#E4002B');
+    expect(mapping.onSurface).toBe('#111827');
+    expect(mapping.success).toBe('#16A34A');
+    const t = buildTokens(current, { ...mapping, border: '#12' }, { font: 'Roboto', radiusLg: 20 });
+    const get = (n: string) => t.colors.find((c) => c.name === n)!;
+    expect(contrast(get('onPrimary').light, get('primary').light)!).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(get('primary').dark, get('background').dark)!).toBeGreaterThanOrEqual(4.5);
+    expect(get('border').light).toBe(current.colors.find((c) => c.name === 'border')!.light);
+    expect(t.fontFamily.startsWith("'Roboto'")).toBe(true);
+    expect(t.radius.find((r) => r.name === 'md')?.value).toBe(15);
+  });
+
+  it('lee colores, textos y fuentes de un PDF', async () => {
+    const { scanContent, fontsFromPdf } = await import('./pdfExtract');
+    const colors = new Map<string, number>();
+    const texts: string[] = [];
+    scanContent('q 0 0.455 0.784 rg 10 10 80 40 re f BT /F1 12 Tf (Primario #0074C8) Tj [(Az) 20 (ul)] TJ ET 0 0 0 1 k', colors, texts);
+    expect(colors.has('#0074C8')).toBe(true);
+    expect(colors.has('#000000')).toBe(true);
+    expect(texts).toContain('Primario #0074C8');
+    expect(texts).toContain('Azul');
+    expect(fontsFromPdf('<< /Type /Font /BaseFont /ABCDEF+Inter-Bold >> << /BaseFont /Roboto-Regular >>')).toEqual(['Inter', 'Roboto']);
   });
 });
 

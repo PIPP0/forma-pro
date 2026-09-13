@@ -1,5 +1,6 @@
 import type { Block, BlockType, Component, Project, Screen, StateName, StyleProps, Tokens } from './model';
 import { builtInStyle } from './tokens';
+import { completeSystem } from './catalog';
 import { uid } from './ids';
 
 // Plantilla «Banco New»: app de banca móvil construida a partir de capturas de referencia.
@@ -476,7 +477,8 @@ export function bancoNewScreens(): Screen[] {
 
 export function bancoNewProject(ownerId: string, name = 'Banco New'): Project {
   const now = Date.now();
-  return {
+  // Los componentes propios de Banco New más el resto del catálogo, con sus tokens.
+  return completeSystem({
     id: uid('p_'),
     name,
     brand: 'New',
@@ -494,5 +496,5 @@ export function bancoNewProject(ownerId: string, name = 'Banco New'): Project {
     screens: bancoNewScreens(),
     createdAt: now,
     updatedAt: now,
-  };
+  });
 }

@@ -5,6 +5,7 @@ import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
 import { blankProject, exampleStudy, transferProject } from './seed';
 import { bancoNewProject } from './seedBancoNew';
+import { completeSystem } from './catalog';
 import { checkProject, hasBlockingErrors } from './flowCheck';
 import { uid } from './ids';
 import { notify } from './toast';
@@ -143,10 +144,7 @@ export async function ensureSamples() {
  */
 export function migrate(d: DB): DB {
   const needs = (p: Project) => p.screens.some((s) => s.id === 's-bn-accesos' && !s.presentation);
-  if (!d.projects.some(needs)) return d;
-  return {
-    ...d,
-    projects: d.projects.map((p) =>
+  const sheets = d.projects.map((p) =>
       needs(p)
         ? {
             ...p,
@@ -156,8 +154,10 @@ export function migrate(d: DB): DB {
             ),
           }
         : p,
-    ),
-  };
+  );
+  // Cada proyecto tiene la biblioteca completa: se agregan los patrones y colores que falten.
+  const projects = sheets.map(completeSystem);
+  return projects.every((p, i) => p === d.projects[i]) ? d : { ...d, projects };
 }
 
 /** Copia el ejemplo con identificadores nuevos y la persona actual como dueña. */

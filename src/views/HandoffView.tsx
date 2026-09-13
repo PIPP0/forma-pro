@@ -3,6 +3,7 @@ import type { Mode, Project, Role } from '../lib/model';
 import { BREAKPOINTS, STYLE_KEYS, TYPE_ROLE_LABEL, baseId, blockMeta } from '../lib/model';
 import { componentCss, componentHtml, componentReact, cssRef, effectiveStyle, exportCss, exportJs, exportStyleDictionary, findComponent, parseRef, resolve, typeToken } from '../lib/tokens';
 import { download } from '../lib/share';
+import { exportDtcg, exportTailwind } from '../lib/systemIO';
 import { ScreenCanvas } from '../components/ScreenCanvas';
 import { Badge, Button, Code, Empty, Field, Tabs } from '../components/ui';
 
@@ -198,9 +199,18 @@ function SpecValue({ v }: { v?: string }) {
 }
 
 function TokenExports({ p }: { p: Project }) {
-  const [format, setFormat] = useState<'css' | 'js' | 'sd'>('css');
-  const out = format === 'css' ? exportCss(p.tokens) : format === 'js' ? exportJs(p.tokens) : exportStyleDictionary(p.tokens);
-  const file = format === 'css' ? 'tokens.css' : format === 'js' ? 'tokens.js' : 'tokens.json';
+  const [format, setFormat] = useState<'css' | 'js' | 'sd' | 'dtcg' | 'tailwind'>('css');
+  const out =
+    format === 'css'
+      ? exportCss(p.tokens)
+      : format === 'js'
+        ? exportJs(p.tokens)
+        : format === 'dtcg'
+          ? exportDtcg(p.tokens)
+          : format === 'tailwind'
+            ? exportTailwind(p.tokens)
+            : exportStyleDictionary(p.tokens);
+  const file = { css: 'tokens.css', js: 'tokens.js', sd: 'tokens.json', dtcg: 'tokens.dtcg.json', tailwind: 'tailwind.config.js' }[format];
   return (
     <section className="section stack">
       <div className="row between">
@@ -212,10 +222,12 @@ function TokenExports({ p }: { p: Project }) {
           items={[
             { id: 'css', label: 'CSS' },
             { id: 'js', label: 'JavaScript' },
+            { id: 'tailwind', label: 'Tailwind' },
+            { id: 'dtcg', label: 'Figma (W3C)' },
             { id: 'sd', label: 'Style Dictionary' },
           ]}
         />
-        <Button size="sm" onClick={() => download(file, out, format === 'sd' ? 'application/json' : format === 'css' ? 'text/css' : 'text/javascript')}>
+        <Button size="sm" onClick={() => download(file, out, format === 'sd' || format === 'dtcg' ? 'application/json' : format === 'css' ? 'text/css' : 'text/javascript')}>
           Descargar {file}
         </Button>
       </div>
