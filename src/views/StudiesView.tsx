@@ -813,7 +813,7 @@ function SessionDrawer({ study, session, events, at, onClose }: { study: Study; 
             <li key={e.id} id={`ev-at-${e.elapsed}`} className={at === e.elapsed ? 'hl' : ''}>
               <time>{clock(e.elapsed)}</time>
               <span>
-                {KIND_LABEL[e.kind]} {e.kind === 'navigate' ? `«${screenName(snap, e.screen)}»` : e.block ? `«${blockLabel(snap, e.block)}»` : ''}
+                {KIND_LABEL[e.kind]} {e.kind === 'navigate' ? `«${screenName(snap, e.screen)}»` : e.option ? `«${e.option.replace(/\*\*/g, '')}»` : e.block ? `«${blockLabel(snap, e.block)}»` : ''}
                 {e.kind !== 'navigate' && <span className="muted"> en {screenName(snap, e.screen)}</span>}
                 {e.dwell ? <span className="muted"> ({fmt1(e.dwell / 1000)} s)</span> : null}
               </span>

@@ -78,6 +78,14 @@ const DOC: Record<BlockType, string> = {
   alert: 'Mensaje de éxito o error después de una acción.',
   image: 'Ilustración o foto de apoyo.',
   divider: 'Separa grupos de contenido.',
+  tabBar: 'Navegación principal fija abajo. Cada opción lleva a una sección y marca la actual.',
+  menuList: 'Tarjeta con opciones navegables: título, descripción e ícono por fila.',
+  accountCard: 'Saldo de una cuenta o resumen con filas de detalle y enlace al pie.',
+  creditCard: 'Tarjeta de crédito con cupos utilizados y disponibles.',
+  carousel: 'Contactos frecuentes, promociones o productos destacados en fila deslizable.',
+  financeCard: 'Resumen financiero con gráfico y métricas clave.',
+  rating: 'Calificación de 1 a 5 estrellas para encuestas de satisfacción.',
+  iconGrid: 'Accesos rápidos en grilla de íconos.',
 };
 
 export function SystemView({ project, role }: { project: Project; role: Role }) {

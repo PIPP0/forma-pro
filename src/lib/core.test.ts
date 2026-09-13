@@ -177,6 +177,20 @@ describe('embudo de tarea', () => {
   });
 });
 
+describe('plantilla Banco New', () => {
+  it('no tiene errores del guardarraíl y todas sus pantallas son alcanzables', async () => {
+    const { bancoNewProject } = await import('./seedBancoNew');
+    const p = bancoNewProject('u1');
+    const issues = checkProject(p);
+    expect(issues.filter((i) => i.severity === 'error')).toEqual([]);
+    expect(issues.filter((i) => i.message.includes('no es alcanzable') || i.message.includes('callejón'))).toEqual([]);
+    expect(p.screens.length).toBe(19);
+    expect(p.components.length).toBe(34);
+    const ids = new Set(p.screens.map((s) => s.id));
+    for (const s of p.screens) for (const b of s.blocks) for (const target of Object.values(b.optionTargets ?? {})) expect(ids.has(target)).toBe(true);
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

@@ -1,5 +1,5 @@
 import type { Project, Session, Study, StudyEvent } from './model';
-import { baseId } from './model';
+import { baseId, plainText } from './model';
 import { bfs, navGraph } from './flowCheck';
 
 export interface Citation {
@@ -69,7 +69,7 @@ export function blockLabel(p: Project, blockId?: string) {
   if (!blockId) return '';
   for (const s of p.screens) {
     const b = s.blocks.find((x) => x.id === blockId);
-    if (b) return b.label;
+    if (b) return plainText(b.label);
   }
   return 'bloque eliminado';
 }
@@ -106,15 +106,15 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
 
   const themes: Theme[] = [];
 
-  for (const [k, bySession] of group((e) => e.kind === 'hesitation' && !!e.block, (e) => `${e.screen}|${e.block}`)) {
-    const [screen, block] = k.split('|');
+  for (const [k, bySession] of group((e) => e.kind === 'hesitation' && !!e.block, (e) => `${e.screen}|${e.block}|${e.option ?? ''}`)) {
+    const [screen, block, option] = k.split('|');
     const list = [...bySession.values()];
-    const dwells = [...events.filter((e) => e.kind === 'hesitation' && e.block === block && e.screen === screen)].map((e) => e.dwell ?? 0);
+    const dwells = [...events.filter((e) => e.kind === 'hesitation' && e.block === block && e.screen === screen && (e.option ?? '') === option)].map((e) => e.dwell ?? 0);
     const avg = dwells.reduce((a, b) => a + b, 0) / Math.max(1, dwells.length);
     themes.push({
       id: `hes-${k}`,
       kind: 'hesitation',
-      title: `${people(list.length, total, 'dudó', 'dudaron')} en «${blockLabel(p, block)}»`,
+      title: `${people(list.length, total, 'dudó', 'dudaron')} en «${option ? plainText(option) : blockLabel(p, block)}»`,
       detail: `En «${screenName(p, screen)}» pasaron en promedio ${fmt1(avg / 1000)} s sin actuar antes de interactuar con ese elemento.`,
       count: list.length,
       total,
@@ -349,7 +349,7 @@ export function buildAiDataset(study: Study, sessions: Session[], events: StudyE
             comment: f?.comment ?? null,
             duration_s: f ? Math.round(f.durationMs / 1000) : null,
             path: te.filter((e) => e.kind === 'navigate').map((e) => screenName(p, e.screen)),
-            hesitations: te.filter((e) => e.kind === 'hesitation').map((e) => ({ element: blockLabel(p, e.block), screen: screenName(p, e.screen), seconds: Math.round((e.dwell ?? 0) / 1000) })),
+            hesitations: te.filter((e) => e.kind === 'hesitation').map((e) => ({ element: e.option ? plainText(e.option) : blockLabel(p, e.block), screen: screenName(p, e.screen), seconds: Math.round((e.dwell ?? 0) / 1000) })),
             taps_without_action: te.filter((e) => e.kind === 'misclick').map((e) => screenName(p, e.screen)),
             blocked_by_required_field: te.filter((e) => e.kind === 'blocked').map((e) => screenName(p, e.screen)),
           };

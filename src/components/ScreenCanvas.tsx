@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
-import type { Mode, Project, Screen } from '../lib/model';
+import type { Block, Mode, Project, Screen } from '../lib/model';
 import { breakpointOf } from '../lib/model';
-import { colorValue, spaceValue } from '../lib/tokens';
+import { colorValue, findComponent, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
 import { IconShield } from './icons';
 
@@ -50,16 +50,7 @@ export function ScaledFrame({
         <div
           ref={inner}
           className={`device device-${width < 600 ? 'phone' : 'wide'}`}
-          style={{
-            width,
-            height: fixed ? height : undefined,
-            minHeight: height,
-            transform: `scale(${scale})`,
-            transformOrigin: 'top left',
-            position: 'absolute',
-            top: 0,
-            left: 0,
-          }}
+          style={{ width, height: fixed ? height : undefined, minHeight: height, transform: `scale(${scale})`, transformOrigin: 'top left', position: 'absolute', top: 0, left: 0 }}
         >
           {children}
         </div>
@@ -68,10 +59,15 @@ export function ScaledFrame({
   );
 }
 
+const screenPadding = (p: Project) => ({ top: spaceValue(p.tokens, 'sm', 8), side: spaceValue(p.tokens, 'lg', 16) + 4, bottom: spaceValue(p.tokens, 'xl', 24) });
+
 export function screenStyle(p: Project, mode: Mode, wireframe?: boolean): CSSProperties {
+  const pad = screenPadding(p);
+  const surface = colorValue(p.tokens, 'surface', mode, '#FFF');
+  const background = colorValue(p.tokens, 'background', mode, mode === 'dark' ? '#111' : '#FFF');
   return {
-    background: wireframe ? '#FFFFFF' : colorValue(p.tokens, 'background', mode, mode === 'dark' ? '#111' : '#FFF'),
-    padding: `${spaceValue(p.tokens, 'sm', 8)}px ${spaceValue(p.tokens, 'lg', 16) + 4}px ${spaceValue(p.tokens, 'xl', 24)}px`,
+    background: wireframe ? '#FFFFFF' : p.backgroundStyle === 'gradient' ? `linear-gradient(180deg, ${surface} 0px, ${surface} 120px, ${background} 320px)` : background,
+    padding: `${pad.top}px ${pad.side}px ${pad.bottom}px`,
     display: 'flex',
     flexDirection: 'column',
     gap: spaceValue(p.tokens, 'lg', 16),
@@ -81,31 +77,55 @@ export function screenStyle(p: Project, mode: Mode, wireframe?: boolean): CSSPro
   };
 }
 
+export const contentWidth = (screen: Screen) => (screen.breakpoint === 'desktop' ? 560 : screen.breakpoint === 'tablet' ? 520 : undefined);
+
+/** Ajustes de ubicación por bloque: barra inferior fija, pestañas y carruseles a sangre. */
+export function blockWrapperStyle(p: Project, b: Block, maxW?: number): CSSProperties | undefined {
+  const pad = screenPadding(p);
+  const variant = findComponent(p, b.componentId)?.variant ?? b.variant;
+  if (b.type === 'tabBar') return { marginTop: 'auto', marginLeft: -pad.side, marginRight: -pad.side, marginBottom: -pad.bottom, position: 'sticky', bottom: 0, zIndex: 3 };
+  if (b.type === 'tabs' && variant === 'underline') return { marginLeft: -pad.side, marginRight: -pad.side };
+  if (b.type === 'carousel') return { marginRight: -pad.side };
+  if (maxW && b.type !== 'navbar') return { width: '100%', maxWidth: maxW, alignSelf: 'center' };
+  return undefined;
+}
+
 /** Barra de estado, nota al pie e indicador de inicio de un teléfono. */
 export function PhoneChrome({ project, mode, wireframe, enabled, children }: { project: Project; mode: Mode; wireframe?: boolean; enabled: boolean; children: ReactNode }) {
   if (!enabled) return <>{children}</>;
-  const bg = wireframe ? '#FFFFFF' : colorValue(project.tokens, 'background', mode, '#FFF');
+  const gradient = project.backgroundStyle === 'gradient';
+  const bg = wireframe ? '#FFFFFF' : colorValue(project.tokens, gradient ? 'surface' : 'background', mode, '#FFF');
   const fg = wireframe ? '#3A424A' : colorValue(project.tokens, 'onSurface', mode, '#111');
   const muted = wireframe ? '#7C868F' : colorValue(project.tokens, 'muted', mode, '#666');
+  const wave = project.statusBar === 'wave';
+  const statusColor = wave && !wireframe ? '#FFFFFF' : fg;
   return (
     <div className="phone" style={{ background: bg, fontFamily: project.tokens.fontFamily }}>
-      <div className="phone-status" style={{ color: fg }}>
-        <span>9:41</span>
-        <span className="phone-status-icons" aria-hidden="true">
-          <svg width="16" height="10" viewBox="0 0 16 10" fill={fg}>
+      <div className="phone-status" style={{ color: statusColor, position: 'relative', overflow: 'hidden' }}>
+        {wave && (
+          <svg aria-hidden="true" viewBox="0 0 375 56" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+            <rect width="375" height="56" fill={wireframe ? '#9AA0A6' : '#4A86D6'} />
+            <path d="M0 56 V46 C 60 34 120 34 175 46 L 160 56 Z" fill={wireframe ? '#80868C' : '#E5484D'} />
+            <path d="M190 56 C 250 46 310 36 375 34 V56 Z" fill={wireframe ? '#B5BABE' : '#F4C430'} />
+            <path d="M120 56 C 200 46 290 48 375 48 V56 Z" fill={bg} />
+          </svg>
+        )}
+        <span style={{ position: 'relative' }}>9:41</span>
+        <span className="phone-status-icons" aria-hidden="true" style={{ position: 'relative' }}>
+          <svg width="16" height="10" viewBox="0 0 16 10" fill={statusColor}>
             <rect x="0" y="6" width="3" height="4" rx="0.6" />
             <rect x="4.3" y="4" width="3" height="6" rx="0.6" />
             <rect x="8.6" y="2" width="3" height="8" rx="0.6" />
             <rect x="12.9" y="0" width="3" height="10" rx="0.6" />
           </svg>
-          <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke={fg} strokeWidth="1.6" strokeLinecap="round">
+          <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke={statusColor} strokeWidth="1.6" strokeLinecap="round">
             <path d="M1 3.6a8.5 8.5 0 0112 0M3.2 6a5.3 5.3 0 017.6 0" />
-            <circle cx="7" cy="8.6" r="0.9" fill={fg} stroke="none" />
+            <circle cx="7" cy="8.6" r="0.9" fill={statusColor} stroke="none" />
           </svg>
           <svg width="22" height="11" viewBox="0 0 22 11" fill="none">
-            <rect x="0.6" y="0.6" width="18" height="9.8" rx="2.6" stroke={fg} strokeOpacity="0.45" />
-            <rect x="2.2" y="2.2" width="14.8" height="6.6" rx="1.5" fill={fg} />
-            <rect x="19.8" y="3.6" width="1.6" height="3.8" rx="0.8" fill={fg} fillOpacity="0.45" />
+            <rect x="0.6" y="0.6" width="18" height="9.8" rx="2.6" stroke={statusColor} strokeOpacity="0.45" />
+            <rect x="2.2" y="2.2" width="14.8" height="6.6" rx="1.5" fill={statusColor} />
+            <rect x="19.8" y="3.6" width="1.6" height="3.8" rx="0.8" fill={statusColor} fillOpacity="0.45" />
           </svg>
         </span>
       </div>
@@ -119,8 +139,6 @@ export function PhoneChrome({ project, mode, wireframe, enabled, children }: { p
     </div>
   );
 }
-
-export const contentWidth = (screen: Screen) => (screen.breakpoint === 'desktop' ? 560 : screen.breakpoint === 'tablet' ? 520 : undefined);
 
 export function ScreenCanvas({
   project,
@@ -145,6 +163,7 @@ export function ScreenCanvas({
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
+  const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
   return (
     <ScaledFrame width={bp.width} height={bp.height} scale={scale}>
       <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile'}>
@@ -155,13 +174,13 @@ export function ScreenCanvas({
                 key={b.id}
                 data-block-id={b.id}
                 className={`blk ${selectedBlockId === b.id ? 'selected' : ''}`}
-                style={maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : undefined}
+                style={blockWrapperStyle(project, b, maxW)}
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelect?.(b.id);
                 }}
               >
-                <BlockView project={project} block={b} mode={mode} wireframe={wireframe} />
+                <BlockView project={project} block={b} mode={mode} wireframe={wireframe} pendingRequired={b.type === 'button' && !!b.disableUntilValid && pendingRequired} />
                 {measures && selectedBlockId === b.id && <Measure />}
               </div>
             ))}
@@ -183,11 +202,7 @@ function Measure() {
     if (!host) return;
     const measure = () => {
       const prev = host.previousElementSibling as HTMLElement | null;
-      setDims({
-        w: Math.round(host.offsetWidth),
-        h: Math.round(host.offsetHeight),
-        gap: prev ? Math.round(host.offsetTop - (prev.offsetTop + prev.offsetHeight)) : null,
-      });
+      setDims({ w: Math.round(host.offsetWidth), h: Math.round(host.offsetHeight), gap: prev ? Math.round(host.offsetTop - (prev.offsetTop + prev.offsetHeight)) : null });
     };
     measure();
     const ro = new ResizeObserver(measure);

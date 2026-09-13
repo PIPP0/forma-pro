@@ -4,6 +4,7 @@ import { emptyDb } from './model';
 import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
 import { blankProject, exampleStudy, transferProject } from './seed';
+import { bancoNewProject } from './seedBancoNew';
 import { checkProject, hasBlockingErrors } from './flowCheck';
 import { uid } from './ids';
 import { notify } from './toast';
@@ -218,11 +219,12 @@ export function redo(projectId: string) {
 
 // ---------- Proyectos ----------
 
-export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank'; withExampleStudy?: boolean }): string | undefined {
+export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank' | 'bancoNew'; withExampleStudy?: boolean }): string | undefined {
   const user = currentUser();
   if (!user) return undefined;
-  const name = opts.name.trim() || 'Proyecto sin nombre';
-  const project = opts.template === 'transfer' ? transferProject(user.id, name) : blankProject(user.id, name, opts.business.trim());
+  const name = opts.name.trim() || (opts.template === 'bancoNew' ? 'Banco New' : 'Proyecto sin nombre');
+  const project =
+    opts.template === 'transfer' ? transferProject(user.id, name) : opts.template === 'bancoNew' ? bancoNewProject(user.id, name) : blankProject(user.id, name, opts.business.trim());
   if (opts.business.trim()) project.business = opts.business.trim();
   let next: DB = {
     ...db,

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Block, BlockType, Breakpoint, Mode, OpInput, Project, Role, Screen } from '../lib/model';
-import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf } from '../lib/model';
+import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
 import { addComment, applyOps, canRedo, canUndo, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
 import { clone, edit } from '../lib/ops';
@@ -63,6 +63,24 @@ const DEFAULTS: Record<BlockType, Partial<Block>> = {
   alert: { label: 'Aviso', detail: 'Detalle del aviso' },
   image: { label: 'Imagen' },
   divider: { label: '' },
+  tabBar: { label: 'Navegación principal', options: ['Inicio|wallet', 'Transferir|transfer', 'Más|plus', 'Créditos|credits', 'Inversiones|investments'], value: 'Inicio' },
+  menuList: { label: 'Opciones', options: ['Primera opción|Descripción breve|info', 'Segunda opción|Descripción breve|info'] },
+  accountCard: { label: 'Cuenta Corriente', value: '$ 0', detail: 'Saldo disponible', linkLabel: 'Más detalles' },
+  creditCard: { label: 'Tarjeta Visa', detail: 'Titular **** 0000', value: 'VISA', options: ['Utilizado|$ 0', 'Disponible|$ 0'], linkLabel: 'Ver datos' },
+  carousel: { label: 'Destacados', variant: 'promo', options: ['gift|Beneficio **destacado**', 'card|Otra **promoción**'] },
+  financeCard: { label: 'Resumen', detail: 'Este mes', value: 'donut', options: ['Gasto total|$ 0|up', 'Transferencias|$ 0'], linkLabel: 'Ver detalle' },
+  rating: { label: '¿Cómo evaluarías esta experiencia?', required: true },
+  iconGrid: { label: 'Accesos', options: ['Inicio|wallet', 'Transferir|transfer', 'Créditos|credits', 'Inversiones|investments'] },
+};
+
+const OPTION_HINT: Partial<Record<BlockType, string>> = {
+  tabBar: 'Una por línea: Etiqueta|ícono. Ícono «plus» para el botón central.',
+  menuList: 'Una por línea: Título|Subtítulo|ícono.',
+  accountCard: 'Filas: Etiqueta|Valor|Detalle|in, out o up.',
+  creditCard: 'Columnas: Etiqueta|Monto|Monto en dólares.',
+  carousel: 'Contactos: Iniciales|Nombre|Detalle. Promociones: emoji|Texto. Destacado: emoji|Título|Descripción|Enlace.',
+  financeCard: 'Métricas: Etiqueta|Valor|in o up.',
+  iconGrid: 'Una por línea: Etiqueta|ícono.',
 };
 
 function newBlock(type: BlockType, componentId?: string, variant?: string): Block {
@@ -86,6 +104,46 @@ const VARIANTS: Partial<Record<BlockType, { v: string; l: string }[]>> = {
   alert: [
     { v: '', l: 'Éxito' },
     { v: 'danger', l: 'Error' },
+  ],
+  navbar: [
+    { v: '', l: 'Marca' },
+    { v: 'app', l: 'Barra de la app' },
+    { v: 'title', l: 'Título con volver' },
+    { v: 'close', l: 'Cierre' },
+  ],
+  listItem: [
+    { v: '', l: 'Fila' },
+    { v: 'icon', l: 'Fila destacada con ícono' },
+    { v: 'profile', l: 'Perfil' },
+    { v: 'contact', l: 'Contacto' },
+    { v: 'notification', l: 'Notificación' },
+    { v: 'logout', l: 'Cerrar sesión' },
+  ],
+  tabs: [
+    { v: '', l: 'Segmentadas' },
+    { v: 'underline', l: 'Subrayadas' },
+  ],
+  radio: [
+    { v: '', l: 'Lista' },
+    { v: 'numbers', l: 'Números en fila' },
+  ],
+  input: [
+    { v: '', l: 'Campo' },
+    { v: 'search', l: 'Buscador' },
+  ],
+  carousel: [
+    { v: 'promo', l: 'Promociones' },
+    { v: 'contacts', l: 'Contactos' },
+    { v: 'feature', l: 'Destacado' },
+  ],
+  menuList: [
+    { v: '', l: 'Tarjeta con opciones' },
+    { v: 'info', l: 'Datos sin navegación' },
+    { v: 'plain', l: 'Menú sin tarjeta' },
+  ],
+  accountCard: [
+    { v: '', l: 'Cuenta' },
+    { v: 'summary', l: 'Resumen' },
   ],
 };
 
@@ -315,7 +373,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                               }}
                             >
                               <IconDiamond size={14} />
-                              <span className="tree-name">{b.label || blockMeta(b.type).label}</span>
+                              <span className="tree-name">{plainText(b.label) || blockMeta(b.type).label}</span>
                             </button>
                           ))}
                         {project.screens
@@ -799,9 +857,25 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
   const bases = project.screens.filter((s) => !s.variantOf);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
 
-  const detailTypes: BlockType[] = ['navbar', 'heading', 'balance', 'help', 'card', 'input', 'textarea', 'amount', 'select', 'listItem', 'alert', 'avatar', 'progress'];
-  const valueLabel: Partial<Record<BlockType, string>> = { balance: 'Monto', progress: 'Porcentaje (0 a 100)', tabs: 'Pestaña activa' };
-  const optionTypes: BlockType[] = ['select', 'radio', 'tabs'];
+  const detailTypes: BlockType[] = ['navbar', 'heading', 'balance', 'help', 'card', 'input', 'textarea', 'amount', 'select', 'listItem', 'alert', 'avatar', 'progress', 'menuList', 'accountCard', 'creditCard', 'financeCard'];
+  const valueLabel: Partial<Record<BlockType, string>> = {
+    balance: 'Monto',
+    progress: 'Porcentaje (0 a 100)',
+    tabs: 'Pestaña activa',
+    tabBar: 'Pestaña activa',
+    iconGrid: 'Acceso activo',
+    accountCard: 'Monto',
+    creditCard: 'Red de la tarjeta',
+    financeCard: 'Gráfico: donut, bars o vacío',
+    menuList: 'Ilustración (emoji o money, rocket, deposit…)',
+    listItem: 'Ícono (icon) o «read» para notificación leída',
+    navbar: 'Ícono a la derecha (title)',
+    rating: 'Valor inicial (1 a 5)',
+  };
+  const optionTypes: BlockType[] = ['select', 'radio', 'tabs', 'tabBar', 'menuList', 'accountCard', 'creditCard', 'carousel', 'financeCard', 'iconGrid'];
+  const linkTypes: BlockType[] = ['accountCard', 'creditCard', 'financeCard'];
+  const keys = optionKeys(block.type, comp?.variant ?? block.variant, block.options);
+  const keyLabel = (k: string) => ({ menu: 'Menú', qr: 'Código QR', bell: 'Notificaciones', right: 'Ícono derecho' })[k] ?? plainText(k);
   const alignTypes: BlockType[] = ['heading', 'text', 'link'];
   const hasAction = meta.interactive && !meta.field;
 
@@ -850,8 +924,13 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
             <CommitInput value={block.options?.[0] ?? ''} disabled={!editable} onCommit={(v) => set('options', v ? [v] : undefined)} />
           </Field>
         )}
+        {linkTypes.includes(block.type) && (
+          <Field label="Enlace al pie">
+            <CommitInput value={block.linkLabel ?? ''} disabled={!editable} onCommit={(v) => set('linkLabel', v.trim() || undefined)} />
+          </Field>
+        )}
         {optionTypes.includes(block.type) && (
-          <Field label="Opciones" hint="Una por línea.">
+          <Field label="Opciones" hint={OPTION_HINT[block.type] ?? 'Una por línea.'}>
             <CommitInput
               multiline
               value={(block.options ?? []).join('\n')}
@@ -936,6 +1015,38 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
               </Field>
             )}
           </>
+        )}
+        {keys.length > 0 && (
+          <div className="stack">
+            <span className="field-label">Destino de cada opción</span>
+            {keys.map((key) => (
+              <Field key={key} label={keyLabel(key)}>
+                <select
+                  value={block.optionTargets?.[key] ?? ''}
+                  disabled={!editable}
+                  onChange={(e) => {
+                    const next = { ...(block.optionTargets ?? {}) };
+                    if (e.target.value) next[key] = e.target.value;
+                    else delete next[key];
+                    set('optionTargets', Object.keys(next).length ? next : undefined, `Conectar «${keyLabel(key)}»`);
+                  }}
+                >
+                  <option value="">No navega</option>
+                  {bases.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ))}
+          </div>
+        )}
+        {block.type === 'button' && (
+          <label className="check">
+            <input type="checkbox" checked={!!block.disableUntilValid} disabled={!editable} onChange={(e) => set('disableUntilValid', e.target.checked || undefined)} />
+            <span>Se ve deshabilitado hasta completar los obligatorios</span>
+          </label>
         )}
         {meta.field && (
           <label className="check">

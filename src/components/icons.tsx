@@ -218,6 +218,263 @@ export const IconFileImage = (p: IconProps = {}) =>
     p,
   );
 
+/** Íconos de interfaz para los prototipos (banca móvil y usos generales). */
+const APP_ICONS: Record<string, ReactNode> = {
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
+  qr: (
+    <>
+      <rect x="6" y="6" width="4.5" height="4.5" rx="0.8" />
+      <rect x="13.5" y="6" width="4.5" height="4.5" rx="0.8" />
+      <rect x="6" y="13.5" width="4.5" height="4.5" rx="0.8" />
+      <path d="M13.5 13.5h1.8v1.8h-1.8zM16.2 16.2H18V18h-1.8z" />
+      <path d="M3 7.5V3h4.5M16.5 3H21v4.5M21 16.5V21h-4.5M7.5 21H3v-4.5" />
+    </>
+  ),
+  bell: (
+    <>
+      <path d="M6 16.5V11a6 6 0 1112 0v5.5l1.5 1.5h-15z" />
+      <path d="M10 20.5a2 2 0 004 0" />
+    </>
+  ),
+  wallet: (
+    <>
+      <path d="M4 8.5h14.5a1.5 1.5 0 011.5 1.5v8.5a1.5 1.5 0 01-1.5 1.5h-13A1.5 1.5 0 014 18.5z" />
+      <path d="M4 8.5l12-4v4" />
+      <rect x="15" y="12" width="6" height="4" rx="1" />
+    </>
+  ),
+  transfer: (
+    <>
+      <rect x="5.5" y="5.5" width="13" height="13" rx="3" />
+      <path d="M12 8.5v7M13.8 10c-.3-.6-1-1-1.8-1-1 0-1.8.6-1.8 1.3 0 1.7 3.6.8 3.6 2.6 0 .7-.8 1.3-1.8 1.3-.8 0-1.5-.4-1.8-1" />
+      <path d="M19 8.5l2-2-2-2M5 15.5l-2 2 2 2" />
+    </>
+  ),
+  plus: <path d="M12 5v14M5 12h14" />,
+  credits: (
+    <>
+      <rect x="3" y="8.5" width="14.5" height="10" rx="1.5" />
+      <path d="M6 8.5V6h15v10h-3.5" />
+      <path d="M10.2 11.5v4M11.6 12.3c-.2-.4-.7-.7-1.3-.7-.7 0-1.3.4-1.3.9 0 1.2 2.6.6 2.6 1.8 0 .5-.6.9-1.3.9-.6 0-1.1-.3-1.3-.7" />
+    </>
+  ),
+  investments: (
+    <>
+      <path d="M4 20.5h16" />
+      <path d="M6 20.5v-5h3v5M11 20.5v-8h3v8M16 20.5V9h3v11.5" />
+      <path d="M8 3.5v4M9.3 4.3c-.2-.4-.7-.7-1.3-.7-.7 0-1.2.4-1.2.9 0 1.1 2.5.6 2.5 1.7 0 .5-.6.9-1.3.9-.6 0-1-.3-1.2-.7" />
+    </>
+  ),
+  cashCard: (
+    <>
+      <rect x="3" y="6.5" width="18" height="12" rx="2" />
+      <path d="M3 10.5h18" />
+      <path d="M12 12.5v4.5M13.3 13.3c-.2-.4-.7-.7-1.3-.7-.7 0-1.3.4-1.3.9 0 1.2 2.6.6 2.6 1.8 0 .5-.6.9-1.3.9-.6 0-1.1-.3-1.3-.7" />
+    </>
+  ),
+  compare: (
+    <>
+      <rect x="3" y="4.5" width="13" height="9" rx="1.5" />
+      <path d="M9.5 7v4M10.8 7.8c-.2-.4-.7-.7-1.3-.7-.7 0-1.2.4-1.2.8 0 1.1 2.5.6 2.5 1.7 0 .5-.6.9-1.3.9-.6 0-1-.3-1.2-.7" />
+      <path d="M14 16l2.5 3 4.5-5.5" />
+    </>
+  ),
+  debts: (
+    <>
+      <path d="M6 3h9l3 3v8" />
+      <path d="M6 3v17h8" />
+      <path d="M9 8h6M9 11.5h6M9 15h3" />
+      <circle cx="18" cy="18" r="3" />
+      <path d="M18 16.5v3M16.5 18h3" />
+    </>
+  ),
+  feedback: (
+    <>
+      <circle cx="8" cy="10" r="3" />
+      <path d="M2.5 20.5c.4-3 2.6-5 5.5-5s5.1 2 5.5 5" />
+      <path d="M13 3.5h8.5v6.5h-4L15 12.5V10h-2z" />
+    </>
+  ),
+  user: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="10" r="3.2" />
+      <path d="M6.3 18.2c1.3-2.1 3.3-3.2 5.7-3.2s4.4 1.1 5.7 3.2" />
+    </>
+  ),
+  gear: (
+    <>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 2.8l1.7 2.3 2.8-.5.7 2.8 2.5 1.4-1.2 2.6 1.2 2.6-2.5 1.4-.7 2.8-2.8-.5L12 21.2l-1.7-2.3-2.8.5-.7-2.8-2.5-1.4L5.5 12 4.3 9.4l2.5-1.4.7-2.8 2.8.5z" />
+    </>
+  ),
+  chat: (
+    <>
+      <path d="M4 5h16v11H9.5L5 19.5V16H4z" />
+      <path d="M8 9h8M8 12h5" />
+    </>
+  ),
+  gift: (
+    <>
+      <rect x="4" y="10" width="16" height="10.5" rx="1" />
+      <path d="M3 10h18V7H3zM12 7v13.5" />
+      <path d="M12 7C10.5 4 7 3.8 7 5.5 7 7 10 7 12 7zM12 7c1.5-3 5-3.2 5-1.5C17 7 14 7 12 7z" />
+    </>
+  ),
+  voucher: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="1.5" />
+      <path d="M13 10h5M13 14h5" />
+      <path d="M8 9v6M9.5 10.2c-.3-.5-.9-.7-1.5-.7-.8 0-1.5.5-1.5 1.1 0 1.4 3 .7 3 2.1 0 .6-.7 1.1-1.5 1.1-.6 0-1.2-.3-1.5-.7" />
+    </>
+  ),
+  power: (
+    <>
+      <path d="M12 3v8" />
+      <path d="M6.3 6.8a8 8 0 1011.4 0" />
+    </>
+  ),
+  doc: (
+    <>
+      <path d="M4 5.5h13v14H4z" />
+      <path d="M7 9.5h7M7 12.5h7M7 15.5h4" />
+      <circle cx="18.5" cy="5" r="2" fill="currentColor" stroke="none" />
+    </>
+  ),
+  briefcase: (
+    <>
+      <rect x="3" y="7" width="18" height="12.5" rx="1.5" />
+      <path d="M9 7V5h6v2M3 12h18" />
+    </>
+  ),
+  funds: (
+    <>
+      <circle cx="12" cy="12" r="3.5" />
+      <path d="M5 9a7.5 7.5 0 0114 0M19 15a7.5 7.5 0 01-14 0" />
+      <circle cx="4.5" cy="17" r="1" />
+      <circle cx="19.5" cy="17" r="1" />
+      <circle cx="12" cy="3.5" r="1" />
+    </>
+  ),
+  clock: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  piggy: (
+    <>
+      <path d="M5 11.5c0-3.3 3.1-6 7-6s7 2.7 7 6c0 2-1.1 3.7-2.8 4.8L15.5 19.5h-3l-.4-1.5h-1.2l-.4 1.5h-3l-.8-3.2C5.9 15.2 5 13.5 5 11.5z" />
+      <path d="M19 10.5h2.2v3H19" />
+      <path d="M12 9v5M13.4 9.9c-.3-.5-.8-.8-1.4-.8-.8 0-1.4.5-1.4 1 0 1.4 2.8.7 2.8 2.1 0 .6-.6 1-1.4 1-.6 0-1.1-.3-1.4-.8" />
+    </>
+  ),
+  shield: (
+    <>
+      <path d="M12 3l7.5 3v6c0 4.4-3.2 8.2-7.5 9-4.3-.8-7.5-4.6-7.5-9V6z" />
+      <path d="M9 12l2 2 4-4" />
+    </>
+  ),
+  receipt: (
+    <>
+      <path d="M5 3h14v18l-2.5-1.5L14 21l-2-1.5-2 1.5-2.5-1.5L5 21z" />
+      <path d="M8 8h3M8 11h3M13 8h3M13 11h3M8 15h8" />
+    </>
+  ),
+  bitcoin: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M10 7.5v9M10 7.5h3a2 2 0 010 4h-3M10 11.5h3.5a2.3 2.3 0 010 4.5H10" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="M20 20l-4.2-4.2" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none" />
+      <circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none" />
+    </>
+  ),
+  trendIn: <path d="M17 7L7 17M7 9v8h8" />,
+  trendUp: <path d="M7 17L17 7M9 7h8v8" />,
+  info: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5" />
+      <path d="M12 7.8h.01" />
+    </>
+  ),
+  close: <path d="M6 6l12 12M18 6L6 18" />,
+  back: (
+    <>
+      <path d="M20 12H4.5" />
+      <path d="M10.5 6l-6 6 6 6" />
+    </>
+  ),
+  userAdd: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20c.5-3.5 3.2-6 6.5-6s6 2.5 6.5 6" />
+      <path d="M18.5 7v6M15.5 10h6" />
+    </>
+  ),
+  swap: <path d="M4 8.5h15.5l-3-3M20 15.5H4.5l3 3" />,
+  coin: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v10M14.4 9c-.5-.8-1.3-1.2-2.4-1.2-1.3 0-2.4.8-2.4 1.8 0 2.3 4.8 1.2 4.8 3.6 0 1-1.1 1.8-2.4 1.8-1.1 0-2-.5-2.4-1.3" />
+    </>
+  ),
+  card: (
+    <>
+      <rect x="3" y="6" width="18" height="12" rx="2" />
+      <path d="M3 10h18M6 14.5h4" />
+    </>
+  ),
+  cardPay: (
+    <>
+      <rect x="3" y="5.5" width="17" height="11.5" rx="2" />
+      <path d="M3 9.5h17" />
+      <circle cx="18" cy="17.5" r="3.2" fill="currentColor" stroke="none" />
+      <path d="M16.7 17.5l.9.9 1.7-1.8" stroke="#fff" />
+    </>
+  ),
+  cardSettings: (
+    <>
+      <rect x="3" y="5.5" width="17" height="11.5" rx="2" />
+      <path d="M3 9.5h17M6 13h3" />
+      <circle cx="18.5" cy="17.5" r="2" />
+      <path d="M18.5 14.5v1M18.5 19.5v1M15.5 17.5h1M20.5 17.5h1" />
+    </>
+  ),
+  cardCash: (
+    <>
+      <rect x="3" y="7" width="13" height="11" rx="1.5" />
+      <path d="M7 5h13v11h-2" />
+      <path d="M9.5 9.5v6M10.8 10.3c-.2-.4-.7-.7-1.3-.7-.7 0-1.3.4-1.3.9 0 1.2 2.6.6 2.6 1.8 0 .5-.6.9-1.3.9-.6 0-1.1-.3-1.3-.7" />
+    </>
+  ),
+  import: (
+    <>
+      <path d="M12 4v10.5M8 10.5l4 4 4-4" />
+      <path d="M4 16v4h16v-4" />
+    </>
+  ),
+  check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
+  chevron: <path d="M9.5 5.5L16 12l-6.5 6.5" />,
+};
+
+export const APP_ICON_NAMES = Object.keys(APP_ICONS);
+
+export function AppIcon({ name, size = 22, color = 'currentColor', strokeWidth = 1.5, style }: { name: string } & IconProps) {
+  return svg(APP_ICONS[name] ?? APP_ICONS.info, { size, color, strokeWidth, style: { color, ...style } });
+}
+
 /** Marca genérica de tres barras para la barra superior del prototipo. */
 export function BrandMark({ colors }: { colors: string[] }) {
   return (

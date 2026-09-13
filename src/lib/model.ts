@@ -36,7 +36,15 @@ export type BlockType =
   | 'statusIcon'
   | 'alert'
   | 'image'
-  | 'divider';
+  | 'divider'
+  | 'tabBar'
+  | 'menuList'
+  | 'accountCard'
+  | 'creditCard'
+  | 'carousel'
+  | 'financeCard'
+  | 'rating'
+  | 'iconGrid';
 
 export const BLOCK_TYPES: { type: BlockType; label: string; interactive: boolean; field: boolean }[] = [
   { type: 'navbar', label: 'Barra superior', interactive: true, field: false },
@@ -60,13 +68,21 @@ export const BLOCK_TYPES: { type: BlockType; label: string; interactive: boolean
   { type: 'avatar', label: 'Avatar', interactive: false, field: false },
   { type: 'progress', label: 'Progreso', interactive: false, field: false },
   { type: 'statusIcon', label: 'Ícono de estado', interactive: false, field: false },
+  { type: 'accountCard', label: 'Tarjeta de cuenta', interactive: true, field: false },
+  { type: 'creditCard', label: 'Tarjeta de crédito', interactive: true, field: false },
+  { type: 'financeCard', label: 'Resumen financiero', interactive: true, field: false },
+  { type: 'menuList', label: 'Lista de opciones', interactive: true, field: false },
+  { type: 'carousel', label: 'Carrusel', interactive: true, field: false },
+  { type: 'iconGrid', label: 'Accesos rápidos', interactive: true, field: false },
+  { type: 'rating', label: 'Calificación', interactive: true, field: true },
+  { type: 'tabBar', label: 'Barra inferior', interactive: true, field: false },
   { type: 'alert', label: 'Aviso', interactive: false, field: false },
   { type: 'image', label: 'Imagen', interactive: false, field: false },
   { type: 'divider', label: 'Separador', interactive: false, field: false },
 ];
 
 /** Tipos cuyo valor es una elección entre opciones. */
-export const CHOICE_TYPES: BlockType[] = ['select', 'radio', 'tabs'];
+export const CHOICE_TYPES: BlockType[] = ['select', 'radio', 'tabs', 'rating'];
 /** Tipos que se encienden o apagan. */
 export const TOGGLE_TYPES: BlockType[] = ['checkbox', 'switch'];
 
@@ -148,6 +164,12 @@ export interface Block {
   componentId?: string;
   overrides?: StyleProps;
   align?: 'start' | 'center';
+  /** Destino por opción: pestañas, barra inferior, filas de lista, carruseles y accesos. */
+  optionTargets?: Record<string, string>;
+  /** Texto del enlace al pie de una tarjeta, ej: «Ver detalle». */
+  linkLabel?: string;
+  /** El botón se ve deshabilitado hasta completar los campos obligatorios. */
+  disableUntilValid?: boolean;
 }
 
 export interface Component {
@@ -180,6 +202,10 @@ export interface Project {
   flowName?: string;
   /** Nota al pie de cada pantalla móvil, ej: «Entorno de prueba · sin operaciones reales». */
   footnote?: string;
+  /** Barra de estado del teléfono: lisa o con onda de color de marca. */
+  statusBar?: 'wave' | 'plain';
+  /** Fondo de pantalla sólido o degradado desde la superficie. */
+  backgroundStyle?: 'gradient' | 'solid';
   owner: string;
   version: number;
   startScreenId: string;
@@ -300,6 +326,8 @@ export interface StudyEvent {
   taskId: string;
   screen: string;
   block?: string;
+  /** Opción tocada dentro del bloque, ej: «Créditos» en la barra inferior. */
+  option?: string;
   kind: EventKind;
   x: number; // 0..1 relativo a la pantalla
   y: number;
@@ -352,6 +380,19 @@ export const emptyDb = (): DB => ({
 
 /** Pantalla base (la que agrupa variantes) */
 export const baseId = (s: Screen) => s.variantOf ?? s.id;
+
+/** Claves de las opciones navegables de un bloque (lo que se usa en optionTargets). */
+export function optionKeys(type: BlockType, variant: string | undefined, options: string[] = []): string[] {
+  if (type === 'navbar') return variant === 'app' ? ['menu', 'qr', 'bell'] : variant === 'title' ? ['right'] : [];
+  if (!['tabBar', 'menuList', 'carousel', 'iconGrid', 'tabs'].includes(type)) return [];
+  return options.map((o) => {
+    const parts = o.split('|').map((x) => x.trim());
+    return type === 'carousel' ? (parts[1] ?? parts[0]) : parts[0];
+  });
+}
+
+/** Quita el marcado de negrita (**texto**) para mostrar etiquetas en texto plano. */
+export const plainText = (s: string) => s.replace(/\*\*/g, '');
 
 /** Resuelve la variante de una pantalla para un breakpoint, o la base si no existe. */
 export function screenFor(p: Project, id: string, bp: Breakpoint): Screen | undefined {

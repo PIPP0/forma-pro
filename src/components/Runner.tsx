@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
-import { CHOICE_TYPES, TOGGLE_TYPES, blockMeta, breakpointOf, screenFor } from '../lib/model';
+import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor } from '../lib/model';
 import { BlockView } from './BlockView';
-import { PhoneChrome, ScaledFrame, contentWidth, screenStyle } from './ScreenCanvas';
+import { PhoneChrome, ScaledFrame, blockWrapperStyle, contentWidth, screenStyle } from './ScreenCanvas';
 
-export type RunnerEvent = Pick<StudyEvent, 'screen' | 'block' | 'kind' | 'x' | 'y' | 'bx' | 'by' | 'dwell'>;
+export type RunnerEvent = Pick<StudyEvent, 'screen' | 'block' | 'option' | 'kind' | 'x' | 'y' | 'bx' | 'by' | 'dwell'>;
 
 const HESITATION_MS = 3500;
 const clamp = (n: number) => Math.round(Math.max(0, Math.min(1, n)) * 1000) / 1000;
+/** Bloques contenedores: tocar fuera de sus opciones es un toque sin acción. */
+const CONTAINERS = ['menuList', 'carousel', 'iconGrid', 'tabBar'];
 
 /** Reproduce el prototipo con los mismos bloques del diseño y registra la interacción. */
 export function Runner({
@@ -55,10 +57,7 @@ export function Runner({
 
   const coords = (e: MouseEvent, el: Element | null) => {
     const r = content.current!.getBoundingClientRect();
-    const out: Pick<RunnerEvent, 'x' | 'y' | 'bx' | 'by'> = {
-      x: clamp((e.clientX - r.left) / r.width),
-      y: clamp((e.clientY - r.top) / r.height),
-    };
+    const out: Pick<RunnerEvent, 'x' | 'y' | 'bx' | 'by'> = { x: clamp((e.clientX - r.left) / r.width), y: clamp((e.clientY - r.top) / r.height) };
     if (el) {
       const br = el.getBoundingClientRect();
       out.bx = clamp((e.clientX - br.left) / br.width);
@@ -68,6 +67,15 @@ export function Runner({
   };
 
   const isFilled = (b: Block) => (TOGGLE_TYPES.includes(b.type) ? !!checked[b.id] : !!(values[b.id] ?? (b.type === 'tabs' ? b.value : ''))?.trim());
+  const pending = current.blocks.some((b) => b.required && !isFilled(b));
+
+  const goTo = (targetId: string) => {
+    const target = screenFor(project, targetId, breakpoint);
+    if (!target || baseId(target) === baseId(current)) return;
+    setErrors({});
+    setStack((s) => [...s, targetId]);
+    emit({ kind: 'navigate', screen: target.id, x: 0, y: 0 });
+  };
 
   const navigate = (block: Block) => {
     if (block.action === 'back') {
@@ -86,9 +94,7 @@ export function Runner({
           return 'blocked' as const;
         }
       }
-      setErrors({});
-      setStack((s) => [...s, block.target!]);
-      emit({ kind: 'navigate', screen: screenFor(project, block.target, breakpoint)?.id ?? block.target, x: 0, y: 0 });
+      goTo(block.target);
     }
   };
 
@@ -113,22 +119,33 @@ export function Runner({
     // La primera acción de la tarea incluye leer la instrucción: ese tiempo no es una duda.
     const wasFirst = first.current;
     first.current = false;
-    const isBack = block?.type === 'navbar' && !!target.closest('button');
-    if (!block || !blockMeta(block.type).interactive || block.disabled || (block.type === 'navbar' && !isBack)) {
+    const option = target.closest('[data-option]')?.getAttribute('data-option') ?? undefined;
+    const optionTarget = option ? block?.optionTargets?.[option] : undefined;
+    const isBack = block?.type === 'navbar' && !!target.closest('button') && !option;
+
+    if (!block || !blockMeta(block.type).interactive || block.disabled || (block.type === 'navbar' && !isBack && !option) || (CONTAINERS.includes(block.type) && !option)) {
       emit({ kind: 'misclick', screen: current.id, block: block?.id, ...c });
       return;
     }
-    if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: block.id, dwell: Math.round(gap), ...c });
+    if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: block.id, option, dwell: Math.round(gap), ...c });
+
+    if (optionTarget) {
+      emit({ kind: 'tap', screen: current.id, block: block.id, option, ...c });
+      goTo(optionTarget);
+      return;
+    }
     if (blockMeta(block.type).field) {
-      emit({ kind: 'tap', screen: current.id, block: block.id, ...c });
+      emit({ kind: 'tap', screen: current.id, block: block.id, option, ...c });
       if (TOGGLE_TYPES.includes(block.type)) {
         setChecked((s) => ({ ...s, [block.id]: !s[block.id] }));
         setErrors((er) => ({ ...er, [block.id]: '' }));
       }
-      if (CHOICE_TYPES.includes(block.type) && block.type !== 'select') {
-        const opt = target.closest('[data-option]')?.getAttribute('data-option');
-        if (opt) setValue(block, opt);
-      }
+      if (CHOICE_TYPES.includes(block.type) && block.type !== 'select' && option) setValue(block, option);
+      return;
+    }
+    if (option) {
+      // Opción sin destino (por ejemplo, la pestaña actual): se registra el toque sin navegar.
+      emit({ kind: 'tap', screen: current.id, block: block.id, option, ...c });
       return;
     }
     const result = navigate(block);
@@ -139,7 +156,7 @@ export function Runner({
   const body = (
     <div ref={content} className="screen" style={screenStyle(project, mode)} onClick={onClick}>
       {current.blocks.map((b) => (
-        <div key={b.id} data-block-id={b.id} style={maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : undefined}>
+        <div key={b.id} data-block-id={b.id} style={blockWrapperStyle(project, b, maxW)}>
           <BlockView
             project={project}
             block={b}
@@ -149,13 +166,21 @@ export function Runner({
             checked={checked[b.id]}
             error={errors[b.id] || undefined}
             onValue={(v) => setValue(b, v)}
+            pendingRequired={b.type === 'button' && !!b.disableUntilValid && pending}
           />
         </div>
       ))}
     </div>
   );
 
-  if (fill) return <div className="runner-fill">{body}</div>;
+  if (fill)
+    return (
+      <div className="runner-fill">
+        <PhoneChrome project={{ ...project, footnote: undefined }} mode={mode} enabled={false}>
+          {body}
+        </PhoneChrome>
+      </div>
+    );
   // El marco sigue a la pantalla resuelta: si no hay variante para este dispositivo, se ve la base.
   const bp = breakpointOf(current.breakpoint);
   return (

@@ -12,7 +12,7 @@ export function ProjectsView() {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [business, setBusiness] = useState('');
-  const [template, setTemplate] = useState<'blank' | 'transfer'>('blank');
+  const [template, setTemplate] = useState<'blank' | 'transfer' | 'bancoNew'>('blank');
   const [toDelete, setToDelete] = useState<Project>();
 
   const create = () => {
@@ -129,6 +129,13 @@ export function ProjectsView() {
             <span>
               <strong>Flujo de ahorro</strong>
               <span className="muted"> Cinco pantallas conectadas y 19 componentes del sistema.</span>
+            </span>
+          </label>
+          <label className="check">
+            <input type="radio" name="tpl" checked={template === 'bancoNew'} onChange={() => setTemplate('bancoNew')} />
+            <span>
+              <strong>Banco New · app móvil</strong>
+              <span className="muted"> 19 pantallas de banca (cuentas, tarjetas, transferencias, créditos, inversiones y encuesta) con 34 componentes.</span>
             </span>
           </label>
         </fieldset>

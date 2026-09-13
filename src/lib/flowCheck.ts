@@ -26,6 +26,9 @@ export function navGraph(p: Project): Map<string, Set<string>> {
     if (!g.has(from)) g.set(from, new Set());
     for (const b of s.blocks) {
       if (b.action === 'navigate' && b.target && ids.has(b.target)) g.get(from)!.add(baseId(ids.get(b.target)!));
+      for (const target of Object.values(b.optionTargets ?? {})) {
+        if (target && ids.has(target)) g.get(from)!.add(baseId(ids.get(target)!));
+      }
     }
   }
   return g;
@@ -80,6 +83,10 @@ export function checkProject(p: Project): Issue[] {
           add({ severity: 'error', area: 'flujo', screenId: s.id, blockId: b.id, message: `«${name}» en «${s.name}» navega, pero no tiene destino.` });
         else if (!byId.has(b.target))
           add({ severity: 'error', area: 'flujo', screenId: s.id, blockId: b.id, message: `«${name}» en «${s.name}» apunta a una pantalla eliminada.` });
+      }
+      for (const [opt, target] of Object.entries(b.optionTargets ?? {})) {
+        if (target && !byId.has(target))
+          add({ severity: 'error', area: 'flujo', screenId: s.id, blockId: b.id, message: `La opción «${opt.replace(/\*\*/g, '')}» de «${name.replace(/\*\*/g, '')}» en «${s.name}» apunta a una pantalla eliminada.` });
       }
       if (meta.field && !b.label.trim())
         add({ severity: 'error', area: 'accesibilidad', screenId: s.id, blockId: b.id, message: `Un ${meta.label.toLowerCase()} en «${s.name}» no tiene etiqueta visible.` });

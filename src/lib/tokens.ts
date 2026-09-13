@@ -61,6 +61,23 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
       });
     case 'navbar':
       return s({ fg: '{color.onSurface}', type: 'title' }, { focus: INTERACTIVE_FOCUS });
+    case 'tabBar':
+      return s({ bg: '{color.surface}', fg: '{color.muted}', border: '{color.border}', type: 'caption' }, { focus: INTERACTIVE_FOCUS });
+    case 'menuList':
+      if (variant === 'plain') return s({ fg: '{color.onSurface}', border: '{color.border}', padY: '{space.lg}', padX: '{space.xs}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
+      return s({ bg: '{color.surface}', fg: '{color.onSurface}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
+    case 'accountCard':
+      return s({ bg: '{color.surface}', fg: '{color.onSurface}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'display' }, { focus: INTERACTIVE_FOCUS });
+    case 'creditCard':
+      return s({ bg: '{color.cardDark}', fg: '{color.onDark}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'display' }, { focus: INTERACTIVE_FOCUS });
+    case 'carousel':
+      return s({ bg: '{color.surface}', fg: '{color.onSurface}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'label' }, { focus: INTERACTIVE_FOCUS });
+    case 'financeCard':
+      return s({ bg: '{color.surface}', fg: '{color.onSurface}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'title' }, { focus: INTERACTIVE_FOCUS });
+    case 'rating':
+      return s({ fg: '{color.onSurface}', border: '{color.star}', type: 'title' }, { focus: INTERACTIVE_FOCUS });
+    case 'iconGrid':
+      return s({ bg: '{color.surface}', fg: '{color.muted}', radius: '{radius.lg}', padY: '{space.xl}', padX: '{space.md}', type: 'caption' }, { focus: INTERACTIVE_FOCUS });
     case 'balance':
       return s({ bg: '{color.primary}', fg: '{color.onPrimary}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'display' });
     case 'help':
@@ -71,9 +88,12 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
         { hover: { bg: '{color.subtle}' }, pressed: { border: '{color.primary}' }, focus: INTERACTIVE_FOCUS },
       );
     case 'radio':
+      if (variant === 'numbers') return s({ fg: '{color.muted}', border: '{color.primary}', type: 'display' }, { focus: INTERACTIVE_FOCUS });
+      return s({ fg: '{color.onSurface}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
     case 'switch':
       return s({ fg: '{color.onSurface}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
     case 'tabs':
+      if (variant === 'underline') return s({ bg: '{color.surface}', fg: '{color.muted}', border: '{color.primary}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
       return s({ bg: '{color.subtle}', fg: '{color.onSurface}', radius: '{radius.md}', padY: '{space.xs}', padX: '{space.xs}', type: 'label' }, { focus: INTERACTIVE_FOCUS });
     case 'tag':
       return s({ bg: '{color.primarySubtle}', fg: '{color.primaryPressed}', radius: '{radius.pill}', padY: '{space.xs}', padX: '{space.sm}', type: 'caption' });
@@ -86,12 +106,19 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
     case 'input':
     case 'textarea':
     case 'select':
+      if (type === 'input' && variant === 'search')
+        return s({ ...field, border: '{color.onSurface}', radius: '{radius.md}' }, { focus: { border: '{color.primary}', ...INTERACTIVE_FOCUS } });
       return s(field, { hover: { border: '{color.muted}' }, focus: { border: '{color.primary}', ...INTERACTIVE_FOCUS }, disabled: { bg: '{color.subtle}', fg: '{color.muted}' } });
     case 'amount':
       return s({ ...field, type: 'display' }, { focus: { border: '{color.primary}', ...INTERACTIVE_FOCUS } });
     case 'checkbox':
       return s({ fg: '{color.onSurface}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
     case 'button':
+      if (variant === 'success')
+        return s(
+          { bg: '{color.success}', fg: '{color.onPrimary}', radius: '{radius.pill}', padY: '{space.lg}', padX: '{space.lg}', type: 'label' },
+          { pressed: { bg: '{color.primaryPressed}' }, disabled: { bg: '{color.subtle}', fg: '{color.muted}' }, focus: INTERACTIVE_FOCUS },
+        );
       if (variant === 'secondary')
         return s(
           { bg: '{color.surface}', fg: '{color.primary}', border: '{color.border}', radius: '{radius.md}', padY: '{space.md}', padX: '{space.lg}', type: 'label' },
@@ -104,6 +131,15 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
     case 'link':
       return s({ fg: '{color.primary}', type: 'label' }, { focus: INTERACTIVE_FOCUS });
     case 'listItem':
+      if (variant === 'icon' || variant === 'profile')
+        return s(
+          { bg: '{color.surface}', fg: '{color.onSurface}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'body' },
+          { hover: { bg: '{color.subtle}' }, focus: INTERACTIVE_FOCUS },
+        );
+      if (variant === 'contact') return s({ fg: '{color.onSurface}', border: '{color.border}', padY: '{space.lg}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
+      if (variant === 'notification')
+        return s({ bg: '{color.surface}', fg: '{color.onSurface}', border: '{color.border}', padY: '{space.lg}', padX: '{space.lg}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
+      if (variant === 'logout') return s({ bg: '{color.subtle}', fg: '{color.onSurface}', padY: '{space.lg}', padX: '{space.lg}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
       return s(
         { bg: '{color.surface}', fg: '{color.onSurface}', border: '{color.border}', radius: '{radius.md}', padY: '{space.md}', padX: '{space.lg}', type: 'body' },
         { hover: { bg: '{color.subtle}' }, pressed: { border: '{color.primary}' }, focus: INTERACTIVE_FOCUS },
