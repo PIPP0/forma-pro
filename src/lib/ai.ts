@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { Block, BlockType, Issue, Project, Screen } from './aiTypes';
 import { BLOCK_TYPES } from './model';
 import { uid } from './ids';
@@ -26,20 +26,18 @@ export const setAiKey = (k: string) => {
 
 export class AiError extends Error {}
 
-function client() {
-  const apiKey = getAiKey();
-  if (!apiKey) throw new AiError('Agrega tu clave de API de Anthropic en Ajustes para usar la IA.');
-  return new Anthropic({ apiKey, dangerouslyAllowBrowser: true });
-}
-
 export interface Turn {
   role: 'user' | 'assistant';
   content: string;
 }
 
 async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>): Promise<T> {
+  const apiKey = getAiKey();
+  if (!apiKey) throw new AiError('Agrega tu clave de API de Anthropic en Ajustes para usar la IA.');
+  // El SDK se carga solo cuando alguien usa la IA, para no pesar en la carga inicial.
+  const { default: Sdk } = await import('@anthropic-ai/sdk');
   try {
-    const res = await client().beta.messages.create({
+    const res = await new Sdk({ apiKey, dangerouslyAllowBrowser: true }).beta.messages.create({
       model: AI_MODEL,
       max_tokens: 16000,
       betas: ['server-side-fallback-2026-07-01'],
@@ -58,10 +56,10 @@ async function askJson<T>(system: string, turns: Turn[], schema: Record<string, 
     return JSON.parse(text) as T;
   } catch (e) {
     if (e instanceof AiError) throw e;
-    if (e instanceof Anthropic.AuthenticationError) throw new AiError('La clave de API no es válida. Revísala en Ajustes.');
-    if (e instanceof Anthropic.RateLimitError) throw new AiError('Se alcanzó el límite de uso de la API. Espera un momento e intenta de nuevo.');
-    if (e instanceof Anthropic.APIConnectionError) throw new AiError('No hay conexión con la API de Anthropic. Revisa tu red.');
-    if (e instanceof Anthropic.APIError) throw new AiError(`La API respondió con un error (${e.status ?? 'sin código'}): ${e.message}`);
+    if (e instanceof Sdk.AuthenticationError) throw new AiError('La clave de API no es válida. Revísala en Ajustes.');
+    if (e instanceof Sdk.RateLimitError) throw new AiError('Se alcanzó el límite de uso de la API. Espera un momento e intenta de nuevo.');
+    if (e instanceof Sdk.APIConnectionError) throw new AiError('No hay conexión con la API de Anthropic. Revisa tu red.');
+    if (e instanceof Sdk.APIError) throw new AiError(`La API respondió con un error (${e.status ?? 'sin código'}): ${e.message}`);
     if (e instanceof SyntaxError) throw new AiError('La respuesta de la IA no tenía el formato esperado.');
     throw new AiError((e as Error).message);
   }
