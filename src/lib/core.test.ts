@@ -282,6 +282,35 @@ describe('biblioteca completa en cada proyecto', () => {
   });
 });
 
+describe('estados de los componentes', () => {
+  it('cada patrón interactivo define cuatro estados distintos de reposo y los de contenido solo reposo', async () => {
+    const { CATALOG } = await import('./catalog');
+    const { builtInStyle, componentStyle } = await import('./tokens');
+    const { blockMeta } = await import('./model');
+    for (const e of CATALOG) {
+      const c = { id: e.id, name: e.name, type: e.type, variant: e.variant, states: builtInStyle(e.type, e.variant) };
+      const base = JSON.stringify(componentStyle(c, 'default'));
+      for (const st of ['hover', 'pressed', 'disabled', 'focus'] as const) {
+        const changed = JSON.stringify(componentStyle(c, st)) !== base;
+        expect([e.name, st, changed]).toEqual([e.name, st, blockMeta(e.type).interactive]);
+      }
+    }
+  });
+
+  it('la migración completa estados vacíos y respeta los personalizados', async () => {
+    const { upgradeStates, STATES_REV } = await import('./catalog');
+    const { builtInStyle } = await import('./tokens');
+    const tokens = transferProject('u1').tokens;
+    const old = { id: 'c1', name: 'Barra inferior', type: 'tabBar' as const, states: { default: builtInStyle('tabBar').default, hover: {}, pressed: { bg: '{color.border}' }, disabled: { fg: '{color.muted}' }, focus: {} } };
+    const up = upgradeStates(old, tokens);
+    expect(up.rev).toBe(STATES_REV);
+    expect(up.states.hover.bg).toBe('{color.subtle}');
+    expect(up.states.pressed).toEqual({ bg: '{color.border}' });
+    expect(up.states.focus.outline).toBe('{color.focus}');
+    expect(upgradeStates(up, tokens)).toBe(up);
+  });
+});
+
 describe('importar sistemas', () => {
   it('lee variables CSS con modo oscuro, SCSS y selectores', async () => {
     const { candidatesFromText } = await import('./systemIO');

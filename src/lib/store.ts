@@ -5,7 +5,7 @@ import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
 import { blankProject, exampleStudy, transferProject } from './seed';
 import { bancoNewProject } from './seedBancoNew';
-import { completeSystem } from './catalog';
+import { completeSystem, upgradeProjectStates } from './catalog';
 import { checkProject, hasBlockingErrors } from './flowCheck';
 import { uid } from './ids';
 import { notify } from './toast';
@@ -156,7 +156,7 @@ export function migrate(d: DB): DB {
         : p,
   );
   // Cada proyecto tiene la biblioteca completa: se agregan los patrones y colores que falten.
-  const projects = sheets.map(completeSystem);
+  const projects = sheets.map((p) => upgradeProjectStates(completeSystem(p)));
   return projects.every((p, i) => p === d.projects[i]) ? d : { ...d, projects };
 }
 

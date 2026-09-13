@@ -1,5 +1,5 @@
 import type { Block, BlockType, ColorToken, Component, Mode, Project, StateName, StyleProps, Tokens } from './model';
-import { builtInStyle, componentStyle, contrast, resolve } from './tokens';
+import { builtInStyle, componentStyle, contrast, hexToRgb, resolve } from './tokens';
 
 // Catálogo de patrones: la biblioteca completa que tiene cada proyecto, con su guía de uso
 // y contenido de ejemplo por variante. Es la fuente de las vistas previas y de lo que se inserta.
@@ -806,9 +806,54 @@ export const REQUIRED_COLORS: ColorToken[] = [
   { name: 'onDark', light: '#FFFFFF', dark: '#FFFFFF', description: 'Texto sobre tarjeta oscura' },
 ];
 
+const mixHex = (a: string, b: string, t: number) => {
+  const x = hexToRgb(a);
+  const y = hexToRgb(b);
+  if (!x || !y) return a;
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('').toUpperCase()}`;
+};
+
+/** Colores derivados del éxito del proyecto, para que hover y presionado del botón de envío sigan su verde. */
+const DERIVED: Record<string, (success: ColorToken) => ColorToken> = {
+  successHover: (s) => ({ name: 'successHover', light: mixHex(s.light, '#000000', 0.12), dark: mixHex(s.dark, '#FFFFFF', 0.15) }),
+  successPressed: (s) => ({ name: 'successPressed', light: mixHex(s.light, '#000000', 0.24), dark: mixHex(s.dark, '#FFFFFF', 0.3) }),
+};
+
 export function ensureColors(t: Tokens): Tokens {
   const missing = REQUIRED_COLORS.filter((c) => !t.colors.some((x) => x.name === c.name));
-  return missing.length ? { ...t, colors: [...t.colors, ...missing.map((c) => ({ ...c }))] } : t;
+  const colors = [...t.colors, ...missing.map((c) => ({ ...c }))];
+  const success = colors.find((c) => c.name === 'success')!;
+  const derived = Object.entries(DERIVED)
+    .filter(([name]) => !colors.some((c) => c.name === name))
+    .map(([, make]) => make(success));
+  return missing.length || derived.length ? { ...t, colors: [...colors, ...derived] } : t;
+}
+
+/** Versión actual de los estados base. */
+export const STATES_REV = 3;
+
+/**
+ * Completa los estados de un componente creado antes de que cada patrón definiera sus cinco estados.
+ * Solo rellena estados vacíos o el deshabilitado antiguo; lo que la persona personalizó se conserva.
+ */
+export function upgradeStates(c: Component, t: Tokens): Component {
+  if ((c.rev ?? 0) >= STATES_REV) return c;
+  const base = builtInStyle(c.type, c.variant);
+  const states = { ...c.states };
+  for (const st of ['hover', 'pressed', 'disabled', 'focus'] as StateName[]) {
+    const current = Object.fromEntries(Object.entries(states[st] ?? {}).filter(([, v]) => v));
+    const empty = !Object.keys(current).length;
+    const oldDisabled = st === 'disabled' && JSON.stringify(current) === JSON.stringify({ fg: '{color.muted}' });
+    const oldFocus = st === 'focus' && JSON.stringify(current) === JSON.stringify({ outline: '{color.focus}' }) && Object.keys(base.focus).length > 1;
+    if (empty || oldDisabled || oldFocus) states[st] = { ...base[st] };
+  }
+  return fixContrast({ ...c, states, rev: STATES_REV }, t);
+}
+
+export function upgradeProjectStates(p: Project): Project {
+  const tokens = ensureColors(p.tokens);
+  const components = p.components.map((c) => upgradeStates(c, tokens));
+  return tokens === p.tokens && components.every((c, i) => c === p.components[i]) ? p : { ...p, tokens, components };
 }
 
 const MODES: Mode[] = ['light', 'dark'];
@@ -865,7 +910,7 @@ export function completeSystem(p: Project): Project {
     let name = e.name;
     if (names.has(name.toLowerCase())) name = `${e.name} (${e.variantLabel ?? 'base'})`;
     names.add(name.toLowerCase());
-    added.push(fixContrast({ id, name, type: e.type, variant: e.variant, states: builtInStyle(e.type, e.variant) }, tokens));
+    added.push(fixContrast({ id, name, type: e.type, variant: e.variant, states: builtInStyle(e.type, e.variant), rev: STATES_REV }, tokens));
   }
   if (!added.length && tokens === p.tokens) return p;
   return { ...p, tokens, components: [...p.components, ...added] };

@@ -178,6 +178,8 @@ export interface Component {
   type: BlockType;
   variant?: string;
   states: Record<StateName, StyleProps>;
+  /** Versión de los estados base con que se creó o actualizó el componente. */
+  rev?: number;
 }
 
 export interface Screen {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import { loadFont } from '../lib/fonts';
-import type { Block, Mode, Project, StateName } from '../lib/model';
+import type { Block, Mode, Project, StateName, StyleProps } from '../lib/model';
 import { effectiveStyle, findComponent, grayTokens, resolve, toCss, typeToken } from '../lib/tokens';
 import { AppIcon, BrandMark, IconArrowLeft, IconArrowUpRight, IconBell, IconCheck, IconChevronRight, IconInfo, IconTarget, IconWallet } from './icons';
 
@@ -49,6 +49,7 @@ function Illustration({ name, size = 64, gray }: { name: string; size?: number; 
 
 const WIRE = '#7C868F';
 const srOnly: CSSProperties = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' };
+const firstOther = (keys: string[], current?: string) => keys.find((k) => k !== current) ?? keys[0];
 
 /** Un bloque renderizado con los tokens y estados del sistema. Es el mismo en el lienzo, el prototipo y el estudio. */
 export function BlockView({ project: source, block: b, mode, wireframe: grayscale, forceState, live, value, checked, error, onValue, pendingRequired }: BlockViewProps) {
@@ -58,6 +59,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [focus, setFocus] = useState(false);
+  const [hotKey, setHotKey] = useState<string>();
 
   const active: StateName[] = forceState
     ? [forceState]
@@ -67,8 +69,42 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
   const t = p.tokens;
   const style = effectiveStyle(p, b, active);
+  const base = effectiveStyle(p, b, []);
   const css = toCss(style, t, mode);
   if (!css.outline) css.outline = 'none';
+  const isDisabled = active.includes('disabled');
+  // En los contenedores, deshabilitado cambia todo el componente; los demás estados, solo el elemento tocado.
+  const baseCss = toCss(isDisabled ? style : base, t, mode);
+
+  // Lo que el estado activo cambia respecto de reposo.
+  const delta: StyleProps = {};
+  for (const k of Object.keys(style) as (keyof StyleProps)[]) if (style[k] !== base[k]) delta[k] = style[k];
+  const itemState = !isDisabled && active.some((s) => s !== 'default') && Object.keys(delta).length > 0;
+  // Deshabilitado sin fondo propio: se atenúa todo el componente, igual en todos los patrones.
+  const dim: CSSProperties = isDisabled && !delta.bg ? { opacity: 0.5 } : {};
+  const stateFg = resolve(delta.fg, t, mode);
+
+  /** Aplica el estado activo a un elemento: fondo, texto, borde como anillo y foco. */
+  const withState = (s: CSSProperties, on: boolean, inset = false): CSSProperties => {
+    if (!on) return s;
+    const out: CSSProperties = { ...s };
+    const bg = resolve(delta.bg, t, mode);
+    const ring = resolve(delta.border, t, mode);
+    const ol = resolve(delta.outline, t, mode);
+    if (bg) {
+      out.backgroundColor = bg;
+      out.backgroundImage = 'none';
+    }
+    if (stateFg) out.color = stateFg;
+    if (ring) out.boxShadow = [`inset 0 0 0 2px ${ring}`, s.boxShadow].filter(Boolean).join(', ');
+    if (ol) {
+      out.outline = `2px solid ${ol}`;
+      out.outlineOffset = inset ? -3 : 2;
+    }
+    return out;
+  };
+  /** En contenedores, el estado se ve en el elemento tocado; en la vista del sistema, en el primero no seleccionado. */
+  const isHot = (key: string, previewKey?: string) => itemState && (forceState ? key === previewKey : key === hotKey);
 
   const token = (ref: string, fallback: string) => resolve(ref, t, mode) ?? fallback;
   const primary = token('{color.primary}', '#1A66CC');
@@ -105,6 +141,33 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
         onBlur: () => setFocus(false),
       }
     : {};
+  const itemHandlers = (key: string) =>
+    interactive
+      ? {
+          onMouseEnter: () => {
+            setHover(true);
+            setHotKey(key);
+          },
+          onMouseLeave: () => {
+            setHover(false);
+            setPressed(false);
+            setHotKey(undefined);
+          },
+          onPointerDown: () => {
+            setPressed(true);
+            setHotKey(key);
+          },
+          onPointerUp: () => setPressed(false),
+          onFocus: () => {
+            setFocus(true);
+            setHotKey(key);
+          },
+          onBlur: () => {
+            setFocus(false);
+            setHotKey(undefined);
+          },
+        }
+      : {};
   const tab = live ? 0 : -1;
   const cursor = live ? 'pointer' : 'default';
   const unset: CSSProperties = { all: 'unset', boxSizing: 'border-box', cursor, fontFamily: t.fontFamily };
@@ -124,65 +187,76 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
   switch (b.type) {
     case 'navbar': {
-      const color = String(css.color ?? onSurfaceColor);
+      const color = String(baseCss.color ?? onSurfaceColor);
+      const iconButton = (key: string, preview: string, extra: CSSProperties = {}) =>
+        withState({ ...unset, lineHeight: 0, padding: 6, margin: -6, borderRadius: 12, color, ...extra }, isHot(key, preview), true);
+      const iconColor = (key: string, preview: string) => (isHot(key, preview) && stateFg ? stateFg : color);
       if (variant === 'app')
         return (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', color, padding: '4px 0', fontFamily: t.fontFamily }}>
-            <button type="button" data-option="menu" aria-label="Menú" tabIndex={tab} style={{ ...unset, justifySelf: 'start', lineHeight: 0 }} {...handlers}>
-              <AppIcon name="menu" size={30} color={color} />
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', alignItems: 'center', color, padding: '4px 0', fontFamily: t.fontFamily, ...dim }}>
+            <button type="button" data-option="menu" aria-label="Menú" tabIndex={tab} style={iconButton('menu', 'menu', { justifySelf: 'start' })} {...itemHandlers('menu')}>
+              <AppIcon name="menu" size={30} color={iconColor('menu', 'menu')} />
             </button>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <BrandMark colors={[danger, starColor, primary, successColor]} />
               <span style={{ fontWeight: 800, fontSize: 26, letterSpacing: '-0.03em', lineHeight: 1 }}>{b.label}</span>
             </span>
             <span style={{ justifySelf: 'end', display: 'flex', gap: 16 }}>
-              <button type="button" data-option="qr" aria-label="Pago con QR" tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
-                <AppIcon name="qr" size={28} color={color} />
+              <button type="button" data-option="qr" aria-label="Pago con QR" tabIndex={tab} style={iconButton('qr', 'menu')} {...itemHandlers('qr')}>
+                <AppIcon name="qr" size={28} color={iconColor('qr', 'menu')} />
               </button>
-              <button type="button" data-option="bell" aria-label="Notificaciones" tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
-                <AppIcon name="bell" size={28} color={color} />
+              <button type="button" data-option="bell" aria-label="Notificaciones" tabIndex={tab} style={iconButton('bell', 'menu')} {...itemHandlers('bell')}>
+                <AppIcon name="bell" size={28} color={iconColor('bell', 'menu')} />
               </button>
             </span>
           </div>
         );
-      if (variant === 'title')
+      if (variant === 'title') {
+        const preview = b.action === 'back' ? 'back' : 'right';
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, color, padding: '6px 0', fontFamily: t.fontFamily }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, color, padding: '6px 0', fontFamily: t.fontFamily, ...dim }}>
             {b.action === 'back' && (
-              <button type="button" aria-label="Volver" tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
-                <AppIcon name="back" size={28} color={color} />
+              <button type="button" aria-label="Volver" tabIndex={tab} style={iconButton('back', preview)} {...itemHandlers('back')}>
+                <AppIcon name="back" size={28} color={iconColor('back', preview)} />
               </button>
             )}
-            <span style={{ flex: 1, fontSize: css.fontSize, fontWeight: css.fontWeight, lineHeight: css.lineHeight }}>{b.label}</span>
+            <span style={{ flex: 1, fontSize: baseCss.fontSize, fontWeight: baseCss.fontWeight, lineHeight: baseCss.lineHeight }}>{b.label}</span>
             {b.value && (
-              <button type="button" data-option="right" aria-label={b.detail || 'Opción'} tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
-                <AppIcon name={b.value} size={26} color={color} />
+              <button type="button" data-option="right" aria-label={b.detail || 'Opción'} tabIndex={tab} style={iconButton('right', preview)} {...itemHandlers('right')}>
+                <AppIcon name={b.value} size={26} color={iconColor('right', preview)} />
               </button>
             )}
           </div>
         );
+      }
       if (variant === 'close')
         return (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color, padding: '6px 0', fontFamily: t.fontFamily }}>
-            <span style={{ fontSize: css.fontSize, fontWeight: css.fontWeight }}>{b.label}</span>
-            <button type="button" aria-label="Cerrar" tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
-              <AppIcon name="close" size={28} color={color} />
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', color, padding: '6px 0', fontFamily: t.fontFamily, ...dim }}>
+            <span style={{ fontSize: baseCss.fontSize, fontWeight: baseCss.fontWeight }}>{b.label}</span>
+            <button type="button" aria-label="Cerrar" tabIndex={tab} style={iconButton('close', 'close')} {...itemHandlers('close')}>
+              <AppIcon name="close" size={28} color={iconColor('close', 'close')} />
             </button>
           </div>
         );
       return (
-        <div style={{ display: 'grid', gap: 12, fontFamily: t.fontFamily }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: css.color }}>
+        <div style={{ display: 'grid', gap: 12, fontFamily: t.fontFamily, ...dim }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: baseCss.color }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <BrandMark colors={[danger, primary, successColor]} />
-              <span style={{ fontWeight: 800, fontSize: Math.max(18, Number(css.fontSize) || 22), letterSpacing: '-0.045em', lineHeight: 1 }}>{b.label}</span>
+              <span style={{ fontWeight: 800, fontSize: Math.max(18, Number(baseCss.fontSize) || 22), letterSpacing: '-0.045em', lineHeight: 1 }}>{b.label}</span>
               {b.detail && <span style={{ fontSize: 7, letterSpacing: '0.14em', color: muted, alignSelf: 'flex-end', marginBottom: 1 }}>{b.detail}</span>}
             </span>
             <IconBell size={17} color={muted} />
           </div>
           {b.action === 'back' && (
-            <button type="button" tabIndex={tab} aria-label="Volver" style={{ ...unset, display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: primary, justifySelf: 'start' }} {...handlers}>
-              <IconArrowLeft size={13} color={primary} /> Volver
+            <button
+              type="button"
+              tabIndex={tab}
+              aria-label="Volver"
+              style={withState({ ...unset, display: 'inline-flex', gap: 5, alignItems: 'center', fontSize: 12, color: primary, justifySelf: 'start', padding: '4px 8px', margin: '-4px -8px', borderRadius: 8 }, isHot('back', 'back'), true)}
+              {...itemHandlers('back')}
+            >
+              <IconArrowLeft size={13} color={isHot('back', 'back') && stateFg ? stateFg : primary} /> Volver
             </button>
           )}
         </div>
@@ -244,7 +318,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'card':
       return (
-        <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left', cursor }} {...handlers}>
+        <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, ...dim, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 12, textAlign: 'left', cursor }} {...handlers}>
           <span aria-hidden="true" style={{ width: 38, height: 38, borderRadius: '50%', background: primarySubtle, display: 'grid', placeItems: 'center', flex: 'none' }}>
             <IconTarget size={20} color={primary} />
           </span>
@@ -262,7 +336,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       const val = live ? (value ?? '') : (b.value ?? '');
       if (b.type === 'input' && variant === 'search')
         return (
-          <label style={{ ...css, display: 'flex', alignItems: 'center', gap: 12, width: '100%', boxSizing: 'border-box', position: 'relative' }}>
+          <label style={{ ...css, ...dim, display: 'flex', alignItems: 'center', gap: 12, width: '100%', boxSizing: 'border-box', position: 'relative' }}>
             <span style={srOnly}>{b.label}</span>
             <AppIcon name="search" size={24} color={muted} />
             <input
@@ -276,7 +350,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
             />
           </label>
         );
-      const fieldCss: CSSProperties = { ...css, width: '100%', boxSizing: 'border-box', display: 'block', resize: 'none' };
+      const fieldCss: CSSProperties = { ...css, ...dim, width: '100%', boxSizing: 'border-box', display: 'block', resize: 'none' };
       const common = { style: fieldCss, placeholder: b.detail, readOnly: !live, tabIndex: tab, disabled: b.disabled, required: b.required, 'aria-invalid': !!error, ...handlers };
       return (
         <label style={{ display: 'block' }}>
@@ -302,9 +376,9 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
             {required}
           </span>
           <select
-            style={{ ...css, width: '100%', boxSizing: 'border-box', display: 'block', appearance: 'auto' }}
+            style={{ ...css, ...dim, width: '100%', boxSizing: 'border-box', display: 'block', appearance: 'auto', pointerEvents: live ? undefined : 'none' }}
             value={live ? (value ?? '') : (b.value ?? '')}
-            disabled={b.disabled || !live}
+            disabled={b.disabled}
             tabIndex={tab}
             aria-invalid={!!error}
             onChange={(e) => onValue?.(e.target.value)}
@@ -323,11 +397,13 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'radio': {
       const current = live ? value : b.value;
+      const options = b.options ?? [];
+      const preview = firstOther(options, current);
       if (variant === 'numbers')
         return (
-          <div role="radiogroup" aria-label={b.label}>
-            <div style={{ display: 'flex', gap: 34, overflowX: 'auto', padding: '4px 2px 8px', scrollbarWidth: 'none' }}>
-              {(b.options ?? []).map((o) => {
+          <div role="radiogroup" aria-label={b.label} style={dim}>
+            <div style={{ display: 'flex', gap: 26, overflowX: 'auto', padding: '4px 2px 8px', scrollbarWidth: 'none' }}>
+              {options.map((o) => {
                 const on = current === o;
                 return (
                   <button
@@ -338,8 +414,12 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
                     aria-label={`${o} cuotas`}
                     data-option={o}
                     tabIndex={tab}
-                    style={{ ...unset, fontSize: css.fontSize, fontWeight: 600, color: on ? primary : css.color, borderBottom: `3px solid ${on ? primary : 'transparent'}`, paddingBottom: 4, flex: 'none' }}
-                    {...handlers}
+                    style={withState(
+                      { ...unset, fontSize: baseCss.fontSize, fontWeight: 600, color: on ? primary : baseCss.color, borderBottom: `3px solid ${on ? primary : 'transparent'}`, padding: '0 6px 4px', borderRadius: 6, flex: 'none' },
+                      isHot(o, preview),
+                      true,
+                    )}
+                    {...itemHandlers(o)}
                   >
                     {o}
                   </button>
@@ -350,16 +430,30 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
           </div>
         );
       return (
-        <div role="radiogroup" aria-label={b.label}>
+        <div role="radiogroup" aria-label={b.label} style={dim}>
           <span style={labelCss}>
             {rich(b.label)}
             {required}
           </span>
-          <div style={{ display: 'grid', gap: 10 }}>
-            {(b.options ?? []).map((o) => {
+          <div style={{ display: 'grid', gap: 4 }}>
+            {options.map((o) => {
               const on = current === o;
               return (
-                <button key={o} type="button" role="radio" aria-checked={on} data-option={o} tabIndex={tab} disabled={b.disabled} style={{ ...css, display: 'flex', gap: 10, alignItems: 'center', background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor }} {...handlers}>
+                <button
+                  key={o}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  data-option={o}
+                  tabIndex={tab}
+                  disabled={b.disabled}
+                  style={withState(
+                    { ...baseCss, display: 'flex', gap: 10, alignItems: 'center', background: 'transparent', border: 'none', padding: '6px 8px', margin: '0 -8px', width: 'calc(100% + 16px)', borderRadius: 10, textAlign: 'left', cursor },
+                    isHot(o, preview),
+                    true,
+                  )}
+                  {...itemHandlers(o)}
+                >
                   <span aria-hidden="true" style={{ width: 18, height: 18, borderRadius: '50%', border: `2px solid ${on ? primary : borderColor}`, display: 'grid', placeItems: 'center', flex: 'none' }}>
                     {on && <span style={{ width: 8, height: 8, borderRadius: '50%', background: primary }} />}
                   </span>
@@ -376,8 +470,20 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
     case 'checkbox': {
       const on = live ? !!checked : b.value === 'true';
       return (
-        <div>
-          <button type="button" role="checkbox" aria-checked={on} tabIndex={tab} disabled={b.disabled} style={{ ...css, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor }} {...handlers}>
+        <div style={dim}>
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={on}
+            tabIndex={tab}
+            disabled={b.disabled}
+            style={withState(
+              { ...baseCss, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', padding: '8px 10px', margin: '0 -10px', width: 'calc(100% + 20px)', borderRadius: 10, textAlign: 'left', cursor },
+              itemState,
+              true,
+            )}
+            {...handlers}
+          >
             <span aria-hidden="true" style={{ width: 20, height: 20, flex: 'none', borderRadius: 6, border: `2px solid ${on ? primary : borderColor}`, background: on ? primary : 'transparent', display: 'grid', placeItems: 'center' }}>
               {on && <IconCheck size={13} color="#fff" strokeWidth={3} />}
             </span>
@@ -392,8 +498,20 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
     case 'switch': {
       const on = live ? !!checked : b.value === 'true';
       return (
-        <div>
-          <button type="button" role="switch" aria-checked={on} tabIndex={tab} disabled={b.disabled} style={{ ...css, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'transparent', border: 'none', padding: 0, textAlign: 'left', cursor }} {...handlers}>
+        <div style={dim}>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={on}
+            tabIndex={tab}
+            disabled={b.disabled}
+            style={withState(
+              { ...baseCss, width: 'calc(100% + 20px)', margin: '0 -10px', padding: '8px 10px', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'transparent', border: 'none', textAlign: 'left', cursor },
+              itemState,
+              true,
+            )}
+            {...handlers}
+          >
             <span>
               {rich(b.label)}
               {required}
@@ -409,10 +527,12 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'tabs': {
       const current = live ? (value ?? b.value) : b.value;
+      const options = b.options ?? [];
+      const preview = firstOther(options, current);
       if (variant === 'underline')
         return (
-          <div role="tablist" aria-label={b.label} style={{ display: 'flex', backgroundColor: css.backgroundColor, borderBottom: `1px solid ${borderColor}`, fontFamily: t.fontFamily }}>
-            {(b.options ?? []).map((o) => {
+          <div role="tablist" aria-label={b.label} style={{ display: 'flex', backgroundColor: baseCss.backgroundColor, borderBottom: `1px solid ${borderColor}`, fontFamily: t.fontFamily, ...dim }}>
+            {options.map((o) => {
               const on = current === o;
               return (
                 <button
@@ -422,8 +542,22 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
                   aria-selected={on}
                   data-option={o}
                   tabIndex={tab}
-                  style={{ ...unset, flex: 1, textAlign: 'center', padding: '14px 4px 11px', color: on ? primary : css.color, fontSize: css.fontSize, borderBottom: `3px solid ${on ? (resolve(style.border, t, mode) ?? primary) : 'transparent'}`, marginBottom: -1 }}
-                  {...handlers}
+                  style={withState(
+                    {
+                      ...unset,
+                      flex: 1,
+                      textAlign: 'center',
+                      padding: '14px 4px 11px',
+                      color: on ? primary : baseCss.color,
+                      fontSize: baseCss.fontSize,
+                      borderBottom: `3px solid ${on ? (resolve(base.border, t, mode) ?? primary) : 'transparent'}`,
+                      marginBottom: -1,
+                      borderRadius: '8px 8px 0 0',
+                    },
+                    isHot(o, preview),
+                    true,
+                  )}
+                  {...itemHandlers(o)}
                 >
                   {o}
                 </button>
@@ -433,8 +567,8 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
         );
       const surface = resolve('{color.surface}', t, mode) ?? '#fff';
       return (
-        <div role="tablist" aria-label={b.label} style={{ ...css, display: 'flex', gap: 4 }}>
-          {(b.options ?? []).map((o) => {
+        <div role="tablist" aria-label={b.label} style={{ ...baseCss, display: 'flex', gap: 4, ...dim }}>
+          {options.map((o) => {
             const on = current === o;
             return (
               <button
@@ -444,8 +578,23 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
                 aria-selected={on}
                 data-option={o}
                 tabIndex={tab}
-                style={{ ...unset, flex: 1, textAlign: 'center', padding: '8px 6px', borderRadius: 9, background: on ? surface : 'transparent', boxShadow: on ? '0 1px 3px rgba(15,23,42,0.12)' : 'none', fontSize: css.fontSize, fontWeight: css.fontWeight, color: css.color }}
-                {...handlers}
+                style={withState(
+                  {
+                    ...unset,
+                    flex: 1,
+                    textAlign: 'center',
+                    padding: '8px 6px',
+                    borderRadius: 9,
+                    backgroundColor: on ? surface : 'transparent',
+                    boxShadow: on ? '0 1px 3px rgba(15,23,42,0.12)' : 'none',
+                    fontSize: baseCss.fontSize,
+                    fontWeight: baseCss.fontWeight,
+                    color: baseCss.color,
+                  },
+                  isHot(o, preview),
+                  true,
+                )}
+                {...itemHandlers(o)}
               >
                 {o}
               </button>
@@ -457,7 +606,14 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'button':
       return (
-        <button type="button" tabIndex={tab} disabled={b.disabled} aria-disabled={pendingRequired || undefined} style={{ ...css, border: css.border ?? 'none', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor }} {...handlers}>
+        <button
+          type="button"
+          tabIndex={tab}
+          disabled={b.disabled}
+          aria-disabled={pendingRequired || undefined}
+          style={{ ...css, ...dim, border: css.border ?? 'none', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor }}
+          {...handlers}
+        >
           <span>{b.label}</span>
           {b.action === 'navigate' && variant !== 'secondary' && variant !== 'success' && !pendingRequired && (
             <IconChevronRight size={16} color={String(css.color ?? '#fff')} style={{ position: 'absolute', right: 14 }} />
@@ -471,7 +627,20 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
           type="button"
           tabIndex={tab}
           disabled={b.disabled}
-          style={{ ...css, background: 'none', border: 'none', padding: 0, textDecoration: 'underline', textUnderlineOffset: 3, textAlign: b.align === 'center' ? 'center' : 'left', alignSelf: b.align === 'center' ? 'center' : 'flex-start', cursor }}
+          style={{
+            ...css,
+            ...dim,
+            backgroundColor: css.backgroundColor ?? 'transparent',
+            border: 'none',
+            padding: '2px 6px',
+            margin: '-2px -6px',
+            borderRadius: 6,
+            textDecoration: 'underline',
+            textUnderlineOffset: 3,
+            textAlign: b.align === 'center' ? 'center' : 'left',
+            alignSelf: b.align === 'center' ? 'center' : 'flex-start',
+            cursor,
+          }}
           {...handlers}
         >
           {rich(b.label)}
@@ -482,22 +651,45 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       if (variant === 'contact') {
         const lines = (b.detail ?? '').split('\n').filter(Boolean);
         return (
-          <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...unset, width: '100%', display: 'flex', gap: 12, padding: `${padY} 0`, borderBottom: `1px solid ${borderColor}`, color: css.color }} {...handlers}>
+          <button
+            type="button"
+            tabIndex={tab}
+            disabled={b.disabled}
+            style={withState(
+              { ...unset, width: 'calc(100% + 16px)', margin: '0 -8px', display: 'flex', gap: 12, padding: `${padY} 8px`, borderRadius: 10, borderBottom: `1px solid ${borderColor}`, color: baseCss.color, ...dim },
+              itemState,
+              true,
+            )}
+            {...handlers}
+          >
             <span style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ display: 'block', fontSize: css.fontSize, lineHeight: css.lineHeight }}>{rich(b.label)}</span>
+              <span style={{ display: 'block', fontSize: baseCss.fontSize, lineHeight: baseCss.lineHeight }}>{rich(b.label)}</span>
               {lines.map((l, i) => (
                 <span key={i} style={{ ...noteCss, fontSize: 15, marginTop: 6 }}>
                   {l}
                 </span>
               ))}
             </span>
-            <AppIcon name="more" size={24} color={onSurfaceColor} />
+            <AppIcon name="more" size={24} color={itemState && stateFg ? stateFg : onSurfaceColor} />
           </button>
         );
       }
-      if (variant === 'notification')
+      if (variant === 'notification' || variant === 'logout') {
+        const row = withState(
+          { ...unset, width: '100%', display: 'flex', gap: 14, alignItems: variant === 'logout' ? 'center' : 'flex-start', padding: pad, backgroundColor: baseCss.backgroundColor, borderBottom: variant === 'notification' ? `1px solid ${borderColor}` : undefined, color: baseCss.color, ...dim },
+          itemState,
+          true,
+        );
+        if (variant === 'logout')
+          return (
+            <button type="button" tabIndex={tab} style={row} {...handlers}>
+              <AppIcon name="power" size={28} color={danger} />
+              <span style={{ flex: 1, fontSize: baseCss.fontSize }}>{rich(b.label)}</span>
+              {b.detail && <span style={{ ...noteCss, fontSize: 15, display: 'inline' }}>{b.detail}</span>}
+            </button>
+          );
         return (
-          <button type="button" tabIndex={tab} style={{ ...unset, width: '100%', display: 'flex', gap: 14, alignItems: 'flex-start', padding: pad, backgroundColor: css.backgroundColor, borderBottom: `1px solid ${borderColor}`, color: css.color }} {...handlers}>
+          <button type="button" tabIndex={tab} style={row} {...handlers}>
             <AppIcon name="doc" size={26} color={muted} />
             <span style={{ flex: 1 }}>
               <span style={{ display: 'block', fontSize: 15, lineHeight: 1.45 }}>{rich(b.label)}</span>
@@ -506,17 +698,10 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
             {b.value !== 'read' && <span role="img" aria-label="Sin leer" style={{ width: 14, height: 14, borderRadius: '50%', background: primary, flex: 'none', marginTop: 4 }} />}
           </button>
         );
-      if (variant === 'logout')
-        return (
-          <button type="button" tabIndex={tab} style={{ ...unset, width: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: pad, backgroundColor: css.backgroundColor, color: css.color }} {...handlers}>
-            <AppIcon name="power" size={28} color={danger} />
-            <span style={{ flex: 1, fontSize: css.fontSize }}>{rich(b.label)}</span>
-            {b.detail && <span style={{ ...noteCss, fontSize: 15, display: 'inline' }}>{b.detail}</span>}
-          </button>
-        );
+      }
       if (variant === 'profile' || variant === 'icon')
         return (
-          <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, border: css.border ?? 'none', boxShadow: shadow, width: '100%', display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor }} {...handlers}>
+          <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, ...dim, border: css.border ?? 'none', boxShadow: shadow, width: '100%', display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor }} {...handlers}>
             {variant === 'profile' ? (
               <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true" style={{ flex: 'none' }}>
                 <circle cx="15" cy="15" r="15" fill={starColor} />
@@ -534,7 +719,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
           </button>
         );
       return (
-        <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, textAlign: 'left', cursor }} {...handlers}>
+        <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, ...dim, width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, textAlign: 'left', cursor }} {...handlers}>
           <span>
             <span style={{ display: 'block' }}>{rich(b.label)}</span>
             {b.detail && <span style={noteCss}>{b.detail}</span>}
@@ -550,8 +735,9 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       const rows = (b.options ?? []).map(split);
       const hasHead = !plain && !!(b.label || b.detail);
       const hero = !!b.value;
+      const preview = rows[0]?.[0];
       return (
-        <div style={{ backgroundColor: css.backgroundColor, color: css.color, borderRadius: css.borderRadius, boxShadow: plain ? 'none' : shadow, overflow: 'hidden', fontFamily: t.fontFamily }}>
+        <div style={{ backgroundColor: baseCss.backgroundColor, color: baseCss.color, borderRadius: baseCss.borderRadius, boxShadow: plain ? 'none' : shadow, overflow: 'hidden', fontFamily: t.fontFamily, ...dim }}>
           {hasHead && (
             <div style={{ padding: hero ? `${padY} ${padX} 28px` : `${padY} ${padX} ${rows.length ? '4px' : padY}`, display: 'flex', gap: 12, alignItems: 'center' }}>
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -561,23 +747,30 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
               {hero && <Illustration name={b.value!} gray={grayscale} />}
             </div>
           )}
-          {rows.map(([title, sub, icon], i) => (
-            <button
-              key={`${title}-${i}`}
-              type="button"
-              data-option={title}
-              tabIndex={tab}
-              style={{ ...unset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 14, padding: plain ? `${padY} ${padX}` : `${padY} ${padX}`, borderTop: i > 0 || hasHead ? `1px solid ${borderColor}` : 'none', borderBottom: plain ? `1px solid ${borderColor}` : undefined, color: css.color }}
-              {...handlers}
-            >
-              {icon && <AppIcon name={icon} size={plain ? 28 : 24} color={plain ? onSurfaceColor : muted} style={{ marginTop: 1 }} />}
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: css.fontSize, lineHeight: css.lineHeight, fontWeight: plain ? 600 : 400 }}>{rich(title)}</span>
-                {sub && <span style={{ ...noteCss, fontSize: 15, marginTop: 6 }}>{sub}</span>}
-              </span>
-              {!info && <IconChevronRight size={20} color={muted} style={{ marginTop: 2 }} />}
-            </button>
-          ))}
+          {rows.map(([title, sub, icon], i) => {
+            const hot = isHot(title, preview);
+            return (
+              <button
+                key={`${title}-${i}`}
+                type="button"
+                data-option={title}
+                tabIndex={tab}
+                style={withState(
+                  { ...unset, width: '100%', display: 'flex', alignItems: 'flex-start', gap: 14, padding: `${padY} ${padX}`, borderTop: i > 0 || hasHead ? `1px solid ${borderColor}` : 'none', borderBottom: plain ? `1px solid ${borderColor}` : undefined, color: baseCss.color },
+                  hot,
+                  true,
+                )}
+                {...itemHandlers(title)}
+              >
+                {icon && <AppIcon name={icon} size={plain ? 28 : 24} color={hot && stateFg ? stateFg : plain ? onSurfaceColor : muted} style={{ marginTop: 1 }} />}
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: baseCss.fontSize, lineHeight: baseCss.lineHeight, fontWeight: plain ? 600 : 400 }}>{rich(title)}</span>
+                  {sub && <span style={{ ...noteCss, fontSize: 15, marginTop: 6 }}>{sub}</span>}
+                </span>
+                {!info && <IconChevronRight size={20} color={hot && stateFg ? stateFg : muted} style={{ marginTop: 2 }} />}
+              </button>
+            );
+          })}
         </div>
       );
     }
@@ -587,7 +780,10 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       const big = typeToken(t, style.type);
       const summary = variant === 'summary';
       return (
-        <div style={{ backgroundColor: css.backgroundColor, color: css.color, borderRadius: css.borderRadius, boxShadow: shadow, fontFamily: t.fontFamily, overflow: 'hidden' }}>
+        <div
+          style={withState({ backgroundColor: baseCss.backgroundColor, color: baseCss.color, borderRadius: baseCss.borderRadius, boxShadow: shadow, fontFamily: t.fontFamily, overflow: 'hidden', ...dim }, itemState, true)}
+          {...handlers}
+        >
           <div style={{ padding: `${padY} ${padX} 14px` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
               <span style={{ fontSize: 19, fontWeight: 600, lineHeight: 1.3 }}>{rich(b.label)}</span>
@@ -603,7 +799,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
                 <span style={{ display: 'block', fontSize: 16 }}>{label}</span>
                 {sub && <span style={{ ...noteCss, fontSize: 14, marginTop: 4 }}>{sub}</span>}
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, color: trend === 'up' ? successColor : css.color, whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 16, color: trend === 'up' ? successColor : undefined, whiteSpace: 'nowrap' }}>
                 {val}
                 {(trend === 'in' || trend === 'out') && <AppIcon name={trend === 'in' ? 'trendIn' : 'trendUp'} size={20} strokeWidth={2} color={trend === 'in' ? successColor : warningColor} />}
               </span>
@@ -619,17 +815,23 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       const end = token('{color.cardDarkEnd}', '#111113');
       return (
         <div
-          style={{
-            borderRadius: css.borderRadius,
-            color: css.color,
-            backgroundColor: css.backgroundColor,
-            backgroundImage: grayscale ? undefined : `linear-gradient(165deg, ${css.backgroundColor} 0%, ${end} 100%)`,
-            padding: pad,
-            fontFamily: t.fontFamily,
-            display: 'grid',
-            gap: 22,
-            boxShadow: shadow,
-          }}
+          style={withState(
+            {
+              borderRadius: baseCss.borderRadius,
+              color: baseCss.color,
+              backgroundColor: baseCss.backgroundColor,
+              backgroundImage: grayscale ? undefined : `linear-gradient(165deg, ${baseCss.backgroundColor} 0%, ${end} 100%)`,
+              padding: pad,
+              fontFamily: t.fontFamily,
+              display: 'grid',
+              gap: 22,
+              boxShadow: shadow,
+              ...dim,
+            },
+            itemState,
+            true,
+          )}
+          {...handlers}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
             <span>
@@ -654,17 +856,20 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'carousel': {
       const items = (b.options ?? []).map(split);
-      const card: CSSProperties = { ...unset, flex: 'none', backgroundColor: css.backgroundColor, color: css.color, borderRadius: css.borderRadius, boxShadow: shadow };
+      const keyOf = (parts: string[]) => (variant === 'contacts' || variant === 'feature' ? parts[1] : parts[1]) ?? parts[0];
+      const preview = items[0] ? keyOf(items[0]) : undefined;
+      const card = (key: string, extra: CSSProperties): CSSProperties =>
+        withState({ ...unset, flex: 'none', backgroundColor: baseCss.backgroundColor, color: baseCss.color, borderRadius: baseCss.borderRadius, boxShadow: shadow, ...extra }, isHot(key, preview), true);
       const dots = variant !== 'contacts' && items.length > 1;
       return (
-        <div>
+        <div style={dim}>
           <div role="list" aria-label={b.label} style={{ display: 'flex', gap: 14, overflowX: 'auto', padding: '2px 2px 10px', scrollbarWidth: 'none' }}>
             {items.map((parts, i) => {
               if (variant === 'contacts') {
                 const [ini, name, sub] = parts;
                 return (
-                  <button key={i} role="listitem" type="button" data-option={name} tabIndex={tab} style={{ ...card, width: 172, padding: '18px 12px', display: 'grid', justifyItems: 'center', gap: 4, textAlign: 'center' }} {...handlers}>
-                    <span aria-hidden="true" style={{ width: 50, height: 50, borderRadius: '50%', border: `1.5px solid ${onSurfaceColor}`, display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 17, marginBottom: 6 }}>
+                  <button key={i} role="listitem" type="button" data-option={name} tabIndex={tab} style={card(name, { width: 172, padding: '18px 12px', display: 'grid', justifyItems: 'center', gap: 4, textAlign: 'center' })} {...itemHandlers(name)}>
+                    <span aria-hidden="true" style={{ width: 50, height: 50, borderRadius: '50%', border: '1.5px solid currentColor', display: 'grid', placeItems: 'center', fontWeight: 600, fontSize: 17, marginBottom: 6 }}>
                       {ini}
                     </span>
                     <span style={{ fontSize: 16, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
@@ -675,7 +880,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
               if (variant === 'feature') {
                 const [emoji, title, desc, link] = parts;
                 return (
-                  <button key={i} role="listitem" type="button" data-option={title} tabIndex={tab} style={{ ...card, width: '88%', display: 'grid' }} {...handlers}>
+                  <button key={i} role="listitem" type="button" data-option={title} tabIndex={tab} style={card(title, { width: '88%', display: 'grid' })} {...itemHandlers(title)}>
                     <span style={{ display: 'flex', gap: 12, padding: `${padY} ${padX}` }}>
                       <span style={{ flex: 1 }}>
                         <span style={{ display: 'block', fontSize: 26, lineHeight: 1.25 }}>{rich(title)}</span>
@@ -689,7 +894,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
               }
               const [emoji, text] = parts;
               return (
-                <button key={i} role="listitem" type="button" data-option={text} tabIndex={tab} style={{ ...card, width: 182, minHeight: 220, padding: `${padY} ${padX}`, display: 'grid', alignContent: 'start', gap: 18 }} {...handlers}>
+                <button key={i} role="listitem" type="button" data-option={text} tabIndex={tab} style={card(text, { width: 182, minHeight: 220, padding: `${padY} ${padX}`, display: 'grid', alignContent: 'start', gap: 18 })} {...itemHandlers(text)}>
                   <Illustration name={emoji} size={48} gray={grayscale} />
                   <span style={{ fontSize: 18, lineHeight: 1.35 }}>{rich(text)}</span>
                 </button>
@@ -710,7 +915,10 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
     case 'financeCard': {
       const metrics = (b.options ?? []).map(split);
       return (
-        <div style={{ backgroundColor: css.backgroundColor, color: css.color, borderRadius: css.borderRadius, boxShadow: shadow, fontFamily: t.fontFamily, overflow: 'hidden' }}>
+        <div
+          style={withState({ backgroundColor: baseCss.backgroundColor, color: baseCss.color, borderRadius: baseCss.borderRadius, boxShadow: shadow, fontFamily: t.fontFamily, overflow: 'hidden', ...dim }, itemState, true)}
+          {...handlers}
+        >
           <div style={{ padding: `${padY} ${padX}` }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
               <span>
@@ -752,16 +960,27 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'rating': {
       const current = Number((live ? value : b.value) ?? 0) || 0;
-      const star = resolve(style.border, t, mode) ?? starColor;
+      const star = resolve(base.border, t, mode) ?? starColor;
+      const preview = String(current > 0 && current < 5 ? current + 1 : 1);
       return (
-        <div role="radiogroup" aria-label={plainTextOf(b.label)}>
-          <span style={{ display: 'block', margin: '0 0 14px', fontSize: css.fontSize, lineHeight: css.lineHeight, fontWeight: 400, color: css.color, fontFamily: t.fontFamily }}>
+        <div role="radiogroup" aria-label={plainTextOf(b.label)} style={dim}>
+          <span style={{ display: 'block', margin: '0 0 14px', fontSize: baseCss.fontSize, lineHeight: baseCss.lineHeight, fontWeight: 400, color: baseCss.color, fontFamily: t.fontFamily }}>
             {rich(b.label)}
             {required}
           </span>
-          <div style={{ display: 'flex', gap: 10 }}>
+          <div style={{ display: 'flex', gap: 6 }}>
             {[1, 2, 3, 4, 5].map((n) => (
-              <button key={n} type="button" role="radio" aria-checked={current === n} aria-label={`${n} de 5`} data-option={String(n)} tabIndex={tab} style={{ ...unset, lineHeight: 0 }} {...handlers}>
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={current === n}
+                aria-label={`${n} de 5`}
+                data-option={String(n)}
+                tabIndex={tab}
+                style={withState({ ...unset, lineHeight: 0, padding: 4, borderRadius: 12 }, isHot(String(n), preview), true)}
+                {...itemHandlers(String(n))}
+              >
                 <svg width="44" height="44" viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 3l2.7 5.6 6.1.8-4.5 4.2 1.1 6.1L12 16.8 6.6 19.7l1.1-6.1L3.2 9.4l6.1-.8z" fill={n <= current ? star : 'none'} stroke={star} strokeWidth="1.3" strokeLinejoin="round" />
                 </svg>
@@ -776,25 +995,39 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
     case 'iconGrid': {
       const items = (b.options ?? []).map(split);
       const current = live ? (value ?? b.value) : b.value;
+      const preview = firstOther(
+        items.map((i) => i[0]),
+        current,
+      );
       return (
         <div
           style={{
-            backgroundColor: variant === 'flat' ? 'transparent' : css.backgroundColor,
-            borderRadius: css.borderRadius,
+            // Sin tarjeta el fondo es transparente, salvo deshabilitado: así ese estado también se distingue.
+            backgroundColor: variant === 'flat' && !isDisabled ? 'transparent' : baseCss.backgroundColor,
+            borderRadius: baseCss.borderRadius,
             boxShadow: variant === 'flat' ? 'none' : shadow,
             padding: variant === 'flat' ? `${padY} 0` : pad,
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            rowGap: 26,
+            rowGap: 18,
             columnGap: 6,
             fontFamily: t.fontFamily,
+            ...dim,
           }}
         >
           {items.map(([label, icon]) => {
             const on = current === label;
-            const color = on ? primary : String(css.color ?? muted);
+            const hot = isHot(label, preview);
+            const color = hot && stateFg ? stateFg : on ? primary : String(baseCss.color ?? muted);
             return (
-              <button key={label} type="button" data-option={label} tabIndex={tab} style={{ ...unset, display: 'grid', justifyItems: 'center', gap: 8, color, fontSize: 15, textAlign: 'center' }} {...handlers}>
+              <button
+                key={label}
+                type="button"
+                data-option={label}
+                tabIndex={tab}
+                style={withState({ ...unset, display: 'grid', justifyItems: 'center', gap: 8, color: on ? primary : baseCss.color, fontSize: 15, textAlign: 'center', padding: '8px 2px', borderRadius: 12 }, hot, true)}
+                {...itemHandlers(label)}
+              >
                 <AppIcon name={icon} size={34} color={color} />
                 {label}
               </button>
@@ -807,13 +1040,30 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
     case 'tabBar': {
       const opts = (b.options ?? []).map(split);
       const current = live ? (value ?? b.value) : b.value;
+      const preview = firstOther(
+        opts.filter((o) => o[1] !== 'plus').map((o) => o[0]),
+        current,
+      );
       return (
-        <nav aria-label={b.label || 'Navegación principal'} style={{ backgroundColor: css.backgroundColor, borderTop: css.border, display: 'grid', gridTemplateColumns: `repeat(${Math.max(opts.length, 1)}, 1fr)`, alignItems: 'center', padding: '10px 6px 12px', fontFamily: t.fontFamily }}>
+        <nav
+          aria-label={b.label || 'Navegación principal'}
+          style={{ backgroundColor: baseCss.backgroundColor, borderTop: baseCss.border, display: 'grid', gridTemplateColumns: `repeat(${Math.max(opts.length, 1)}, 1fr)`, alignItems: 'center', padding: '8px 6px 10px', gap: 2, fontFamily: t.fontFamily, ...dim }}
+        >
           {opts.map(([label, icon]) => {
             const on = current === label;
-            const color = on ? primary : String(css.color ?? muted);
+            const hot = isHot(label, preview);
+            const color = hot && stateFg ? stateFg : on ? primary : String(baseCss.color ?? muted);
             return (
-              <button key={label} type="button" data-option={label} tabIndex={tab} aria-current={on ? 'page' : undefined} aria-label={label} style={{ ...unset, display: 'grid', justifyItems: 'center', gap: 5, color, fontSize: 14, lineHeight: '18px' }} {...handlers}>
+              <button
+                key={label}
+                type="button"
+                data-option={label}
+                tabIndex={tab}
+                aria-current={on ? 'page' : undefined}
+                aria-label={label}
+                style={withState({ ...unset, display: 'grid', justifyItems: 'center', gap: 5, color: on ? primary : baseCss.color, fontSize: 14, lineHeight: '18px', padding: '4px 0', borderRadius: 12 }, hot, true)}
+                {...itemHandlers(label)}
+              >
                 {icon === 'plus' ? (
                   <span aria-hidden="true" style={{ width: 48, height: 48, borderRadius: '50%', border: `1.5px solid ${onSurfaceColor}`, display: 'grid', placeItems: 'center' }}>
                     <AppIcon name="plus" size={24} color={onSurfaceColor} />

@@ -133,6 +133,21 @@ function ComponentDetail({ p, c, editable, mode, uses, onSelect }: { p: Project;
   const instances = p.screens.flatMap((s) => s.blocks.filter((b) => b.componentId === c.id).map((b) => ({ s, b })));
   const view = (st?: StateName, interactive = false) => <BlockView project={p} block={block} mode={mode} forceState={interactive ? undefined : st} live={interactive} />;
 
+  // Solo se muestran los estados que cambian algo respecto de reposo; los de contenido solo tienen reposo.
+  const meta = blockMeta(c.type);
+  const changesIn = (st: StateName) => {
+    const s = componentStyle(c, st);
+    const d = componentStyle(c, 'default');
+    return STYLE_KEYS.filter((k) => (s[k.key] ?? '') !== (d[k.key] ?? '')).map((k) => {
+      const v = s[k.key];
+      const ref = parseRef(v);
+      const shown = !v ? 'sin valor' : ref ? ref.name : k.key === 'type' ? TYPE_ROLE_LABEL[v as keyof typeof TYPE_ROLE_LABEL] ?? v : v;
+      return `${k.label.toLowerCase()} ${shown}`;
+    });
+  };
+  const shownStates: StateName[] = meta.interactive ? STATES.filter((st) => st === 'default' || changesIn(st).length > 0) : ['default'];
+  const sameStates = meta.interactive ? STATES.filter((st) => !shownStates.includes(st)) : [];
+
   const contrastIn = (m: Mode) => {
     if (!style.fg) return null;
     const bg = resolve(style.bg, p.tokens, m) ?? resolve('{color.background}', p.tokens, m) ?? '#FFFFFF';
@@ -201,20 +216,26 @@ function ComponentDetail({ p, c, editable, mode, uses, onSelect }: { p: Project;
         <>
           <section className="cs-stage-card" aria-label="Vista previa">
             <div className="cs-stage-bar">
-              <Tabs
-                small
-                label="Estado de la vista previa"
-                value={state}
-                onChange={(s) => {
-                  setState(s);
-                  setLive(false);
-                }}
-                items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))}
-              />
-              <label className="check cs-live">
-                <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
-                <span>Probar interacción</span>
-              </label>
+              {shownStates.length > 1 ? (
+                <Tabs
+                  small
+                  label="Estado de la vista previa"
+                  value={state}
+                  onChange={(s) => {
+                    setState(s);
+                    setLive(false);
+                  }}
+                  items={shownStates.map((s) => ({ id: s, label: STATE_LABEL[s] }))}
+                />
+              ) : (
+                <span className="cs-kicker">Solo estado en reposo</span>
+              )}
+              {meta.interactive && (
+                <label className="check cs-live">
+                  <input type="checkbox" checked={live} onChange={(e) => setLive(e.target.checked)} />
+                  <span>Probar interacción</span>
+                </label>
+              )}
             </div>
             <div className="cs-stage" style={{ backgroundColor: stageBg }}>
               <FitPreview width={343} maxScale={1.1}>
@@ -228,25 +249,36 @@ function ComponentDetail({ p, c, editable, mode, uses, onSelect }: { p: Project;
             </p>
           </section>
 
-          <div className="cs-states" aria-label="Los cinco estados">
-            {STATES.map((st) => (
-              <PressableCard
-                key={st}
-                className="cs-state"
-                selected={st === state}
-                label={`Ver estado ${STATE_LABEL[st].toLowerCase()}`}
-                onPress={() => {
-                  setState(st);
-                  setLive(false);
-                }}
-              >
-                <span className="cs-state-name">{STATE_LABEL[st]}</span>
-                <span className="cs-state-view" aria-hidden="true" style={{ backgroundColor: stageBg }}>
-                  <FitPreview width={343}>{view(st)}</FitPreview>
-                </span>
-              </PressableCard>
-            ))}
-          </div>
+          {shownStates.length > 1 && (
+            <div className="cs-states" aria-label="Estados del componente">
+              {shownStates.map((st) => (
+                <PressableCard
+                  key={st}
+                  className="cs-state"
+                  selected={st === state}
+                  label={`Ver estado ${STATE_LABEL[st].toLowerCase()}`}
+                  onPress={() => {
+                    setState(st);
+                    setLive(false);
+                  }}
+                >
+                  <span className="cs-state-name">
+                    {STATE_LABEL[st]}
+                    <span className="cs-state-change">{st === 'default' ? 'Base del componente' : changesIn(st).join(' · ')}</span>
+                  </span>
+                  <span className="cs-state-view" aria-hidden="true" style={{ backgroundColor: stageBg }}>
+                    <FitPreview width={343}>{view(st)}</FitPreview>
+                  </span>
+                </PressableCard>
+              ))}
+            </div>
+          )}
+          {!meta.interactive && <p className="cs-states-note">Es un componente de contenido: no se toca ni recibe foco, por eso solo tiene estado en reposo.</p>}
+          {sameStates.length > 0 && (
+            <p className="cs-states-note">
+              Igual que reposo: {sameStates.map((s) => STATE_LABEL[s].toLowerCase()).join(', ')}. Defínelos en «Estilos por estado» para que se distingan.
+            </p>
+          )}
 
           <div className="cs-grid-2">
             <section className="cs-card">
@@ -374,7 +406,11 @@ function ComponentDetail({ p, c, editable, mode, uses, onSelect }: { p: Project;
       {tab === 'styles' && (
         <div className="cs-styles">
           <div className="stack">
-            <Tabs small label="Estado a editar" value={state} onChange={setState} items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))} />
+            {meta.interactive ? (
+              <Tabs small label="Estado a editar" value={state} onChange={setState} items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))} />
+            ) : (
+              <p className="muted small">Componente de contenido: solo se edita el estado en reposo.</p>
+            )}
             {state !== 'default' && <p className="muted small">Lo que dejes en «Hereda» toma el valor del estado en reposo.</p>}
             <div className="picker-grid">
               {STYLE_KEYS.map((k) => (
