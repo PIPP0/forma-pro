@@ -5,7 +5,7 @@ import { addComment, applyOps, canRedo, canUndo, redo, releasesFor, resolveComme
 import { can } from '../lib/permissions';
 import { clone, edit } from '../lib/ops';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
-import { effectiveStyle, findComponent } from '../lib/tokens';
+import { colorValue, effectiveStyle, findComponent } from '../lib/tokens';
 import { importHtml } from '../lib/importer';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
@@ -14,6 +14,8 @@ import { FONT_INTER } from '../lib/seed';
 import { CATEGORIES, entryForComponent, sampleContent } from '../lib/catalog';
 import { ScreenCanvas } from '../components/ScreenCanvas';
 import { Runner } from '../components/Runner';
+import { BlockView } from '../components/BlockView';
+import { FitPreview } from '../components/FitPreview';
 import { CopilotPanel } from '../components/CopilotPanel';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
 import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
@@ -442,29 +444,53 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <span>BIBLIOTECA DEL PROYECTO</span>
                 <span>{project.components.length}</span>
               </div>
+              {editable && <p className="lib-help">Toca un componente para agregarlo a «{screen.name}».</p>}
               {CATEGORIES.map((cat) => {
                 const items = project.components.filter((c) => entryForComponent(c).category === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
                 if (!items.length) return null;
                 return (
                   <div key={cat.id} className="lib-group">
-                    <div className="lib-sub">{cat.label}</div>
-                    {items.map((c) => (
-                      <div key={c.id} className="lib-row" title={entryForComponent(c).summary}>
-                        <IconDiamond size={16} />
-                        <span className="lib-name">{c.name}</span>
-                        {editable && (
-                          <button
-                            type="button"
-                            className="lib-add"
-                            aria-label={`Agregar ${c.name} a ${screen.name}`}
-                            title={`Agregar a «${screen.name}»`}
-                            onClick={() => insertBlock(newBlock(c.type, c.id, c.variant, project.brand))}
-                          >
-                            <IconPlus size={15} />
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                    <div className="lib-sub">
+                      {cat.label} <span>{items.length}</span>
+                    </div>
+                    {items.map((c) => {
+                      const add = () => editable && insertBlock(newBlock(c.type, c.id, c.variant, project.brand));
+                      return (
+                        <div
+                          key={c.id}
+                          role="button"
+                          tabIndex={editable ? 0 : -1}
+                          aria-disabled={!editable}
+                          aria-label={`Agregar ${c.name} a ${screen.name}`}
+                          className="lib-tile"
+                          title={entryForComponent(c).summary}
+                          onClick={add}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              add();
+                            }
+                          }}
+                        >
+                          <span className="lib-tile-view" aria-hidden="true" style={{ backgroundColor: colorValue(project.tokens, 'background', 'light', '#FFFFFF') }}>
+                            <FitPreview width={343}>
+                              <BlockView project={project} block={{ id: `lib-${c.id}`, type: c.type, componentId: c.id, ...sampleContent(c.type, c.variant, project.brand) } as Block} mode="light" />
+                            </FitPreview>
+                          </span>
+                          <span className="lib-tile-meta">
+                            <span className="lib-tile-text">
+                              <strong>{c.name}</strong>
+                              <span>{blockMeta(c.type).label}</span>
+                            </span>
+                            {editable && (
+                              <span className="lib-tile-add" aria-hidden="true">
+                                <IconPlus size={14} /> Agregar
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 );
               })}
@@ -1010,6 +1036,37 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
         )}
       </div>
 
+      {editable && (
+        <div className="props-actions props-actions-top" role="toolbar" aria-label="Acciones del bloque">
+          <Button size="sm" disabled={index === 0} title="Subir (Alt + ↑)" onClick={() => applyOps(project.id, [edit.moveBlock(project, screen.id, index, index - 1)], 'Mover bloque')}>
+            ↑ Subir
+          </Button>
+          <Button size="sm" disabled={index === screen.blocks.length - 1} title="Bajar (Alt + ↓)" onClick={() => applyOps(project.id, [edit.moveBlock(project, screen.id, index, index + 1)], 'Mover bloque')}>
+            ↓ Bajar
+          </Button>
+          <Button
+            size="sm"
+            title="Duplicar bloque"
+            onClick={() => {
+              const copy = { ...clone(block), id: uid('b_') };
+              if (applyOps(project.id, [edit.addBlock(project, screen.id, copy, index + 1)], `Duplicar «${name}»`)) onSelect(copy.id);
+            }}
+          >
+            Duplicar
+          </Button>
+          <Button
+            size="sm"
+            tone="danger"
+            title="Eliminar (Supr)"
+            onClick={() => {
+              if (applyOps(project.id, [edit.removeBlock(project, screen.id, block.id)], `Eliminar «${name}»`)) onSelect(undefined);
+            }}
+          >
+            Eliminar
+          </Button>
+        </div>
+      )}
+
       <Section title="Contenido">
         {block.type !== 'divider' && (
           <Field label="Texto principal">
@@ -1191,34 +1248,6 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
         </details>
       )}
 
-      {editable && (
-        <div className="props-actions">
-          <Button size="sm" disabled={index === 0} onClick={() => applyOps(project.id, [edit.moveBlock(project, screen.id, index, index - 1)], 'Mover bloque')}>
-            Subir
-          </Button>
-          <Button size="sm" disabled={index === screen.blocks.length - 1} onClick={() => applyOps(project.id, [edit.moveBlock(project, screen.id, index, index + 1)], 'Mover bloque')}>
-            Bajar
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => {
-              const copy = { ...clone(block), id: uid('b_') };
-              if (applyOps(project.id, [edit.addBlock(project, screen.id, copy, index + 1)], `Duplicar «${name}»`)) onSelect(copy.id);
-            }}
-          >
-            Duplicar
-          </Button>
-          <Button
-            size="sm"
-            tone="danger"
-            onClick={() => {
-              if (applyOps(project.id, [edit.removeBlock(project, screen.id, block.id)], `Eliminar «${name}»`)) onSelect(undefined);
-            }}
-          >
-            Eliminar
-          </Button>
-        </div>
-      )}
     </>
   );
 }
