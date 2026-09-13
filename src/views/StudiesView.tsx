@@ -29,17 +29,20 @@ export const clock = (ms: number) => {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
-export function StudiesView({ project, role, studyId }: { project: Project; role: Role; studyId?: string }) {
+export function StudiesView({ project, role, studyId, openNew }: { project: Project; role: Role; studyId?: string; openNew?: boolean }) {
   const db = useDb();
   const studies = db.studies.filter((s) => s.projectId === project.id).sort((a, b) => b.created - a.created);
   const study = studyId ? studies.find((s) => s.id === studyId) : undefined;
   if (studyId && study) return <StudyDetail project={project} role={role} study={study} />;
-  return <StudyList project={project} role={role} studies={studies} missing={!!studyId} />;
+  return <StudyList project={project} role={role} studies={studies} missing={!!studyId} openNew={openNew} />;
 }
 
-function StudyList({ project, role, studies, missing }: { project: Project; role: Role; studies: Study[]; missing: boolean }) {
+function StudyList({ project, role, studies, missing, openNew }: { project: Project; role: Role; studies: Study[]; missing: boolean; openNew?: boolean }) {
   const db = useDb();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!!openNew && can(role, 'runStudy'));
+  useEffect(() => {
+    if (openNew && can(role, 'runStudy')) setOpen(true);
+  }, [openNew, role]);
   return (
     <div className="page">
       <div className="page-head">

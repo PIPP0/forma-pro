@@ -56,24 +56,27 @@ export default function App() {
       );
     } else {
       const section = c ?? 'screens';
+      const latestStudy = db.studies.filter((s) => s.projectId === project.id).sort((x, y) => y.created - x.created)[0];
       const views: Record<string, ReactNode> = {
         system: <SystemView project={project} role={role} />,
-        screens: <ScreensView project={project} role={role} initialScreen={route.query.get('s') ?? undefined} />,
-        studies: <StudiesView project={project} role={role} studyId={d} />,
+        screens: <ScreensView project={project} role={role} initialScreen={route.query.get('s') ?? undefined} openAi={route.query.get('ai') === '1'} />,
+        studies: <StudiesView project={project} role={role} studyId={d} openNew={route.query.get('new') === '1'} />,
+        results: <StudiesView project={project} role={role} studyId={latestStudy?.id} />,
         handoff: <HandoffView project={project} role={role} />,
         library: <LibraryView project={project} role={role} />,
         history: <HistoryView project={project} role={role} />,
         team: <MembersView project={project} role={role} />,
       };
+      const active = section === 'studies' && d ? 'results' : section in views ? section : 'screens';
       content = (
-        <Shell project={project} role={role} section={section}>
+        <Shell project={project} role={role} active={active}>
           {views[section] ?? views.screens}
         </Shell>
       );
     }
   } else if (a === 'settings') {
     content = (
-      <Shell section="settings">
+      <Shell>
         <SettingsView />
       </Shell>
     );

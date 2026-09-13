@@ -83,7 +83,7 @@ export function checkProject(p: Project): Issue[] {
       }
       if (meta.field && !b.label.trim())
         add({ severity: 'error', area: 'accesibilidad', screenId: s.id, blockId: b.id, message: `Un ${meta.label.toLowerCase()} en «${s.name}» no tiene etiqueta visible.` });
-      if ((b.type === 'button' || b.type === 'link' || b.type === 'listItem') && !b.label.trim())
+      if ((b.type === 'button' || b.type === 'link' || b.type === 'listItem' || b.type === 'card') && !b.label.trim())
         add({ severity: 'error', area: 'accesibilidad', screenId: s.id, blockId: b.id, message: `Un ${meta.label.toLowerCase()} en «${s.name}» no tiene texto.` });
       if (b.componentId && !p.components.some((c) => c.id === b.componentId))
         add({ severity: 'error', area: 'sistema', screenId: s.id, blockId: b.id, message: `«${name}» en «${s.name}» usa un componente que ya no existe.` });

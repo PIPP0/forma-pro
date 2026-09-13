@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Block, BlockType, Breakpoint, Mode, OpInput, Project, Role, Screen } from '../lib/model';
-import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta } from '../lib/model';
-import { addComment, applyOps, resolveComment, useDb, userName } from '../lib/store';
+import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf } from '../lib/model';
+import { addComment, applyOps, canRedo, canUndo, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
 import { clone, edit } from '../lib/ops';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
@@ -10,27 +10,64 @@ import { importHtml } from '../lib/importer';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
+import { FONT_INTER } from '../lib/seed';
 import { ScreenCanvas } from '../components/ScreenCanvas';
 import { Runner } from '../components/Runner';
 import { CopilotPanel } from '../components/CopilotPanel';
-import { CommitInput, ValuePicker } from '../components/inputs';
-import { Badge, Button, Empty, Field, Modal, Tabs, timeAgo } from '../components/ui';
+import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
+import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
+import {
+  IconArrowUpRight,
+  IconChevronRight,
+  IconCursor,
+  IconDiamond,
+  IconExpand,
+  IconFrame,
+  IconLink,
+  IconMessage,
+  IconMinus,
+  IconMoon,
+  IconPlay,
+  IconPlus,
+  IconRedo,
+  IconSearch,
+  IconShield,
+  IconSliders,
+  IconSparkle,
+  IconSun,
+  IconUndo,
+} from '../components/icons';
 
-const DEFAULT_LABEL: Record<BlockType, string> = {
-  navbar: 'Título de sección',
-  heading: 'Título',
-  text: 'Texto de apoyo',
-  input: 'Etiqueta del campo',
-  amount: 'Monto',
-  select: 'Selecciona una opción',
-  checkbox: 'Acepto las condiciones',
-  button: 'Continuar',
-  link: 'Ver más',
-  listItem: 'Elemento de la lista',
-  alert: 'Aviso',
-  image: 'Imagen',
-  divider: '',
+const DEFAULTS: Record<BlockType, Partial<Block>> = {
+  navbar: { label: 'marca', detail: 'DEMO' },
+  heading: { label: 'Título de la pantalla', variant: 'title', detail: 'Texto de apoyo' },
+  text: { label: 'Texto de apoyo' },
+  balance: { label: 'Saldo disponible', value: '$ 0', detail: 'Cuenta corriente', options: ['•• 0000'] },
+  help: { label: 'Mensaje de ayuda', detail: 'Explica aquí el siguiente paso.' },
+  card: { label: 'Tarjeta', detail: 'Descripción breve' },
+  input: { label: 'Etiqueta del campo', detail: 'Texto de ejemplo' },
+  textarea: { label: 'Comentarios', detail: 'Escribe aquí' },
+  amount: { label: 'Monto', detail: '$ 0' },
+  select: { label: 'Selecciona una opción', options: ['Opción 1', 'Opción 2'] },
+  radio: { label: 'Elige una opción', options: ['Opción 1', 'Opción 2'] },
+  checkbox: { label: 'Acepto las condiciones' },
+  switch: { label: 'Activar recordatorio' },
+  tabs: { label: 'Pestañas', options: ['Primera', 'Segunda'], value: 'Primera' },
+  button: { label: 'Continuar' },
+  link: { label: 'Ver más' },
+  listItem: { label: 'Elemento de la lista', detail: 'Detalle' },
+  tag: { label: 'Nueva' },
+  avatar: { label: 'Francisca Soto', detail: 'Titular' },
+  progress: { label: 'Progreso', detail: '0%', value: '0' },
+  statusIcon: { label: 'Listo' },
+  alert: { label: 'Aviso', detail: 'Detalle del aviso' },
+  image: { label: 'Imagen' },
+  divider: { label: '' },
 };
+
+function newBlock(type: BlockType, componentId?: string, variant?: string): Block {
+  return { id: uid('b_'), type, ...clone(DEFAULTS[type]), ...(variant ? { variant } : {}), ...(componentId ? { componentId } : {}) } as Block;
+}
 
 const VARIANTS: Partial<Record<BlockType, { v: string; l: string }[]>> = {
   heading: [
@@ -52,52 +89,71 @@ const VARIANTS: Partial<Record<BlockType, { v: string; l: string }[]>> = {
   ],
 };
 
-function newBlock(type: BlockType, componentId?: string, variant?: string): Block {
-  const b: Block = { id: uid('b_'), type, label: DEFAULT_LABEL[type] };
-  if (type === 'select') b.options = ['Opción 1', 'Opción 2'];
-  if (type === 'heading') b.variant = 'title';
-  if (variant) b.variant = variant;
-  if (componentId) b.componentId = componentId;
-  return b;
-}
+const FONTS = [
+  { label: 'Inter / Sans serif', value: FONT_INTER },
+  { label: 'Sistema', value: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+  { label: 'Serif', value: "Georgia, 'Times New Roman', serif" },
+  { label: 'Monoespaciada', value: "'JetBrains Mono', ui-monospace, monospace" },
+];
 
-type Panel = 'inspect' | 'comments' | 'copilot';
+const BP_EYEBROW: Record<Breakpoint, string> = { mobile: 'EXPERIENCIA MÓVIL', tablet: 'EXPERIENCIA TABLET', desktop: 'EXPERIENCIA ESCRITORIO' };
+const FRAME_GAP = 36;
+const clampZoom = (z: number) => Math.round(Math.max(0.3, Math.min(1.25, z)) * 100) / 100;
 
-export function ScreensView({ project, role, initialScreen }: { project: Project; role: Role; initialScreen?: string }) {
+type Panel = 'props' | 'comments' | 'ai';
+
+export function ScreensView({ project, role, initialScreen, openAi }: { project: Project; role: Role; initialScreen?: string; openAi?: boolean }) {
   const editable = can(role, 'edit');
+  const db = useDb();
   const [screenId, setScreenId] = useState(() => (initialScreen && project.screens.some((s) => s.id === initialScreen) ? initialScreen : project.startScreenId));
   const [blockId, setBlockId] = useState<string>();
+  const [bp, setBp] = useState<Breakpoint>('mobile');
   const [mode, setMode] = useState<Mode>('light');
   const [wireframe, setWireframe] = useState(false);
   const [play, setPlay] = useState(false);
-  const [panel, setPanel] = useState<Panel>('inspect');
+  const [panel, setPanel] = useState<Panel>(openAi ? 'ai' : 'props');
+  const [explorer, setExplorer] = useState<'screens' | 'components'>('screens');
+  const [q, setQ] = useState('');
+  const [zoom, setZoom] = useState(0.75);
   const [guardOpen, setGuardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const scroller = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (openAi) setPanel('ai');
+  }, [openAi]);
   useEffect(() => {
     if (initialScreen && project.screens.some((s) => s.id === initialScreen)) setScreenId(initialScreen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialScreen]);
 
+  const bases = project.screens.filter((s) => !s.variantOf);
   const screen = project.screens.find((s) => s.id === screenId) ?? project.screens.find((s) => s.id === project.startScreenId) ?? project.screens[0];
   const block = screen?.blocks.find((b) => b.id === blockId);
   const issues = useMemo(() => checkProject(project), [project]);
   const errors = issues.filter((i) => i.severity === 'error').length;
   const warnings = issues.length - errors;
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
+  const bpInfo = breakpointOf(bp);
+  const frameW = bpInfo.width * zoom;
+  const frameH = bpInfo.height * zoom;
+
+  const select = (sid: string, bid?: string) => {
+    setScreenId(sid);
+    setBlockId(bid);
+  };
 
   const addScreen = () => {
-    const s: Screen = { id: uid('s_'), name: 'Nueva pantalla', breakpoint: 'mobile', blocks: [newBlock('heading')] };
+    const s: Screen = { id: uid('s_'), name: 'Nueva pantalla', breakpoint: 'mobile', blocks: [newBlock('navbar'), newBlock('heading', project.components.find((c) => c.type === 'heading')?.id, 'title')] };
     const ops = [edit.addScreen(project, s)];
     if (!project.screens.some((x) => x.id === project.startScreenId)) ops.push(edit.project('startScreenId', s.id));
     if (apply(ops, 'Agregar pantalla')) {
-      setScreenId(s.id);
-      setBlockId(undefined);
-      setPlay(false);
+      select(s.id);
+      setBp('mobile');
+      requestAnimationFrame(() => scroller.current?.scrollTo({ left: scroller.current.scrollWidth, behavior: 'smooth' }));
     }
   };
 
-  // Atajos de teclado para el bloque seleccionado
   useEffect(() => {
     if (!editable || !block || !screen || play) return;
     const onKey = (e: KeyboardEvent) => {
@@ -121,39 +177,21 @@ export function ScreensView({ project, role, initialScreen }: { project: Project
   if (!screen)
     return (
       <div className="page">
-        <Empty
-          title="Este proyecto no tiene pantallas"
-          action={
-            editable && (
-              <Button tone="primary" onClick={addScreen}>
-                Crear la primera pantalla
-              </Button>
-            )
-          }
-        >
-          Las pantallas se conectan por acciones y se prueban tal como las diseñas.
-        </Empty>
+        <div className="empty">
+          <h3>Este proyecto no tiene pantallas</h3>
+          <p>Las pantallas se conectan por acciones y se prueban tal como las diseñas.</p>
+          {editable && (
+            <Button tone="primary" onClick={addScreen}>
+              Crear la primera pantalla
+            </Button>
+          )}
+        </div>
       </div>
     );
 
-  const bases = project.screens.filter((s) => !s.variantOf);
-  const groupId = baseId(screen);
-  const group = project.screens.filter((s) => baseId(s) === groupId);
-
-  const createVariant = (bp: Breakpoint) => {
-    const base = project.screens.find((s) => s.id === groupId)!;
-    const v: Screen = {
-      id: uid('s_'),
-      name: base.name,
-      breakpoint: bp,
-      variantOf: base.id,
-      terminal: base.terminal,
-      blocks: base.blocks.map((b) => ({ ...clone(b), id: uid('b_') })),
-    };
-    if (apply([edit.addScreen(project, v)], `Crear variante ${BREAKPOINTS.find((b) => b.id === bp)!.label.toLowerCase()} de «${base.name}»`)) {
-      setScreenId(v.id);
-      setBlockId(undefined);
-    }
+  const createVariant = (base: Screen, target: Breakpoint) => {
+    const v: Screen = { id: uid('s_'), name: base.name, breakpoint: target, variantOf: base.id, terminal: base.terminal, blocks: base.blocks.map((b) => ({ ...clone(b), id: uid('b_') })) };
+    if (apply([edit.addScreen(project, v)], `Crear variante ${BREAKPOINTS.find((b) => b.id === target)!.label.toLowerCase()} de «${base.name}»`)) select(v.id);
   };
 
   const deleteScreen = () => {
@@ -163,214 +201,399 @@ export function ScreensView({ project, role, initialScreen }: { project: Project
       .filter((x) => (screen.variantOf ? x.s.id === screen.id : baseId(x.s) === screen.id))
       .sort((a, b) => b.i - a.i);
     const ops: OpInput[] = targets.map((x) => ({ kind: 'remove', path: ['screens'], index: x.i }));
-    if (apply(ops, `Eliminar «${screen.name}»${targets.length > 1 ? ' y sus variantes' : ''}`)) {
-      setScreenId(screen.variantOf ?? project.startScreenId);
-      setBlockId(undefined);
-    }
+    if (apply(ops, `Eliminar «${screen.name}»${targets.length > 1 ? ' y sus variantes' : ''}`)) select(screen.variantOf ?? project.startScreenId);
   };
 
   const insertBlock = (b: Block) => {
     const i = block ? screen.blocks.findIndex((x) => x.id === block.id) + 1 : screen.blocks.length;
-    if (apply([edit.addBlock(project, screen.id, b, i)], `Agregar ${blockMeta(b.type).label.toLowerCase()}`)) {
+    if (apply([edit.addBlock(project, screen.id, b, i)], `Agregar ${blockMeta(b.type).label.toLowerCase()} en «${screen.name}»`)) {
       setBlockId(b.id);
-      setPanel('inspect');
+      setPanel('props');
     }
   };
 
   const goIssue = (i: Issue) => {
+    setGuardOpen(false);
     if (i.screenId) {
-      setScreenId(i.screenId);
-      setBlockId(i.blockId);
-      setPlay(false);
-      setPanel('inspect');
+      const s = project.screens.find((x) => x.id === i.screenId);
+      if (s) setBp(s.breakpoint);
+      select(i.screenId, i.blockId);
+      setPanel('props');
     }
   };
 
+  const scrollToFrame = (index: number) => scroller.current?.scrollTo({ left: Math.max(0, index * (frameW + FRAME_GAP) - 40), behavior: 'smooth' });
+  const fit = () => {
+    const w = (scroller.current?.clientWidth ?? 1000) - 80;
+    setZoom(clampZoom(w / (bases.length * (bpInfo.width + FRAME_GAP / 0.75))));
+  };
+  const connected = (from: Screen, toId: string) => project.screens.some((s) => baseId(s) === from.id && s.blocks.some((x) => x.action === 'navigate' && x.target === toId));
+  const match = (text: string) => !q.trim() || text.toLowerCase().includes(q.trim().toLowerCase());
+  const libVersion = project.library?.version ?? releasesFor(db, project.id)[0]?.version;
+  const commentCount = db.comments.filter((c) => c.projectId === project.id && c.screenId === screen.id && !c.resolved).length;
+
   return (
-    <div className="editor">
-      <aside className="screens-list" aria-label="Pantallas">
-        <div className="sl-head">
-          <strong>Pantallas</strong>
+    <div className="studio">
+      <aside className="explorer" aria-label="Explorador">
+        <div className="panel-head">
+          <h2>Explorador</h2>
           {editable && (
-            <Button size="sm" onClick={addScreen}>
-              Agregar
-            </Button>
+            <button type="button" className="icon-btn" aria-label="Nueva pantalla" title="Nueva pantalla" onClick={addScreen}>
+              <IconPlus size={18} />
+            </button>
           )}
         </div>
-        {bases.map((s) => (
-          <div key={s.id}>
-            <button
-              type="button"
-              className="sl-item"
-              aria-current={screen.id === s.id}
-              onClick={() => {
-                setScreenId(s.id);
-                setBlockId(undefined);
-              }}
-            >
-              <span className="sl-name">{s.name}</span>
-              <span className="sl-tags">
-                {s.id === project.startScreenId && <Badge tone="accent">Inicio</Badge>}
-                {s.terminal && <Badge>Final</Badge>}
-              </span>
-            </button>
-            {project.screens
-              .filter((v) => v.variantOf === s.id)
-              .map((v) => (
-                <button
-                  key={v.id}
-                  type="button"
-                  className="sl-item sl-variant"
-                  aria-current={screen.id === v.id}
-                  onClick={() => {
-                    setScreenId(v.id);
-                    setBlockId(undefined);
-                  }}
-                >
-                  {BREAKPOINTS.find((b) => b.id === v.breakpoint)!.label}
+        <div className="explorer-tabs">
+          <Tabs
+            small
+            label="Contenido del explorador"
+            value={explorer}
+            onChange={setExplorer}
+            items={[
+              { id: 'screens', label: 'Pantallas' },
+              { id: 'components', label: 'Componentes' },
+            ]}
+          />
+        </div>
+        <label className="search">
+          <IconSearch size={15} />
+          <input placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} aria-label={explorer === 'screens' ? 'Buscar pantallas' : 'Buscar componentes'} />
+        </label>
+        <div className="explorer-body">
+          {explorer === 'screens' ? (
+            <>
+              <div className="lib-head">
+                <span>PANTALLAS DEL FLUJO</span>
+                <span>{bases.length}</span>
+              </div>
+              {bases.map((s, i) =>
+                match(s.name) ? (
+                  <div key={s.id}>
+                    <button
+                      type="button"
+                      className="tree-row"
+                      aria-current={baseId(screen) === s.id && screen.breakpoint === s.breakpoint}
+                      onClick={() => {
+                        setBp('mobile');
+                        select(s.id);
+                        scrollToFrame(i);
+                      }}
+                    >
+                      <IconFrame size={14} />
+                      <span className="tree-name">
+                        {String(i + 1).padStart(2, '0')} {s.name}
+                      </span>
+                      {s.id === project.startScreenId && <span className="tree-tag">Inicio</span>}
+                      {s.terminal && <span className="tree-tag neutral">Final</span>}
+                    </button>
+                    {project.screens
+                      .filter((v) => v.variantOf === s.id)
+                      .map((v) => (
+                        <button
+                          key={v.id}
+                          type="button"
+                          className="tree-row tree-sub"
+                          aria-current={screen.id === v.id}
+                          onClick={() => {
+                            setBp(v.breakpoint);
+                            select(v.id);
+                            scrollToFrame(i);
+                          }}
+                        >
+                          {BREAKPOINTS.find((b) => b.id === v.breakpoint)!.label}
+                        </button>
+                      ))}
+                  </div>
+                ) : null,
+              )}
+              {editable && (
+                <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
+                  Importar pantalla desde HTML
                 </button>
-              ))}
-          </div>
-        ))}
-        {editable && (
-          <Button size="sm" tone="ghost" className="sl-import" onClick={() => setImportOpen(true)}>
-            Importar pantalla desde HTML
-          </Button>
-        )}
+              )}
+            </>
+          ) : (
+            <>
+              <div className="lib-head">
+                <span>BIBLIOTECA DEL PROYECTO</span>
+                <span>{project.components.length}</span>
+              </div>
+              {project.components
+                .filter((c) => match(c.name))
+                .map((c) => (
+                  <div key={c.id} className="lib-row">
+                    <IconDiamond size={16} />
+                    <span className="lib-name">{c.name}</span>
+                    {editable && (
+                      <button type="button" className="lib-add" aria-label={`Agregar ${c.name} a ${screen.name}`} title={`Agregar a «${screen.name}»`} onClick={() => insertBlock(newBlock(c.type, c.id, c.variant))}>
+                        <IconPlus size={15} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              {editable && (
+                <details className="loose">
+                  <summary>Bloques sueltos, sin componente</summary>
+                  <div className="palette">
+                    {BLOCK_TYPES.filter((t) => match(t.label)).map((t) => (
+                      <button key={t.type} type="button" className="chip chip-quiet" onClick={() => insertBlock(newBlock(t.type))}>
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+        </div>
+        <a className="lib-card" href={href(`/p/${project.id}/library`)}>
+          <span className="lib-card-icon">
+            <IconDiamond size={18} />
+          </span>
+          <span className="lib-card-text">
+            <strong>{project.brand} UI</strong>
+            <span>
+              {project.components.length} componentes · {libVersion ? `v${libVersion}` : 'sin publicar'}
+            </span>
+          </span>
+          <i className={`status-dot ${libVersion ? 'on' : ''}`} aria-label={libVersion ? 'Biblioteca publicada' : 'Biblioteca sin publicar'} />
+        </a>
       </aside>
 
-      <section className="mat" aria-label="Lienzo">
-        <div className="mat-toolbar">
-          <Tabs
-            small
-            label="Dispositivo"
-            value={screen.breakpoint}
-            onChange={(bp) => {
-              const existing = group.find((s) => s.breakpoint === bp);
-              if (existing) {
-                setScreenId(existing.id);
-                setBlockId(undefined);
-              } else if (editable) createVariant(bp);
-              else notify('Esta pantalla no tiene variante para ese dispositivo.', 'info');
-            }}
-            items={BREAKPOINTS.map((b) => ({
-              id: b.id,
-              label: group.some((s) => s.breakpoint === b.id) ? b.label : `${b.label} +`,
-            }))}
-          />
-          <Tabs
-            small
-            label="Modo de color"
-            value={mode}
-            onChange={setMode}
-            items={[
-              { id: 'light', label: 'Claro' },
-              { id: 'dark', label: 'Oscuro' },
-            ]}
-          />
-          <Tabs
-            small
-            label="Fidelidad"
-            value={wireframe ? 'wire' : 'hifi'}
-            onChange={(v) => setWireframe(v === 'wire')}
-            items={[
-              { id: 'hifi', label: 'Alta fidelidad' },
-              { id: 'wire', label: 'Wireframe' },
-            ]}
-          />
-          <div className="grow" />
-          <Button tone={play ? 'primary' : 'default'} size="sm" onClick={() => setPlay((v) => !v)} aria-pressed={play}>
-            {play ? 'Volver a editar' : 'Probar prototipo'}
-          </Button>
-        </div>
-
-        <div className={`guard ${errors ? 'has-errors' : warnings ? 'has-warnings' : 'clean'}`}>
-          <button type="button" className="guard-summary" aria-expanded={guardOpen} onClick={() => setGuardOpen((v) => !v)}>
-            <span className={`dot ${errors ? 'dot-error' : warnings ? 'dot-warning' : 'dot-ok'}`} aria-hidden="true" />
-            <strong>Guardarraíl</strong>
-            <span>
-              {errors === 0 && warnings === 0
-                ? 'Flujo, contraste y sistema en orden. Listo para probar con personas.'
-                : `${errors} ${errors === 1 ? 'error crítico' : 'errores críticos'} y ${warnings} ${warnings === 1 ? 'aviso' : 'avisos'}${errors ? '. Corrige los errores antes de publicar un estudio.' : '.'}`}
+      <section className="canvas-area" aria-label="Lienzo">
+        <div className="canvas-top">
+          <nav className="canvas-crumb" aria-label="Flujo">
+            <span>{project.flowName || 'Flujo principal'}</span>
+            <IconChevronRight size={14} />
+            <span className="muted">
+              {bases.length} {bases.length === 1 ? 'pantalla' : 'pantallas'}
             </span>
-            {issues.length > 0 && <span className="guard-toggle">{guardOpen ? 'Ocultar' : 'Ver detalle'}</span>}
-          </button>
-          {guardOpen && issues.length > 0 && (
-            <ul className="issues">
-              {issues.map((i) => (
-                <li key={i.id}>
-                  {i.screenId ? (
-                    <button type="button" className="issue" onClick={() => goIssue(i)}>
-                      <span className={`dot dot-${i.severity}`} aria-hidden="true" />
-                      <span>
-                        <span className="issue-area">{AREA_LABEL[i.area]}</span> {i.message}
-                      </span>
-                    </button>
-                  ) : (
-                    <a className="issue" href={href(`/p/${project.id}/system`)}>
-                      <span className={`dot dot-${i.severity}`} aria-hidden="true" />
-                      <span>
-                        <span className="issue-area">{AREA_LABEL[i.area]}</span> {i.message}
-                      </span>
-                    </a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
+          </nav>
+          <div className="canvas-tools">
+            <Tabs small label="Dispositivo" value={bp} onChange={setBp} items={BREAKPOINTS.map((b) => ({ id: b.id, label: b.label }))} />
+            <button type="button" className="icon-btn" aria-label={mode === 'light' ? 'Ver en modo oscuro' : 'Ver en modo claro'} title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'} onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}>
+              {mode === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
+            </button>
+            <Tabs
+              small
+              label="Fidelidad"
+              value={wireframe ? 'wire' : 'hifi'}
+              onChange={(v) => setWireframe(v === 'wire')}
+              items={[
+                { id: 'wire', label: 'Wireframe' },
+                { id: 'hifi', label: 'Alta fidelidad' },
+              ]}
+            />
+            <button type="button" className="btn btn-outline btn-sm" onClick={() => setPlay(true)}>
+              <IconPlay size={14} /> Probar
+            </button>
+          </div>
         </div>
 
-        <div className="mat-stage">
-          <div className="ruler" aria-hidden="true" />
-          {play ? (
-            <Runner key={`${screen.id}-${project.version}`} project={project} startScreenId={screen.id} breakpoint={screen.breakpoint} mode={mode} />
-          ) : (
-            <ScreenCanvas project={project} screen={screen} mode={mode} wireframe={wireframe} selectedBlockId={blockId} onSelect={setBlockId} measures />
-          )}
+        <div
+          className="canvas-scroll"
+          ref={scroller}
+          onClick={(e) => {
+            const el = e.target as HTMLElement;
+            if (el === e.currentTarget || el.classList.contains('frames') || el.classList.contains('canvas-head')) setBlockId(undefined);
+          }}
+        >
+          <header className="canvas-head">
+            <div>
+              <span className="eyebrow">
+                <i aria-hidden="true" /> {BP_EYEBROW[bp]}
+              </span>
+              <h1 className="canvas-title">{project.tagline || project.name}</h1>
+              {project.summary && <p className="canvas-sub">{project.summary}</p>}
+            </div>
+            <div className="guard-wrap">
+              <button type="button" className={`sys-pill ${errors ? 'err' : ''}`} aria-expanded={guardOpen} onClick={() => setGuardOpen((v) => !v)}>
+                <IconShield size={14} />
+                {errors ? `${errors} ${errors === 1 ? 'error crítico' : 'errores críticos'}` : 'Sistema conectado'}
+                {warnings > 0 && <span className="sys-count">{warnings}</span>}
+              </button>
+              {guardOpen && (
+                <div className="guard-pop" role="dialog" aria-label="Guardarraíl">
+                  <strong>Guardarraíl de flujo, contraste y sistema</strong>
+                  <p className="muted small">
+                    {errors === 0 && warnings === 0
+                      ? 'Todo en orden. Puedes publicar un estudio.'
+                      : `${errors} ${errors === 1 ? 'error crítico' : 'errores críticos'} y ${warnings} ${warnings === 1 ? 'aviso' : 'avisos'}.${errors ? ' Corrige los errores antes de publicar un estudio.' : ''}`}
+                  </p>
+                  <ul className="issues">
+                    {issues.map((i) => (
+                      <li key={i.id}>
+                        {i.screenId ? (
+                          <button type="button" className="issue" onClick={() => goIssue(i)}>
+                            <span className={`dot dot-${i.severity}`} aria-hidden="true" />
+                            <span>
+                              <span className="issue-area">{AREA_LABEL[i.area]}</span> {i.message}
+                            </span>
+                          </button>
+                        ) : (
+                          <a className="issue" href={href(`/p/${project.id}/system`)}>
+                            <span className={`dot dot-${i.severity}`} aria-hidden="true" />
+                            <span>
+                              <span className="issue-area">{AREA_LABEL[i.area]}</span> {i.message}
+                            </span>
+                          </a>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          </header>
+
+          <div className="frames" style={{ gap: 0 }}>
+            {bases.map((s, i) => {
+              const shown = s.breakpoint === bp ? s : project.screens.find((v) => v.variantOf === s.id && v.breakpoint === bp);
+              const isSel = !!shown && screen.id === shown.id;
+              return (
+                <Fragment key={s.id}>
+                  <div className="frame" style={{ width: frameW }}>
+                    <div className="frame-label">
+                      <button type="button" className="frame-name" onClick={() => select(shown?.id ?? s.id)}>
+                        <IconFrame size={13} /> {String(i + 1).padStart(2, '0')} — {s.name}
+                      </button>
+                      {s.id === project.startScreenId && (
+                        <span className="frame-badge">
+                          <IconPlay size={9} /> Inicio
+                        </span>
+                      )}
+                    </div>
+                    {shown ? (
+                      <div className={`frame-device ${isSel ? 'is-selected' : ''}`}>
+                        <ScreenCanvas
+                          project={project}
+                          screen={shown}
+                          mode={mode}
+                          wireframe={wireframe}
+                          scale={zoom}
+                          selectedBlockId={isSel ? blockId : undefined}
+                          onSelect={(bid) => select(shown.id, bid)}
+                          measures={isSel}
+                        />
+                      </div>
+                    ) : (
+                      <div className="frame-missing" style={{ height: frameH }}>
+                        <p>
+                          «{s.name}» aún no tiene variante para {bpInfo.label.toLowerCase()}.
+                        </p>
+                        {editable && (
+                          <Button size="sm" onClick={() => createVariant(s, bp)}>
+                            Crear variante
+                          </Button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {i < bases.length - 1 && <div className={`connector ${connected(s, bases[i + 1].id) ? 'on' : ''}`} style={{ marginTop: 32 + Math.min(frameH, 560 * zoom) / 2 }} aria-hidden="true" />}
+                </Fragment>
+              );
+            })}
+            {editable && (
+              <>
+                <div className="connector" aria-hidden="true" />
+                <button type="button" className="frame-add" style={{ height: Math.min(frameH, 420), width: Math.max(140, frameW * 0.6) }} onClick={addScreen}>
+                  <IconPlus size={18} />
+                  Nueva pantalla
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {!block && (
+          <p className="canvas-hint">
+            <IconDiamond size={14} /> Selecciona un componente para editar sus propiedades e interacciones.
+          </p>
+        )}
+        <div className="toolbar-float" role="toolbar" aria-label="Herramientas del lienzo">
+          <button type="button" className="tool active" title="Seleccionar" aria-label="Seleccionar" aria-pressed="true">
+            <IconCursor size={18} />
+          </button>
+          <button type="button" className="tool" title="Nueva pantalla" aria-label="Nueva pantalla" disabled={!editable} onClick={addScreen}>
+            <IconFrame size={18} />
+          </button>
+          <button type="button" className="tool" title="Componentes del sistema" aria-label="Componentes del sistema" onClick={() => setExplorer('components')}>
+            <IconDiamond size={18} />
+          </button>
+          <button type="button" className="tool" title="Asistente IA" aria-label="Asistente IA" onClick={() => setPanel('ai')}>
+            <IconSparkle size={18} />
+          </button>
+          <span className="tool-sep" aria-hidden="true" />
+          <button type="button" className="tool" title="Deshacer" aria-label="Deshacer" disabled={!editable || !canUndo(project.id)} onClick={() => undo(project.id)}>
+            <IconUndo size={18} />
+          </button>
+          <button type="button" className="tool" title="Rehacer" aria-label="Rehacer" disabled={!editable || !canRedo(project.id)} onClick={() => redo(project.id)}>
+            <IconRedo size={18} />
+          </button>
+        </div>
+        <div className="zoom-float" role="group" aria-label="Zoom">
+          <button type="button" className="tool sm" aria-label="Alejar" onClick={() => setZoom((z) => clampZoom(z - 0.1))}>
+            <IconMinus size={15} />
+          </button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button type="button" className="tool sm" aria-label="Acercar" onClick={() => setZoom((z) => clampZoom(z + 0.1))}>
+            <IconPlus size={15} />
+          </button>
+          <button type="button" className="tool sm" aria-label="Ajustar a la vista" title="Ajustar a la vista" onClick={fit}>
+            <IconExpand size={15} />
+          </button>
         </div>
       </section>
 
-      <aside className="inspector" aria-label="Inspector">
-        <div className="insp-tabs">
-          <Tabs
-            label="Panel"
-            value={panel}
-            onChange={setPanel}
-            items={[
-              { id: 'inspect', label: 'Inspector' },
-              { id: 'comments', label: 'Comentarios' },
-              { id: 'copilot', label: 'Copiloto' },
-            ]}
-          />
-        </div>
-        {panel === 'inspect' &&
-          (block ? (
-            <BlockInspector key={block.id} project={project} screen={screen} block={block} editable={editable} onSelect={setBlockId} />
-          ) : (
-            <ScreenInspector key={screen.id} project={project} screen={screen} editable={editable} onDelete={deleteScreen} />
-          ))}
-        {panel === 'inspect' && editable && <BlockPalette project={project} onAdd={insertBlock} after={block} />}
-        {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
-        {panel === 'copilot' && (
-          <div className="insp-section">
-            <CopilotPanel
-              project={project}
-              screen={screen}
-              editable={editable}
-              onApplied={(id) => {
-                setScreenId(id);
-                setBlockId(undefined);
-                setPanel('inspect');
-              }}
-              onSelectBlock={(id) => {
-                setBlockId(id);
-                setPlay(false);
-                setPanel('inspect');
-              }}
-            />
+      <aside className="props" aria-label="Panel lateral">
+        <div className="panel-head">
+          <h2>{panel === 'props' ? 'Propiedades' : panel === 'comments' ? 'Comentarios' : 'Asistente IA'}</h2>
+          <div className="head-icons">
+            <button type="button" className={`icon-btn ${panel === 'props' ? 'on' : ''}`} aria-label="Propiedades" aria-pressed={panel === 'props'} onClick={() => setPanel('props')}>
+              <IconSliders size={17} />
+            </button>
+            <button type="button" className={`icon-btn ${panel === 'comments' ? 'on' : ''}`} aria-label="Comentarios" aria-pressed={panel === 'comments'} onClick={() => setPanel('comments')}>
+              <IconMessage size={17} />
+              {commentCount > 0 && <span className="count-dot">{commentCount}</span>}
+            </button>
           </div>
+        </div>
+        <div className="props-body">
+          {panel === 'props' &&
+            (block ? (
+              <BlockProps key={block.id} project={project} screen={screen} block={block} editable={editable} onSelect={setBlockId} />
+            ) : (
+              <ScreenProps key={screen.id} project={project} screen={screen} editable={editable} onDelete={deleteScreen} onAdd={insertBlock} />
+            ))}
+          {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
+          {panel === 'ai' && (
+            <div className="props-section">
+              <CopilotPanel
+                project={project}
+                screen={screen}
+                editable={editable}
+                onApplied={(id) => {
+                  select(id);
+                  setBp('mobile');
+                  setPanel('props');
+                  requestAnimationFrame(() => scroller.current?.scrollTo({ left: scroller.current.scrollWidth, behavior: 'smooth' }));
+                }}
+                onSelectBlock={(id) => {
+                  setBlockId(id);
+                  setPanel('props');
+                }}
+              />
+            </div>
+          )}
+        </div>
+        {panel !== 'ai' && (
+          <button type="button" className="props-foot" onClick={() => setPanel('ai')}>
+            <IconSparkle size={15} /> Explorar con IA <IconArrowUpRight size={13} />
+          </button>
         )}
       </aside>
+
+      {play && <PlayOverlay project={project} screen={screen} mode={mode} onClose={() => setPlay(false)} />}
 
       <ImportHtmlModal
         open={importOpen}
@@ -378,8 +601,7 @@ export function ScreensView({ project, role, initialScreen }: { project: Project
         onImport={(name, blocks) => {
           const s: Screen = { id: uid('s_'), name, breakpoint: 'mobile', blocks };
           if (apply([edit.addScreen(project, s)], `Importar «${name}» desde HTML`)) {
-            setScreenId(s.id);
-            setBlockId(undefined);
+            select(s.id);
             setImportOpen(false);
             notify(`Importaste ${blocks.length} bloques. Vincúlalos a componentes para que hereden el sistema.`, 'success');
           }
@@ -389,50 +611,144 @@ export function ScreensView({ project, role, initialScreen }: { project: Project
   );
 }
 
-function ScreenInspector({ project, screen, editable, onDelete }: { project: Project; screen: Screen; editable: boolean; onDelete: () => void }) {
-  const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
-  const base = project.screens.find((s) => s.id === baseId(screen))!;
+function Section({ title, aside, icon, children }: { title: string; aside?: ReactNode; icon?: ReactNode; children: ReactNode }) {
   return (
-    <div className="insp-section stack">
-      <h3 className="insp-title">Pantalla</h3>
-      <Field label="Nombre">
-        <CommitInput
-          value={screen.name}
-          disabled={!editable || !!screen.variantOf}
-          onCommit={(v) => {
-            if (!v.trim()) return;
-            // El nombre se comparte entre variantes
-            const ops = project.screens.filter((s) => baseId(s) === base.id).map((s) => edit.screen(project, s.id, 'name', v.trim()));
-            apply(ops, `Renombrar pantalla a «${v.trim()}»`);
-          }}
-        />
-      </Field>
-      {screen.variantOf && <p className="muted small">Variante de «{base.name}» para {BREAKPOINTS.find((b) => b.id === screen.breakpoint)!.label.toLowerCase()}. El nombre y las conexiones se definen en la base.</p>}
-      <label className="check">
-        <input
-          type="checkbox"
-          checked={!!base.terminal}
-          disabled={!editable}
-          onChange={(e) => apply([edit.screen(project, base.id, 'terminal', e.target.checked || undefined)], e.target.checked ? `Marcar «${base.name}» como final` : `Desmarcar «${base.name}» como final`)}
-        />
-        <span>Es una pantalla final del flujo (no necesita salida)</span>
-      </label>
-      <div className="row">
-        {base.id !== project.startScreenId && (
-          <Button size="sm" disabled={!editable} onClick={() => apply([edit.project('startScreenId', base.id)], `Usar «${base.name}» como inicio`)}>
-            Usar como inicio
-          </Button>
-        )}
-        <Button size="sm" tone="danger" disabled={!editable} onClick={onDelete}>
-          {screen.variantOf ? 'Eliminar variante' : 'Eliminar pantalla'}
-        </Button>
+    <section className="props-section">
+      <div className="props-section-head">
+        <h3>{title}</h3>
+        {aside && <span className="props-aside">{aside}</span>}
+        {icon}
       </div>
-      <p className="muted small">Selecciona un bloque en el lienzo para editarlo. Con un bloque seleccionado: Supr lo elimina y Alt + flechas lo mueve.</p>
-    </div>
+      <div className="stack">{children}</div>
+    </section>
   );
 }
 
-function BlockInspector({ project, screen, block, editable, onSelect }: { project: Project; screen: Screen; block: Block; editable: boolean; onSelect: (id?: string) => void }) {
+function GlobalTokens({ project, editable }: { project: Project; editable: boolean }) {
+  const t = project.tokens;
+  const pi = t.colors.findIndex((c) => c.name === 'primary');
+  const ri = t.radius.findIndex((r) => r.name === 'lg');
+  const si = t.space.findIndex((s) => s.name === 'lg');
+  const fonts = FONTS.some((f) => f.value === t.fontFamily) ? FONTS : [...FONTS, { label: 'Personalizada', value: t.fontFamily }];
+  return (
+    <>
+      {pi >= 0 && (
+        <Field label="Color principal">
+          <ColorCell
+            value={t.colors[pi].light}
+            disabled={!editable}
+            label="Color principal"
+            onCommit={(v) => {
+              if (/^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(v.trim())) applyOps(project.id, [edit.token('colors', pi, 'light', v.trim().toUpperCase())], 'Cambiar color principal');
+              else notify('Usa un color hexadecimal, por ejemplo #0074C8.', 'error');
+            }}
+          />
+        </Field>
+      )}
+      <div className="grid-2">
+        {ri >= 0 && (
+          <Field label="Radio">
+            <CommitNumber value={t.radius[ri].value} label="Radio" disabled={!editable} onCommit={(n) => applyOps(project.id, [edit.token('radius', ri, 'value', n)], 'Cambiar radio global')} />
+          </Field>
+        )}
+        {si >= 0 && (
+          <Field label="Espaciado">
+            <CommitNumber value={t.space[si].value} label="Espaciado" disabled={!editable} onCommit={(n) => applyOps(project.id, [edit.token('space', si, 'value', n)], 'Cambiar espaciado global')} />
+          </Field>
+        )}
+      </div>
+      <Field label="Tipografía">
+        <select value={t.fontFamily} disabled={!editable} onChange={(e) => applyOps(project.id, [{ kind: 'set', path: ['tokens', 'fontFamily'], value: e.target.value }], 'Cambiar tipografía')}>
+          {fonts.map((f) => (
+            <option key={f.label} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+      </Field>
+    </>
+  );
+}
+
+function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: Project; screen: Screen; editable: boolean; onDelete: () => void; onAdd: (b: Block) => void }) {
+  const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
+  const base = project.screens.find((s) => s.id === baseId(screen))!;
+  const setProject = (key: 'tagline' | 'summary' | 'flowName' | 'footnote', label: string) => (v: string) => apply([edit.project(key, v.trim() || undefined)], `Cambiar ${label}`);
+  return (
+    <>
+      <div className="sel-card">
+        <span className="sel-icon">
+          <IconFrame size={18} />
+        </span>
+        <span className="sel-text">
+          <strong>{screen.name}</strong>
+          <span>
+            Pantalla · {BREAKPOINTS.find((b) => b.id === screen.breakpoint)!.label}
+            {screen.variantOf ? ' · variante' : ''}
+          </span>
+        </span>
+      </div>
+      <Section title="Contenido">
+        <Field label="Nombre de pantalla">
+          <CommitInput
+            value={screen.name}
+            disabled={!editable}
+            onCommit={(v) => v.trim() && apply(project.screens.filter((s) => baseId(s) === base.id).map((s) => edit.screen(project, s.id, 'name', v.trim())), `Renombrar pantalla a «${v.trim()}»`)}
+          />
+        </Field>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={!!base.terminal}
+            disabled={!editable}
+            onChange={(e) => apply([edit.screen(project, base.id, 'terminal', e.target.checked || undefined)], e.target.checked ? `Marcar «${base.name}» como final` : `Desmarcar «${base.name}» como final`)}
+          />
+          <span>Pantalla final del flujo (no necesita salida)</span>
+        </label>
+        <div className="row">
+          {base.id !== project.startScreenId && (
+            <Button size="sm" disabled={!editable} onClick={() => apply([edit.project('startScreenId', base.id)], `Usar «${base.name}» como inicio`)}>
+              Usar como inicio
+            </Button>
+          )}
+          <Button size="sm" tone="danger" disabled={!editable} onClick={onDelete}>
+            {screen.variantOf ? 'Eliminar variante' : 'Eliminar pantalla'}
+          </Button>
+        </div>
+      </Section>
+      <Section title="Lienzo del flujo">
+        <Field label="Titular">
+          <CommitInput value={project.tagline ?? ''} disabled={!editable} onCommit={setProject('tagline', 'titular del flujo')} />
+        </Field>
+        <Field label="Descripción">
+          <CommitInput value={project.summary ?? ''} disabled={!editable} onCommit={setProject('summary', 'descripción del flujo')} />
+        </Field>
+        <Field label="Nombre del flujo">
+          <CommitInput value={project.flowName ?? ''} disabled={!editable} onCommit={setProject('flowName', 'nombre del flujo')} />
+        </Field>
+        <Field label="Nota al pie de cada pantalla">
+          <CommitInput value={project.footnote ?? ''} disabled={!editable} onCommit={setProject('footnote', 'nota al pie')} />
+        </Field>
+      </Section>
+      <Section title="Diseño" aside="Tokens globales">
+        <GlobalTokens project={project} editable={editable} />
+      </Section>
+      {editable && (
+        <Section title={`Agregar a «${screen.name}»`}>
+          <div className="palette">
+            {project.components.map((c) => (
+              <button key={c.id} type="button" className="chip" onClick={() => onAdd(newBlock(c.type, c.id, c.variant))}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </Section>
+      )}
+    </>
+  );
+}
+
+function BlockProps({ project, screen, block, editable, onSelect }: { project: Project; screen: Screen; block: Block; editable: boolean; onSelect: (id?: string) => void }) {
   const meta = blockMeta(block.type);
   const name = block.label || meta.label;
   const set = (key: keyof Block, value: unknown, label = `Editar «${name}»`) => applyOps(project.id, [edit.block(project, screen.id, block.id, key, value)], label);
@@ -441,111 +757,163 @@ function BlockInspector({ project, screen, block, editable, onSelect }: { projec
   const comp = findComponent(project, block.componentId);
   const inherited = effectiveStyle(project, { ...block, overrides: undefined }, ['default']);
   const bases = project.screens.filter((s) => !s.variantOf);
+  const base = project.screens.find((s) => s.id === baseId(screen))!;
+
+  const detailTypes: BlockType[] = ['navbar', 'heading', 'balance', 'help', 'card', 'input', 'textarea', 'amount', 'select', 'listItem', 'alert', 'avatar', 'progress'];
+  const valueLabel: Partial<Record<BlockType, string>> = { balance: 'Monto', progress: 'Porcentaje (0 a 100)', tabs: 'Pestaña activa' };
+  const optionTypes: BlockType[] = ['select', 'radio', 'tabs'];
+  const alignTypes: BlockType[] = ['heading', 'text', 'link'];
+  const hasAction = meta.interactive && !meta.field;
 
   return (
-    <div className="insp-section stack">
-      <div className="row between">
-        <h3 className="insp-title">{meta.label}</h3>
-        {comp ? <Badge tone="accent">{comp.name}</Badge> : <Badge>Sin componente</Badge>}
+    <>
+      <div className="sel-card">
+        <span className="sel-icon">
+          <IconDiamond size={18} />
+        </span>
+        <span className="sel-text">
+          <strong>{name}</strong>
+          <span>{comp ? `Instancia editable de «${comp.name}»` : `${meta.label} suelto`}</span>
+        </span>
+        {comp && (
+          <span className="ds-tag" title="Viene del sistema de diseño">
+            DS
+          </span>
+        )}
       </div>
 
-      {block.type !== 'divider' && (
-        <Field label={meta.field ? 'Etiqueta visible' : 'Texto'}>
-          <CommitInput value={block.label} disabled={!editable} onCommit={(v) => set('label', v)} />
-        </Field>
-      )}
-      {['heading', 'input', 'amount', 'select', 'listItem', 'alert'].includes(block.type) && (
-        <Field label={meta.field ? 'Texto de ayuda dentro del campo' : 'Texto secundario'}>
-          <CommitInput value={block.detail ?? ''} disabled={!editable} onCommit={(v) => set('detail', v || undefined)} />
-        </Field>
-      )}
-      {VARIANTS[block.type] && !comp && (
-        <Field label="Variante">
-          <select value={block.variant ?? ''} disabled={!editable} onChange={(e) => set('variant', e.target.value || undefined)}>
-            {VARIANTS[block.type]!.map((v) => (
-              <option key={v.v} value={v.v}>
-                {v.l}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-      {comps.length > 0 && (
-        <Field label="Componente del sistema" hint="La instancia hereda estilos y estados del maestro.">
-          <select value={block.componentId ?? ''} disabled={!editable} onChange={(e) => set('componentId', e.target.value || undefined, e.target.value ? `Vincular «${name}» a componente` : `Desvincular «${name}»`)}>
-            <option value="">Sin componente (bloque suelto)</option>
-            {comps.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
-
-      {meta.interactive && !meta.field && (
-        <>
-          <Field label="Al tocar">
-            <select
-              value={block.action ?? 'none'}
-              disabled={!editable}
-              onChange={(e) => set('action', e.target.value === 'none' ? undefined : e.target.value, `Cambiar acción de «${name}»`)}
-            >
-              <option value="none">No hace nada</option>
-              <option value="navigate">Ir a una pantalla</option>
-              <option value="back">Volver a la anterior</option>
-            </select>
-          </Field>
-          {block.action === 'navigate' && (
-            <Field label="Destino">
-              <select value={block.target ?? ''} disabled={!editable} onChange={(e) => set('target', e.target.value || undefined, `Conectar «${name}»`)}>
-                <option value="">Elige una pantalla</option>
-                {bases
-                  .filter((s) => s.id !== baseId(screen))
-                  .map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-            </Field>
-          )}
-        </>
-      )}
-
-      {block.type === 'select' && (
-        <Field label="Opciones" hint="Una por línea.">
+      <Section title="Contenido">
+        <Field label="Nombre de pantalla">
           <CommitInput
-            multiline
-            value={(block.options ?? []).join('\n')}
+            value={screen.name}
             disabled={!editable}
-            onCommit={(v) =>
-              set(
-                'options',
-                v
-                  .split('\n')
-                  .map((o) => o.trim())
-                  .filter(Boolean),
-              )
-            }
+            onCommit={(v) => v.trim() && applyOps(project.id, project.screens.filter((s) => baseId(s) === base.id).map((s) => edit.screen(project, s.id, 'name', v.trim())), `Renombrar pantalla a «${v.trim()}»`)}
           />
         </Field>
-      )}
-      {meta.field && (
-        <label className="check">
-          <input type="checkbox" checked={!!block.required} disabled={!editable} onChange={(e) => set('required', e.target.checked || undefined)} />
-          <span>Obligatorio para continuar</span>
-        </label>
-      )}
-      {meta.interactive && (
-        <label className="check">
-          <input type="checkbox" checked={!!block.disabled} disabled={!editable} onChange={(e) => set('disabled', e.target.checked || undefined)} />
-          <span>Deshabilitado</span>
-        </label>
-      )}
+        {block.type !== 'divider' && (
+          <Field label="Texto principal">
+            <CommitInput multiline value={block.label} disabled={!editable} onCommit={(v) => set('label', v)} />
+          </Field>
+        )}
+        {detailTypes.includes(block.type) && (
+          <Field label={meta.field ? 'Texto de ejemplo dentro del campo' : block.type === 'navbar' ? 'Texto junto a la marca' : 'Texto de apoyo'}>
+            <CommitInput multiline value={block.detail ?? ''} disabled={!editable} onCommit={(v) => set('detail', v || undefined)} />
+          </Field>
+        )}
+        {valueLabel[block.type] && (
+          <Field label={valueLabel[block.type]!}>
+            <CommitInput value={block.value ?? ''} disabled={!editable} onCommit={(v) => set('value', v || undefined)} />
+          </Field>
+        )}
+        {block.type === 'balance' && (
+          <Field label="Referencia de la cuenta">
+            <CommitInput value={block.options?.[0] ?? ''} disabled={!editable} onCommit={(v) => set('options', v ? [v] : undefined)} />
+          </Field>
+        )}
+        {optionTypes.includes(block.type) && (
+          <Field label="Opciones" hint="Una por línea.">
+            <CommitInput
+              multiline
+              value={(block.options ?? []).join('\n')}
+              disabled={!editable}
+              onCommit={(v) =>
+                set(
+                  'options',
+                  v
+                    .split('\n')
+                    .map((o) => o.trim())
+                    .filter(Boolean),
+                )
+              }
+            />
+          </Field>
+        )}
+        {alignTypes.includes(block.type) && (
+          <Field label="Alineación">
+            <Tabs
+              small
+              label="Alineación"
+              value={block.align ?? 'start'}
+              onChange={(v) => editable && set('align', v === 'start' ? undefined : v)}
+              items={[
+                { id: 'start', label: 'Izquierda' },
+                { id: 'center', label: 'Centro' },
+              ]}
+            />
+          </Field>
+        )}
+      </Section>
+
+      <Section title="Diseño" aside="Tokens globales">
+        <GlobalTokens project={project} editable={editable} />
+        {comps.length > 0 && (
+          <Field label="Componente del sistema" hint="La instancia hereda estilos y estados del maestro.">
+            <select value={block.componentId ?? ''} disabled={!editable} onChange={(e) => set('componentId', e.target.value || undefined, e.target.value ? `Vincular «${name}» a componente` : `Desvincular «${name}»`)}>
+              <option value="">Sin componente (bloque suelto)</option>
+              {comps.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        {VARIANTS[block.type] && !comp && (
+          <Field label="Variante">
+            <select value={block.variant ?? ''} disabled={!editable} onChange={(e) => set('variant', e.target.value || undefined)}>
+              {VARIANTS[block.type]!.map((v) => (
+                <option key={v.v} value={v.v}>
+                  {v.l}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </Section>
+
+      <Section title="Interacción" icon={<IconLink size={15} />}>
+        {hasAction && (
+          <>
+            <Field label="Al tocar">
+              <select value={block.action ?? 'none'} disabled={!editable} onChange={(e) => set('action', e.target.value === 'none' ? undefined : e.target.value, `Cambiar interacción de «${name}»`)}>
+                <option value="none">No hace nada</option>
+                {block.type !== 'navbar' && <option value="navigate">Ir a una pantalla</option>}
+                <option value="back">Volver a la anterior</option>
+              </select>
+            </Field>
+            {block.action === 'navigate' && (
+              <Field label="Destino">
+                <select value={block.target ?? ''} disabled={!editable} onChange={(e) => set('target', e.target.value || undefined, `Conectar «${name}»`)}>
+                  <option value="">Elige una pantalla</option>
+                  {bases
+                    .filter((s) => s.id !== base.id)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+              </Field>
+            )}
+          </>
+        )}
+        {meta.field && (
+          <label className="check">
+            <input type="checkbox" checked={!!block.required} disabled={!editable} onChange={(e) => set('required', e.target.checked || undefined)} />
+            <span>Obligatorio para continuar</span>
+          </label>
+        )}
+        {meta.interactive && (
+          <label className="check">
+            <input type="checkbox" checked={!!block.disabled} disabled={!editable} onChange={(e) => set('disabled', e.target.checked || undefined)} />
+            <span>Deshabilitado</span>
+          </label>
+        )}
+        {!meta.interactive && <p className="muted small">Este componente no tiene interacción. Los toques sobre él se registran como zonas sin acción en las pruebas.</p>}
+      </Section>
 
       {block.type !== 'divider' && (
-        <details className="overrides" open={!!block.overrides && Object.values(block.overrides).some(Boolean)}>
+        <details className="props-details" open={!!block.overrides && Object.values(block.overrides).some(Boolean)}>
           <summary>Sobrescribir estilo de esta instancia</summary>
           <p className="muted small">Úsalo con cuidado: los valores sueltos se marcan en el guardarraíl.</p>
           <div className="picker-grid one">
@@ -566,7 +934,7 @@ function BlockInspector({ project, screen, block, editable, onSelect }: { projec
       )}
 
       {editable && (
-        <div className="row">
+        <div className="props-actions">
           <Button size="sm" disabled={index === 0} onClick={() => applyOps(project.id, [edit.moveBlock(project, screen.id, index, index - 1)], 'Mover bloque')}>
             Subir
           </Button>
@@ -593,29 +961,49 @@ function BlockInspector({ project, screen, block, editable, onSelect }: { projec
           </Button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function BlockPalette({ project, onAdd, after }: { project: Project; onAdd: (b: Block) => void; after?: Block }) {
+function PlayOverlay({ project, screen, mode, onClose }: { project: Project; screen: Screen; mode: Mode; onClose: () => void }) {
+  const [m, setM] = useState<Mode>(mode);
+  const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
+  useEffect(() => {
+    const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('resize', onResize);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+  const bp = breakpointOf(screen.breakpoint);
+  const s = Math.min(1, (size.h - 110) / bp.height, (size.w - 48) / bp.width);
   return (
-    <div className="insp-section">
-      <h3 className="insp-title">{after ? `Agregar después de «${after.label || blockMeta(after.type).label}»` : 'Agregar bloque'}</h3>
-      <p className="palette-label">Desde el sistema</p>
-      <div className="palette">
-        {project.components.map((c) => (
-          <button key={c.id} type="button" className="chip" onClick={() => onAdd(newBlock(c.type, c.id, c.variant))}>
-            {c.name}
-          </button>
-        ))}
+    <div className="play-overlay" role="dialog" aria-modal="true" aria-label={`Probando desde ${screen.name}`}>
+      <div className="play-bar">
+        <span>
+          <IconPlay size={14} /> Probando desde «{screen.name}»
+        </span>
+        <div className="row">
+          <Tabs
+            small
+            label="Modo de color"
+            value={m}
+            onChange={setM}
+            items={[
+              { id: 'light', label: 'Claro' },
+              { id: 'dark', label: 'Oscuro' },
+            ]}
+          />
+          <Button size="sm" onClick={onClose}>
+            Cerrar
+          </Button>
+        </div>
       </div>
-      <p className="palette-label">Bloque suelto</p>
-      <div className="palette">
-        {BLOCK_TYPES.map((t) => (
-          <button key={t.type} type="button" className="chip chip-quiet" onClick={() => onAdd(newBlock(t.type))}>
-            {t.label}
-          </button>
-        ))}
+      <div style={{ width: bp.width * s }}>
+        <Runner project={project} startScreenId={screen.id} breakpoint={screen.breakpoint} mode={m} maxScale={s} />
       </div>
     </div>
   );
@@ -642,8 +1030,7 @@ function CommentsPanel({ project, screen, block, canComment }: { project: Projec
   const label = (id?: string) => (id ? screen.blocks.find((b) => b.id === id)?.label || 'bloque eliminado' : 'la pantalla');
 
   return (
-    <div className="insp-section stack">
-      <h3 className="insp-title">{block ? `Comentarios en «${block.label || blockMeta(block.type).label}»` : `Comentarios en «${screen.name}»`}</h3>
+    <Section title={block ? `En «${block.label || blockMeta(block.type).label}»` : `En «${screen.name}»`}>
       {canComment && (
         <form
           className="stack"
@@ -654,7 +1041,7 @@ function CommentsPanel({ project, screen, block, canComment }: { project: Projec
         >
           <textarea className="input" rows={3} aria-label="Nuevo comentario" placeholder="Escribe un comentario. Menciona con @nombre." value={text} onChange={(e) => setText(e.target.value)} />
           <Button size="sm" type="submit" disabled={!text.trim()}>
-            Comentar {block ? 'en este bloque' : 'en la pantalla'}
+            Comentar {block ? 'en este componente' : 'en la pantalla'}
           </Button>
         </form>
       )}
@@ -679,7 +1066,7 @@ function CommentsPanel({ project, screen, block, canComment }: { project: Projec
           ))}
         </ul>
       )}
-    </div>
+    </Section>
   );
 }
 
@@ -714,11 +1101,7 @@ function ImportHtmlModal({ open, onClose, onImport }: { open: boolean; onClose: 
       <Field label="HTML" hint="Reconoce títulos, párrafos, campos (con su label), selectores, botones, enlaces, imágenes y separadores.">
         <textarea className="input input-code" rows={10} value={html} onChange={(e) => setHtml(e.target.value)} placeholder={'<h2>Datos de contacto</h2>\n<label for="mail">Correo</label>\n<input id="mail" type="email" required>\n<button>Guardar</button>'} />
       </Field>
-      {blocks.length > 0 && (
-        <p className="ok-text">
-          Se detectaron: {blocks.map((b) => blockMeta(b.type).label.toLowerCase()).join(', ')}.
-        </p>
-      )}
+      {blocks.length > 0 && <p className="ok-text">Se detectaron: {blocks.map((b) => blockMeta(b.type).label.toLowerCase()).join(', ')}.</p>}
     </Modal>
   );
 }

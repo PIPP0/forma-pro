@@ -3,25 +3,28 @@ import { builtInStyle } from './tokens';
 import { mulberry32, uid } from './ids';
 import { clone } from './ops';
 
+export const FONT_INTER = "'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif";
+
 export function baseTokens(): Tokens {
   return {
-    fontFamily: "'Hanken Grotesk', system-ui, -apple-system, 'Segoe UI', sans-serif",
+    fontFamily: FONT_INTER,
     colors: [
-      { name: 'background', light: '#F4F6F9', dark: '#0E1318', description: 'Fondo de pantalla' },
+      { name: 'background', light: '#FFFFFF', dark: '#0E1318', description: 'Fondo de pantalla' },
       { name: 'surface', light: '#FFFFFF', dark: '#182028', description: 'Tarjetas y campos' },
-      { name: 'subtle', light: '#E9EEF5', dark: '#222B35', description: 'Fondos secundarios' },
-      { name: 'onSurface', light: '#16202B', dark: '#E6EBF0', description: 'Texto principal' },
-      { name: 'muted', light: '#566170', dark: '#9BA7B4', description: 'Texto secundario' },
-      { name: 'border', light: '#D3DAE3', dark: '#2F3A46', description: 'Bordes' },
-      { name: 'primary', light: '#1646C8', dark: '#7D9CFF', description: 'Acción principal' },
-      { name: 'primaryHover', light: '#1B52E0', dark: '#93AEFF' },
-      { name: 'primaryPressed', light: '#0F349A', dark: '#AFC2FF' },
-      { name: 'onPrimary', light: '#FFFFFF', dark: '#0A1433', description: 'Texto sobre acción principal' },
-      { name: 'focus', light: '#E2A200', dark: '#FFC940', description: 'Anillo de foco' },
-      { name: 'danger', light: '#B3261E', dark: '#FF8A80' },
-      { name: 'dangerSubtle', light: '#FCE8E6', dark: '#3A1F1E' },
-      { name: 'success', light: '#1E7B4A', dark: '#6FD69C' },
-      { name: 'successSubtle', light: '#E3F4EA', dark: '#173327' },
+      { name: 'subtle', light: '#F3F5F8', dark: '#1F2731', description: 'Fondos secundarios' },
+      { name: 'onSurface', light: '#1B1F24', dark: '#E8ECF0', description: 'Texto principal' },
+      { name: 'muted', light: '#5F6773', dark: '#9BA7B4', description: 'Texto secundario' },
+      { name: 'border', light: '#E3E7EC', dark: '#2F3A46', description: 'Bordes' },
+      { name: 'primary', light: '#0074C8', dark: '#5AB0F0', description: 'Acción principal' },
+      { name: 'primaryHover', light: '#0068B4', dark: '#78BFF3' },
+      { name: 'primaryPressed', light: '#005A9C', dark: '#9ACFF6' },
+      { name: 'primarySubtle', light: '#EAF3FB', dark: '#10283B', description: 'Fondo suave de marca' },
+      { name: 'onPrimary', light: '#FFFFFF', dark: '#03203A', description: 'Texto sobre acción principal' },
+      { name: 'focus', light: '#E0A100', dark: '#FFC940', description: 'Anillo de foco' },
+      { name: 'danger', light: '#C62828', dark: '#FF8A80' },
+      { name: 'dangerSubtle', light: '#FDECEC', dark: '#3A1F1E' },
+      { name: 'success', light: '#1E8E5A', dark: '#6FD69C' },
+      { name: 'successSubtle', light: '#E6F6EE', dark: '#173327' },
     ],
     space: [
       { name: 'xs', value: 4 },
@@ -32,17 +35,17 @@ export function baseTokens(): Tokens {
       { name: 'xxl', value: 32 },
     ],
     radius: [
-      { name: 'sm', value: 6 },
-      { name: 'md', value: 10 },
+      { name: 'sm', value: 8 },
+      { name: 'md', value: 12 },
       { name: 'lg', value: 16 },
       { name: 'pill', value: 999 },
     ],
     type: [
-      { role: 'display', size: 32, lineHeight: 38, weight: 700 },
-      { role: 'title', size: 22, lineHeight: 28, weight: 650 },
-      { role: 'body', size: 16, lineHeight: 24, weight: 400 },
-      { role: 'label', size: 15, lineHeight: 20, weight: 600 },
-      { role: 'caption', size: 13, lineHeight: 18, weight: 500 },
+      { role: 'display', size: 30, lineHeight: 36, weight: 700 },
+      { role: 'title', size: 22, lineHeight: 28, weight: 700 },
+      { role: 'body', size: 15, lineHeight: 22, weight: 400 },
+      { role: 'label', size: 14, lineHeight: 20, weight: 600 },
+      { role: 'caption', size: 12, lineHeight: 16, weight: 500 },
     ],
   };
 }
@@ -57,12 +60,25 @@ const comp = (id: string, name: string, type: BlockType, variant?: string): Comp
 
 export function baseComponents(): Component[] {
   return [
-    comp('cmp-btn-primary', 'Botón principal', 'button', 'primary'),
+    comp('cmp-btn-primary', 'Botón', 'button', 'primary'),
     comp('cmp-btn-secondary', 'Botón secundario', 'button', 'secondary'),
     comp('cmp-input', 'Campo de texto', 'input'),
+    comp('cmp-textarea', 'Área de texto', 'textarea'),
     comp('cmp-amount', 'Campo de monto', 'amount'),
-    comp('cmp-list', 'Fila de lista', 'listItem'),
-    comp('cmp-alert', 'Aviso de éxito', 'alert'),
+    comp('cmp-select', 'Selector', 'select'),
+    comp('cmp-checkbox', 'Casilla', 'checkbox'),
+    comp('cmp-radio', 'Opciones', 'radio'),
+    comp('cmp-switch', 'Interruptor', 'switch'),
+    comp('cmp-card', 'Tarjeta', 'card'),
+    comp('cmp-heading', 'Título', 'heading', 'title'),
+    comp('cmp-help', 'Mensaje de ayuda', 'help'),
+    comp('cmp-balance', 'Saldo', 'balance'),
+    comp('cmp-tag', 'Etiqueta', 'tag'),
+    comp('cmp-avatar', 'Avatar', 'avatar'),
+    comp('cmp-progress', 'Progreso', 'progress'),
+    comp('cmp-list', 'Lista', 'listItem'),
+    comp('cmp-tabs', 'Pestañas', 'tabs'),
+    comp('cmp-alert', 'Aviso', 'alert'),
   ];
 }
 
@@ -76,6 +92,9 @@ export function blankProject(ownerId: string, name: string, business: string): P
     name,
     brand: name,
     business,
+    tagline: name,
+    summary: 'Describe aquí el objetivo del flujo.',
+    flowName: 'Flujo principal',
     owner: ownerId,
     version: 1,
     startScreenId: start,
@@ -87,7 +106,9 @@ export function blankProject(ownerId: string, name: string, business: string): P
         name: 'Inicio',
         breakpoint: 'mobile',
         terminal: true,
-        blocks: [b(uid('b_'), 'heading', 'Primera pantalla', { variant: 'title' }), b(uid('b_'), 'text', 'Agrega bloques desde el panel derecho.')],
+        blocks: [
+          b(uid('b_'), 'heading', 'Primera pantalla', { componentId: 'cmp-heading', variant: 'title', detail: 'Agrega componentes desde el explorador.' }),
+        ],
       },
     ],
     createdAt: now,
@@ -95,95 +116,87 @@ export function blankProject(ownerId: string, name: string, business: string): P
   };
 }
 
-export function transferProject(ownerId: string, name = 'Transferencias'): Project {
+/** Proyecto de ejemplo: flujo de ahorro «Ahorro con propósito». */
+export function transferProject(ownerId: string, name = 'Ahorro con propósito'): Project {
   const now = Date.now();
+  const nav = (id: string, back = false): Block => b(id, 'navbar', 'austral', { detail: 'DEMO', ...(back ? { action: 'back' as const } : {}) });
   const inicioBlocks = (sfx: string): Block[] => [
-    b('b-in-nav' + sfx, 'navbar', 'Banco Austral'),
-    b('b-in-hola' + sfx, 'heading', 'Hola, Camila', { variant: 'title' }),
-    b('b-in-saldo-l' + sfx, 'text', 'Saldo disponible', { variant: 'muted' }),
-    b('b-in-saldo' + sfx, 'heading', '$1.284.300', { variant: 'display' }),
-    b('b-in-transferir' + sfx, 'button', 'Transferir', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-destinatario' }),
-    b('b-in-mov' + sfx, 'listItem', 'Último movimiento', { detail: 'Supermercado, −$32.990', componentId: 'cmp-list', action: 'none' }),
-    b('b-in-ayuda' + sfx, 'link', '¿Necesitas ayuda?', { action: 'navigate', target: 's-ayuda' }),
+    nav('b-in-nav' + sfx),
+    b('b-in-hola' + sfx, 'heading', 'Hola, Francisca', { componentId: 'cmp-heading', variant: 'title', detail: 'Qué bueno verte de nuevo' }),
+    b('b-in-saldo' + sfx, 'balance', 'Saldo disponible', { componentId: 'cmp-balance', value: '$ 1.850.000', detail: 'Cuenta corriente', options: ['•• 2840'] }),
+    b('b-in-ayuda' + sfx, 'help', 'Tu próximo paso empieza hoy', { componentId: 'cmp-help', detail: 'Dale un espacio a eso que quieres lograr.' }),
+    b('b-in-alcancia' + sfx, 'card', 'Alcancía', { componentId: 'cmp-card', detail: 'Organiza tu ahorro y acércate a tus metas.', action: 'navigate', target: 's-nueva' }),
+    b('b-in-crear' + sfx, 'button', 'Crear una meta', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-nueva' }),
+    b('b-in-metas' + sfx, 'link', 'Ver mis metas', { action: 'navigate', target: 's-metas' }),
   ];
   const screens: Screen[] = [
     { id: 's-inicio', name: 'Inicio', breakpoint: 'mobile', blocks: inicioBlocks('') },
     { id: 's-inicio-tablet', name: 'Inicio', breakpoint: 'tablet', variantOf: 's-inicio', blocks: inicioBlocks('-t') },
     {
-      id: 's-destinatario',
-      name: 'Elegir destinatario',
+      id: 's-nueva',
+      name: 'Nueva meta',
       breakpoint: 'mobile',
       blocks: [
-        b('b-de-nav', 'navbar', 'Transferir', { action: 'back' }),
-        b('b-de-titulo', 'heading', '¿A quién le transfieres?', { variant: 'title' }),
-        b('b-de-buscar', 'input', 'Buscar contacto', { detail: 'Nombre, RUT o alias', componentId: 'cmp-input' }),
-        b('b-de-martina', 'listItem', 'Martina Rojas', { detail: 'BancoEstado, cuenta vista', componentId: 'cmp-list', action: 'navigate', target: 's-monto' }),
-        b('b-de-diego', 'listItem', 'Diego Fuentes', { detail: 'Banco Austral, cuenta corriente', componentId: 'cmp-list', action: 'navigate', target: 's-monto' }),
-        b('b-de-nuevo', 'button', 'Nuevo destinatario', { componentId: 'cmp-btn-secondary', action: 'none' }),
+        nav('b-nm-nav', true),
+        b('b-nm-titulo', 'heading', 'Tus planes merecen una meta', { componentId: 'cmp-heading', variant: 'title', detail: 'Ponle nombre a eso que quieres lograr.' }),
+        b('b-nm-nombre', 'input', 'Nombre de tu meta', { componentId: 'cmp-input', detail: 'Mi próximo viaje', required: true }),
+        b('b-nm-monto', 'amount', '¿Cuánto quieres ahorrar?', { componentId: 'cmp-amount', detail: '$ 500.000', required: true }),
+        b('b-nm-ritmo', 'help', 'A tu ritmo', { componentId: 'cmp-help', detail: 'Puedes modificar tu meta cuando quieras.' }),
+        b('b-nm-continuar', 'button', 'Continuar', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-confirmacion', overrides: { radius: '14' } }),
       ],
     },
     {
-      id: 's-monto',
-      name: 'Monto',
+      id: 's-confirmacion',
+      name: 'Confirmación',
       breakpoint: 'mobile',
       blocks: [
-        b('b-mo-nav', 'navbar', 'Monto', { action: 'back' }),
-        b('b-mo-titulo', 'heading', '¿Cuánto quieres transferir?', { variant: 'title' }),
-        b('b-mo-monto', 'amount', 'Monto', { detail: '$0', required: true, componentId: 'cmp-amount' }),
-        b('b-mo-disp', 'text', 'Disponible: $1.284.300', { variant: 'caption' }),
-        b('b-mo-mensaje', 'input', 'Mensaje (opcional)', { detail: 'Ej: cumpleaños', componentId: 'cmp-input' }),
-        b('b-mo-continuar', 'button', 'Continuar', {
-          componentId: 'cmp-btn-primary',
-          action: 'navigate',
-          target: 's-confirmar',
-          overrides: { radius: '14' },
-        }),
+        nav('b-co-nav', true),
+        b('b-co-titulo', 'heading', 'Un pequeño paso. Un gran comienzo.', { componentId: 'cmp-heading', variant: 'title', detail: 'Revisa tu nueva meta antes de continuar.' }),
+        b('b-co-meta', 'card', 'Tu nueva meta', { componentId: 'cmp-card', detail: 'Ahorro flexible · sin aportes automáticos', action: 'none' }),
+        b('b-co-control', 'help', 'Tú tienes el control', { componentId: 'cmp-help', detail: 'Este demo no mueve dinero ni contrata productos.' }),
+        b('b-co-crear', 'button', 'Crear mi alcancía', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-creada' }),
+        b('b-co-editar', 'button', 'Volver a editar', { componentId: 'cmp-btn-secondary', action: 'back' }),
       ],
     },
     {
-      id: 's-confirmar',
-      name: 'Confirmar',
-      breakpoint: 'mobile',
-      blocks: [
-        b('b-co-nav', 'navbar', 'Confirmar', { action: 'back' }),
-        b('b-co-titulo', 'heading', 'Revisa antes de confirmar', { variant: 'title' }),
-        b('b-co-dest', 'listItem', 'Destinatario', { detail: 'Martina Rojas, BancoEstado', componentId: 'cmp-list', action: 'none' }),
-        b('b-co-monto', 'listItem', 'Monto', { detail: 'El monto que ingresaste', componentId: 'cmp-list', action: 'none' }),
-        b('b-co-fav', 'checkbox', 'Guardar como favorito'),
-        b('b-co-confirmar', 'button', 'Confirmar transferencia', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-exito' }),
-        b('b-co-cancelar', 'button', 'Cancelar', { componentId: 'cmp-btn-secondary', action: 'navigate', target: 's-inicio' }),
-      ],
-    },
-    {
-      id: 's-exito',
-      name: 'Transferencia enviada',
+      id: 's-creada',
+      name: 'Meta creada',
       breakpoint: 'mobile',
       terminal: true,
       blocks: [
-        b('b-ex-alerta', 'alert', 'Transferencia enviada', { detail: 'Martina recibirá el dinero en minutos.', componentId: 'cmp-alert' }),
-        b('b-ex-titulo', 'heading', 'Listo', { variant: 'display' }),
-        b('b-ex-texto', 'text', 'Te enviamos el comprobante a tu correo.'),
-        b('b-ex-volver', 'button', 'Volver al inicio', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-inicio' }),
+        nav('b-cr-nav', true),
+        b('b-cr-icono', 'statusIcon', 'Meta creada'),
+        b('b-cr-titulo', 'heading', '¡Tu meta ya tiene un lugar!', { componentId: 'cmp-heading', variant: 'title', align: 'center' }),
+        b('b-cr-texto', 'text', 'Cada paso cuenta. Empieza cuando tú quieras.', { variant: 'muted', align: 'center' }),
+        b('b-cr-aventura', 'card', 'Mi próxima aventura', { componentId: 'cmp-card', detail: 'Tu alcancía está lista para recibir tu primer ahorro.', action: 'navigate', target: 's-metas' }),
+        b('b-cr-progreso', 'progress', 'Progreso inicial', { componentId: 'cmp-progress', detail: '0% de $500.000', value: '0' }),
+        b('b-cr-volver', 'button', 'Volver al inicio', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-inicio' }),
       ],
     },
     {
-      id: 's-ayuda',
-      name: 'Ayuda',
+      id: 's-metas',
+      name: 'Mis metas',
       breakpoint: 'mobile',
       blocks: [
-        b('b-ay-nav', 'navbar', 'Ayuda', { action: 'back' }),
-        b('b-ay-titulo', 'heading', '¿En qué te ayudamos?', { variant: 'title' }),
-        b('b-ay-limite', 'listItem', 'Límites de transferencia', { detail: 'Hasta $5.000.000 diarios', componentId: 'cmp-list', action: 'none' }),
-        b('b-ay-ejecutiva', 'listItem', 'Hablar con una ejecutiva', { detail: 'Lunes a viernes, de 9 a 18 h', componentId: 'cmp-list', action: 'none' }),
-        b('b-ay-volver', 'button', 'Volver', { componentId: 'cmp-btn-secondary', action: 'back' }),
+        nav('b-me-nav', true),
+        b('b-me-titulo', 'heading', 'Tus metas', { componentId: 'cmp-heading', variant: 'title', detail: 'Empieza con una y suma las que quieras.' }),
+        b('b-me-tabs', 'tabs', 'Estado de las metas', { componentId: 'cmp-tabs', options: ['Activas', 'Completadas'], value: 'Activas' }),
+        b('b-me-aventura', 'listItem', 'Mi próxima aventura', { componentId: 'cmp-list', detail: '$0 de $500.000', action: 'none' }),
+        b('b-me-nueva', 'tag', 'Nueva', { componentId: 'cmp-tag' }),
+        b('b-me-recordatorio', 'switch', 'Recordarme ahorrar cada mes', { componentId: 'cmp-switch' }),
+        b('b-me-volver', 'button', 'Volver al inicio', { componentId: 'cmp-btn-secondary', action: 'navigate', target: 's-inicio' }),
       ],
     },
   ];
   return {
     id: uid('p_'),
     name,
-    brand: 'Banco Austral',
-    business: 'Banca personal',
+    brand: 'Austral',
+    business: 'Proyecto bancario',
+    tagline: 'Pequeños pasos, grandes metas.',
+    summary: 'Alcancía · Creación de una meta de ahorro',
+    flowName: 'Flujo de ahorro',
+    footnote: 'Entorno de prueba · sin operaciones reales',
     owner: ownerId,
     version: 1,
     startScreenId: 's-inicio',
@@ -201,10 +214,10 @@ export function exampleStudy(project: Project, ownerId: string): { study: Study;
   const study: Study = {
     id: uid('st_'),
     projectId: project.id,
-    name: 'Transferir a un contacto (ejemplo)',
+    name: 'Crear una meta de ahorro (ejemplo)',
     tasks: [
-      { id: 't1', prompt: 'Transfiere $25.000 a Martina Rojas.', startScreenId: 's-inicio', successScreenId: 's-exito' },
-      { id: 't2', prompt: 'Encuentra cuál es el límite diario de transferencias.', startScreenId: 's-inicio', successScreenId: 's-ayuda' },
+      { id: 't1', prompt: 'Crea una meta de ahorro de $500.000 para tu próximo viaje.', startScreenId: 's-inicio', successScreenId: 's-creada' },
+      { id: 't2', prompt: 'Encuentra dónde ver tus metas de ahorro.', startScreenId: 's-inicio', successScreenId: 's-metas' },
     ],
     snapshot: clone(project),
     askAudio: false,
@@ -220,9 +233,9 @@ export function exampleStudy(project: Project, ownerId: string): { study: Study;
   const MISCLICK = [1, 4, 6, 9];
   const DETOUR = [3, 7];
   const COMMENTS: Record<number, string> = {
-    5: 'No me quedó claro si el monto incluía comisión.',
-    11: 'Esperaba montos sugeridos, no sabía qué formato usar.',
-    2: 'Rápido, pero dudé con el formato del monto.',
+    5: 'No me quedó claro si el monto era mensual o total.',
+    11: 'Esperaba montos sugeridos para no inventar la cifra.',
+    2: 'Fácil, pero dudé con cuánto poner.',
     7: 'Todo claro.',
   };
   const sessions: Session[] = [];
@@ -257,27 +270,26 @@ export function exampleStudy(project: Project, ownerId: string): { study: Study;
     ev('t1', 's-inicio', 'task_start');
     if (MISCLICK.includes(i)) ev('t1', 's-inicio', 'misclick', 'b-in-saldo');
     if (DETOUR.includes(i)) {
-      ev('t1', 's-inicio', 'tap', 'b-in-ayuda');
-      ev('t1', 's-ayuda', 'navigate');
-      ev('t1', 's-ayuda', 'tap', 'b-ay-nav');
+      ev('t1', 's-inicio', 'tap', 'b-in-metas');
+      ev('t1', 's-metas', 'navigate');
+      ev('t1', 's-metas', 'tap', 'b-me-nav');
       ev('t1', 's-inicio', 'navigate');
     }
-    ev('t1', 's-inicio', 'tap', 'b-in-transferir');
-    ev('t1', 's-destinatario', 'navigate');
-    ev('t1', 's-destinatario', 'tap', 'b-de-martina');
-    ev('t1', 's-monto', 'navigate');
-    if (HES.includes(i)) ev('t1', 's-monto', 'hesitation', 'b-mo-monto', 4000 + rnd() * 5000);
-    if (BLOCKED.includes(i)) ev('t1', 's-monto', 'blocked', 'b-mo-continuar');
+    ev('t1', 's-inicio', 'tap', 'b-in-crear');
+    ev('t1', 's-nueva', 'navigate');
+    ev('t1', 's-nueva', 'input', 'b-nm-nombre');
+    if (HES.includes(i)) ev('t1', 's-nueva', 'hesitation', 'b-nm-monto', 4000 + rnd() * 5000);
+    if (BLOCKED.includes(i)) ev('t1', 's-nueva', 'blocked', 'b-nm-continuar');
     if (GIVEUP.includes(i)) {
-      ev('t1', 's-monto', 'task_giveup');
+      ev('t1', 's-nueva', 'task_giveup');
       feedback.push({ taskId: 't1', outcome: 'giveup', difficulty: 4 + Math.round(rnd()), comment: COMMENTS[i], durationMs: t - start });
     } else {
-      ev('t1', 's-monto', 'input', 'b-mo-monto');
-      ev('t1', 's-monto', 'tap', 'b-mo-continuar');
-      ev('t1', 's-confirmar', 'navigate');
-      ev('t1', 's-confirmar', 'tap', 'b-co-confirmar');
-      ev('t1', 's-exito', 'navigate');
-      ev('t1', 's-exito', 'task_success');
+      ev('t1', 's-nueva', 'input', 'b-nm-monto');
+      ev('t1', 's-nueva', 'tap', 'b-nm-continuar');
+      ev('t1', 's-confirmacion', 'navigate');
+      ev('t1', 's-confirmacion', 'tap', 'b-co-crear');
+      ev('t1', 's-creada', 'navigate');
+      ev('t1', 's-creada', 'task_success');
       feedback.push({
         taskId: 't1',
         outcome: 'success',
@@ -291,14 +303,14 @@ export function exampleStudy(project: Project, ownerId: string): { study: Study;
     start = t;
     ev('t2', 's-inicio', 'task_start');
     if (i === 13) {
-      ev('t2', 's-inicio', 'misclick', 'b-in-mov');
+      ev('t2', 's-inicio', 'misclick', 'b-in-ayuda');
       ev('t2', 's-inicio', 'task_giveup');
       feedback.push({ taskId: 't2', outcome: 'giveup', difficulty: 4, durationMs: t - start });
     } else {
-      if (i === 4 || i === 10) ev('t2', 's-inicio', 'hesitation', 'b-in-ayuda', 5200);
-      ev('t2', 's-inicio', 'tap', 'b-in-ayuda');
-      ev('t2', 's-ayuda', 'navigate');
-      ev('t2', 's-ayuda', 'task_success');
+      if (i === 4 || i === 10) ev('t2', 's-inicio', 'hesitation', 'b-in-metas', 5200);
+      ev('t2', 's-inicio', 'tap', 'b-in-metas');
+      ev('t2', 's-metas', 'navigate');
+      ev('t2', 's-metas', 'task_success');
       feedback.push({ taskId: 't2', outcome: 'success', difficulty: 1 + Math.floor(rnd() * 2), durationMs: t - start });
     }
 

@@ -92,7 +92,7 @@ export function signIn(name: string, email: string): boolean {
   }
   next = { ...next, currentUserId: user.id };
   commit(next);
-  if (!projectsFor(db, user).length) createProject({ name: 'Transferencias', business: 'Banca personal', template: 'transfer' });
+  if (!projectsFor(db, user).length) createProject({ name: 'Ahorro con propósito', business: 'Proyecto bancario', template: 'transfer' });
   return true;
 }
 

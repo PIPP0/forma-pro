@@ -60,11 +60,31 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
         type: variant === 'caption' ? 'caption' : 'body',
       });
     case 'navbar':
+      return s({ fg: '{color.onSurface}', type: 'title' }, { focus: INTERACTIVE_FOCUS });
+    case 'balance':
+      return s({ bg: '{color.primary}', fg: '{color.onPrimary}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'display' });
+    case 'help':
+      return s({ bg: '{color.subtle}', fg: '{color.onSurface}', radius: '{radius.md}', padY: '{space.md}', padX: '{space.lg}', type: 'label' });
+    case 'card':
       return s(
-        { bg: '{color.surface}', fg: '{color.onSurface}', border: '{color.border}', padY: '{space.md}', padX: '{space.lg}', type: 'label' },
-        { focus: INTERACTIVE_FOCUS },
+        { bg: '{color.surface}', fg: '{color.onSurface}', border: '{color.border}', radius: '{radius.lg}', padY: '{space.lg}', padX: '{space.lg}', type: 'label' },
+        { hover: { bg: '{color.subtle}' }, pressed: { border: '{color.primary}' }, focus: INTERACTIVE_FOCUS },
       );
+    case 'radio':
+    case 'switch':
+      return s({ fg: '{color.onSurface}', type: 'body' }, { focus: INTERACTIVE_FOCUS });
+    case 'tabs':
+      return s({ bg: '{color.subtle}', fg: '{color.onSurface}', radius: '{radius.md}', padY: '{space.xs}', padX: '{space.xs}', type: 'label' }, { focus: INTERACTIVE_FOCUS });
+    case 'tag':
+      return s({ bg: '{color.primarySubtle}', fg: '{color.primaryPressed}', radius: '{radius.pill}', padY: '{space.xs}', padX: '{space.sm}', type: 'caption' });
+    case 'avatar':
+      return s({ bg: '{color.primarySubtle}', fg: '{color.primaryPressed}', radius: '{radius.pill}', type: 'label' });
+    case 'progress':
+      return s({ bg: '{color.subtle}', fg: '{color.onSurface}', border: '{color.primary}', radius: '{radius.pill}', type: 'caption' });
+    case 'statusIcon':
+      return s({ bg: '{color.successSubtle}', fg: '{color.success}', radius: '{radius.pill}', type: 'display' });
     case 'input':
+    case 'textarea':
     case 'select':
       return s(field, { hover: { border: '{color.muted}' }, focus: { border: '{color.primary}', ...INTERACTIVE_FOCUS }, disabled: { bg: '{color.subtle}', fg: '{color.muted}' } });
     case 'amount':
@@ -75,7 +95,7 @@ export function builtInStyle(type: BlockType, variant?: string): Record<StateNam
       if (variant === 'secondary')
         return s(
           { bg: '{color.surface}', fg: '{color.primary}', border: '{color.border}', radius: '{radius.md}', padY: '{space.md}', padX: '{space.lg}', type: 'label' },
-          { hover: { bg: '{color.subtle}' }, pressed: { border: '{color.primary}' }, focus: INTERACTIVE_FOCUS },
+          { hover: { bg: '{color.subtle}', fg: '{color.primaryPressed}' }, pressed: { border: '{color.primary}' }, focus: INTERACTIVE_FOCUS },
         );
       return s(
         { bg: '{color.primary}', fg: '{color.onPrimary}', radius: '{radius.md}', padY: '{space.md}', padX: '{space.lg}', type: 'label' },

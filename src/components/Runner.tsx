@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
-import { blockMeta, breakpointOf, screenFor } from '../lib/model';
+import { CHOICE_TYPES, TOGGLE_TYPES, blockMeta, breakpointOf, screenFor } from '../lib/model';
 import { BlockView } from './BlockView';
-import { ScaledFrame, contentWidth, navbarBleed, screenStyle } from './ScreenCanvas';
+import { PhoneChrome, ScaledFrame, contentWidth, screenStyle } from './ScreenCanvas';
 
 export type RunnerEvent = Pick<StudyEvent, 'screen' | 'block' | 'kind' | 'x' | 'y' | 'bx' | 'by' | 'dwell'>;
 
@@ -44,7 +44,7 @@ export function Runner({
     last.current = performance.now();
     typed.current = new Set();
     onScreen?.(current.id);
-    content.current?.parentElement?.scrollTo?.({ top: 0 });
+    content.current?.closest('.device-scroll, .runner-fill')?.scrollTo?.({ top: 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
@@ -66,6 +66,8 @@ export function Runner({
     return out;
   };
 
+  const isFilled = (b: Block) => (TOGGLE_TYPES.includes(b.type) ? !!checked[b.id] : !!(values[b.id] ?? (b.type === 'tabs' ? b.value : ''))?.trim());
+
   const navigate = (block: Block) => {
     if (block.action === 'back') {
       if (stack.length > 1) {
@@ -77,7 +79,7 @@ export function Runner({
     }
     if (block.action === 'navigate' && block.target) {
       if (block.type === 'button') {
-        const missing = current.blocks.filter((b) => b.required && !(b.type === 'checkbox' ? checked[b.id] : values[b.id]?.trim()));
+        const missing = current.blocks.filter((b) => b.required && !isFilled(b));
         if (missing.length) {
           setErrors(Object.fromEntries(missing.map((m) => [m.id, 'Completa este campo para continuar.'])));
           return 'blocked' as const;
@@ -87,31 +89,6 @@ export function Runner({
       setStack((s) => [...s, block.target!]);
       emit({ kind: 'navigate', screen: screenFor(project, block.target, breakpoint)?.id ?? block.target, x: 0, y: 0 });
     }
-  };
-
-  const onClick = (e: MouseEvent) => {
-    const el = (e.target as Element).closest('[data-block-id]');
-    const block = el ? current.blocks.find((b) => b.id === el.getAttribute('data-block-id')) : undefined;
-    const c = coords(e, el);
-    const now = performance.now();
-    const gap = now - last.current;
-    last.current = now;
-    const isBack = block?.type === 'navbar' && !!(e.target as Element).closest('button');
-    if (!block || !blockMeta(block.type).interactive || block.disabled || (block.type === 'navbar' && !isBack)) {
-      emit({ kind: 'misclick', screen: current.id, block: block?.id, ...c });
-      return;
-    }
-    if (gap > HESITATION_MS) emit({ kind: 'hesitation', screen: current.id, block: block.id, dwell: Math.round(gap), ...c });
-    if (blockMeta(block.type).field) {
-      emit({ kind: 'tap', screen: current.id, block: block.id, ...c });
-      if (block.type === 'checkbox') {
-        setChecked((s) => ({ ...s, [block.id]: !s[block.id] }));
-        setErrors((er) => ({ ...er, [block.id]: '' }));
-      }
-      return;
-    }
-    const result = navigate(block);
-    emit({ kind: result === 'blocked' ? 'blocked' : 'tap', screen: current.id, block: block.id, ...c });
   };
 
   const setValue = (block: Block, v: string) => {
@@ -124,18 +101,41 @@ export function Runner({
     }
   };
 
+  const onClick = (e: MouseEvent) => {
+    const target = e.target as Element;
+    const el = target.closest('[data-block-id]');
+    const block = el ? current.blocks.find((b) => b.id === el.getAttribute('data-block-id')) : undefined;
+    const c = coords(e, el);
+    const now = performance.now();
+    const gap = now - last.current;
+    last.current = now;
+    const isBack = block?.type === 'navbar' && !!target.closest('button');
+    if (!block || !blockMeta(block.type).interactive || block.disabled || (block.type === 'navbar' && !isBack)) {
+      emit({ kind: 'misclick', screen: current.id, block: block?.id, ...c });
+      return;
+    }
+    if (gap > HESITATION_MS) emit({ kind: 'hesitation', screen: current.id, block: block.id, dwell: Math.round(gap), ...c });
+    if (blockMeta(block.type).field) {
+      emit({ kind: 'tap', screen: current.id, block: block.id, ...c });
+      if (TOGGLE_TYPES.includes(block.type)) {
+        setChecked((s) => ({ ...s, [block.id]: !s[block.id] }));
+        setErrors((er) => ({ ...er, [block.id]: '' }));
+      }
+      if (CHOICE_TYPES.includes(block.type) && block.type !== 'select') {
+        const opt = target.closest('[data-option]')?.getAttribute('data-option');
+        if (opt) setValue(block, opt);
+      }
+      return;
+    }
+    const result = navigate(block);
+    emit({ kind: result === 'blocked' ? 'blocked' : 'tap', screen: current.id, block: block.id, ...c });
+  };
+
   const maxW = contentWidth(current);
   const body = (
     <div ref={content} className="screen" style={screenStyle(project, mode)} onClick={onClick}>
-      {current.blocks.map((b, i) => (
-        <div
-          key={b.id}
-          data-block-id={b.id}
-          style={{
-            ...(b.type === 'navbar' && i === 0 ? navbarBleed(project) : {}),
-            ...(maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : {}),
-          }}
-        >
+      {current.blocks.map((b) => (
+        <div key={b.id} data-block-id={b.id} style={maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : undefined}>
           <BlockView
             project={project}
             block={b}
@@ -156,7 +156,11 @@ export function Runner({
   const bp = breakpointOf(current.breakpoint);
   return (
     <ScaledFrame width={bp.width} height={bp.height} fixed maxScale={maxScale}>
-      <div className="device-scroll">{body}</div>
+      <div className="device-scroll">
+        <PhoneChrome project={project} mode={mode} enabled={current.breakpoint === 'mobile'}>
+          {body}
+        </PhoneChrome>
+      </div>
     </ScaledFrame>
   );
 }

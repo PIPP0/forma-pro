@@ -16,13 +16,24 @@ export type BlockType =
   | 'navbar'
   | 'heading'
   | 'text'
+  | 'balance'
+  | 'help'
+  | 'card'
   | 'input'
+  | 'textarea'
   | 'amount'
   | 'select'
+  | 'radio'
   | 'checkbox'
+  | 'switch'
+  | 'tabs'
   | 'button'
   | 'link'
   | 'listItem'
+  | 'tag'
+  | 'avatar'
+  | 'progress'
+  | 'statusIcon'
   | 'alert'
   | 'image'
   | 'divider';
@@ -31,17 +42,33 @@ export const BLOCK_TYPES: { type: BlockType; label: string; interactive: boolean
   { type: 'navbar', label: 'Barra superior', interactive: true, field: false },
   { type: 'heading', label: 'Título', interactive: false, field: false },
   { type: 'text', label: 'Texto', interactive: false, field: false },
+  { type: 'balance', label: 'Saldo', interactive: false, field: false },
+  { type: 'help', label: 'Mensaje de ayuda', interactive: false, field: false },
+  { type: 'card', label: 'Tarjeta', interactive: true, field: false },
   { type: 'input', label: 'Campo de texto', interactive: true, field: true },
+  { type: 'textarea', label: 'Área de texto', interactive: true, field: true },
   { type: 'amount', label: 'Campo de monto', interactive: true, field: true },
   { type: 'select', label: 'Selector', interactive: true, field: true },
+  { type: 'radio', label: 'Opciones', interactive: true, field: true },
   { type: 'checkbox', label: 'Casilla', interactive: true, field: true },
+  { type: 'switch', label: 'Interruptor', interactive: true, field: true },
+  { type: 'tabs', label: 'Pestañas', interactive: true, field: true },
   { type: 'button', label: 'Botón', interactive: true, field: false },
   { type: 'link', label: 'Enlace', interactive: true, field: false },
-  { type: 'listItem', label: 'Fila de lista', interactive: true, field: false },
+  { type: 'listItem', label: 'Lista', interactive: true, field: false },
+  { type: 'tag', label: 'Etiqueta', interactive: false, field: false },
+  { type: 'avatar', label: 'Avatar', interactive: false, field: false },
+  { type: 'progress', label: 'Progreso', interactive: false, field: false },
+  { type: 'statusIcon', label: 'Ícono de estado', interactive: false, field: false },
   { type: 'alert', label: 'Aviso', interactive: false, field: false },
   { type: 'image', label: 'Imagen', interactive: false, field: false },
   { type: 'divider', label: 'Separador', interactive: false, field: false },
 ];
+
+/** Tipos cuyo valor es una elección entre opciones. */
+export const CHOICE_TYPES: BlockType[] = ['select', 'radio', 'tabs'];
+/** Tipos que se encienden o apagan. */
+export const TOGGLE_TYPES: BlockType[] = ['checkbox', 'switch'];
 
 export const blockMeta = (t: BlockType) => BLOCK_TYPES.find((b) => b.type === t)!;
 
@@ -120,6 +147,7 @@ export interface Block {
   value?: string;
   componentId?: string;
   overrides?: StyleProps;
+  align?: 'start' | 'center';
 }
 
 export interface Component {
@@ -144,6 +172,14 @@ export interface Project {
   name: string;
   brand: string;
   business: string;
+  /** Titular del flujo en el lienzo, ej: «Pequeños pasos, grandes metas.» */
+  tagline?: string;
+  /** Descripción corta bajo el titular. */
+  summary?: string;
+  /** Nombre del flujo en la miga de pan del lienzo. */
+  flowName?: string;
+  /** Nota al pie de cada pantalla móvil, ej: «Entorno de prueba · sin operaciones reales». */
+  footnote?: string;
   owner: string;
   version: number;
   startScreenId: string;

@@ -3,14 +3,16 @@ import type { Mode, Project, Screen } from '../lib/model';
 import { breakpointOf } from '../lib/model';
 import { colorValue, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
+import { IconShield } from './icons';
 
-/** Marco de dispositivo escalado para caber en su contenedor, sin perder medidas reales. */
+/** Marco de dispositivo escalado. Con `scale` usa un zoom fijo; sin él, cabe en su contenedor. */
 export function ScaledFrame({
   width,
   height,
   fixed,
   children,
   maxScale = 1,
+  scale: fixedScale,
   className = '',
 }: {
   width: number;
@@ -18,19 +20,21 @@ export function ScaledFrame({
   fixed?: boolean;
   children: ReactNode;
   maxScale?: number;
+  scale?: number;
   className?: string;
 }) {
   const outer = useRef<HTMLDivElement>(null);
   const inner = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
+  const [fit, setFit] = useState(1);
   const [innerH, setInnerH] = useState(height);
+  const scale = fixedScale ?? fit;
 
   useLayoutEffect(() => {
     const o = outer.current;
     const i = inner.current;
     if (!o || !i) return;
     const measure = () => {
-      setScale(Math.max(0.2, Math.min(maxScale, (o.clientWidth - 2) / width)));
+      if (fixedScale == null) setFit(Math.max(0.2, Math.min(maxScale, (o.clientWidth - 2) / width)));
       setInnerH(i.offsetHeight);
     };
     measure();
@@ -38,15 +42,14 @@ export function ScaledFrame({
     ro.observe(o);
     ro.observe(i);
     return () => ro.disconnect();
-  }, [width, maxScale]);
+  }, [width, maxScale, fixedScale]);
 
   return (
-    <div ref={outer} className={`frame-outer ${className}`}>
+    <div ref={outer} className={`frame-outer ${className}`} style={fixedScale != null ? { width: width * scale } : undefined}>
       <div style={{ width: width * scale, height: innerH * scale, margin: '0 auto', position: 'relative' }}>
         <div
           ref={inner}
-          className="device"
-          data-scale={scale}
+          className={`device device-${width < 600 ? 'phone' : 'wide'}`}
           style={{
             width,
             height: fixed ? height : undefined,
@@ -66,24 +69,56 @@ export function ScaledFrame({
 }
 
 export function screenStyle(p: Project, mode: Mode, wireframe?: boolean): CSSProperties {
-  const pad = spaceValue(p.tokens, 'lg', 16);
   return {
-    background: wireframe ? '#FFFFFF' : colorValue(p.tokens, 'background', mode, mode === 'dark' ? '#111' : '#F7F7F7'),
-    padding: pad,
+    background: wireframe ? '#FFFFFF' : colorValue(p.tokens, 'background', mode, mode === 'dark' ? '#111' : '#FFF'),
+    padding: `${spaceValue(p.tokens, 'sm', 8)}px ${spaceValue(p.tokens, 'lg', 16) + 4}px ${spaceValue(p.tokens, 'xl', 24)}px`,
     display: 'flex',
     flexDirection: 'column',
-    gap: spaceValue(p.tokens, 'md', 12),
+    gap: spaceValue(p.tokens, 'lg', 16),
     minHeight: '100%',
     boxSizing: 'border-box',
     fontFamily: p.tokens.fontFamily,
   };
 }
 
-/** Margen negativo para que la barra superior toque los bordes de la pantalla. */
-export const navbarBleed = (p: Project): CSSProperties => {
-  const pad = spaceValue(p.tokens, 'lg', 16);
-  return { margin: `-${pad}px -${pad}px 0` };
-};
+/** Barra de estado, nota al pie e indicador de inicio de un teléfono. */
+export function PhoneChrome({ project, mode, wireframe, enabled, children }: { project: Project; mode: Mode; wireframe?: boolean; enabled: boolean; children: ReactNode }) {
+  if (!enabled) return <>{children}</>;
+  const bg = wireframe ? '#FFFFFF' : colorValue(project.tokens, 'background', mode, '#FFF');
+  const fg = wireframe ? '#3A424A' : colorValue(project.tokens, 'onSurface', mode, '#111');
+  const muted = wireframe ? '#7C868F' : colorValue(project.tokens, 'muted', mode, '#666');
+  return (
+    <div className="phone" style={{ background: bg, fontFamily: project.tokens.fontFamily }}>
+      <div className="phone-status" style={{ color: fg }}>
+        <span>9:41</span>
+        <span className="phone-status-icons" aria-hidden="true">
+          <svg width="16" height="10" viewBox="0 0 16 10" fill={fg}>
+            <rect x="0" y="6" width="3" height="4" rx="0.6" />
+            <rect x="4.3" y="4" width="3" height="6" rx="0.6" />
+            <rect x="8.6" y="2" width="3" height="8" rx="0.6" />
+            <rect x="12.9" y="0" width="3" height="10" rx="0.6" />
+          </svg>
+          <svg width="14" height="10" viewBox="0 0 14 10" fill="none" stroke={fg} strokeWidth="1.6" strokeLinecap="round">
+            <path d="M1 3.6a8.5 8.5 0 0112 0M3.2 6a5.3 5.3 0 017.6 0" />
+            <circle cx="7" cy="8.6" r="0.9" fill={fg} stroke="none" />
+          </svg>
+          <svg width="22" height="11" viewBox="0 0 22 11" fill="none">
+            <rect x="0.6" y="0.6" width="18" height="9.8" rx="2.6" stroke={fg} strokeOpacity="0.45" />
+            <rect x="2.2" y="2.2" width="14.8" height="6.6" rx="1.5" fill={fg} />
+            <rect x="19.8" y="3.6" width="1.6" height="3.8" rx="0.8" fill={fg} fillOpacity="0.45" />
+          </svg>
+        </span>
+      </div>
+      {children}
+      {project.footnote && (
+        <div className="phone-foot" style={{ color: muted }}>
+          <IconShield size={11} color={muted} /> {project.footnote}
+        </div>
+      )}
+      <div className="phone-home" style={{ background: fg }} />
+    </div>
+  );
+}
 
 export const contentWidth = (screen: Screen) => (screen.breakpoint === 'desktop' ? 560 : screen.breakpoint === 'tablet' ? 520 : undefined);
 
@@ -96,6 +131,7 @@ export function ScreenCanvas({
   onSelect,
   measures,
   overlay,
+  scale,
 }: {
   project: Project;
   screen: Screen;
@@ -105,35 +141,35 @@ export function ScreenCanvas({
   onSelect?: (blockId: string | undefined) => void;
   measures?: boolean;
   overlay?: ReactNode;
+  scale?: number;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
   return (
-    <ScaledFrame width={bp.width} height={bp.height}>
-      <div className="screen" style={screenStyle(project, mode, wireframe)} onClick={() => onSelect?.(undefined)}>
-        <div style={{ display: 'contents' }}>
-          {screen.blocks.map((b, i) => (
-            <div
-              key={b.id}
-              data-block-id={b.id}
-              className={`blk ${selectedBlockId === b.id ? 'selected' : ''}`}
-              style={{
-                ...(b.type === 'navbar' && i === 0 ? navbarBleed(project) : {}),
-                ...(maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : {}),
-              }}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelect?.(b.id);
-              }}
-            >
-              <BlockView project={project} block={b} mode={mode} wireframe={wireframe} />
-              {measures && selectedBlockId === b.id && <Measure />}
-            </div>
-          ))}
-          {!screen.blocks.length && <div className="screen-empty">Pantalla vacía. Agrega bloques desde el panel derecho.</div>}
+    <ScaledFrame width={bp.width} height={bp.height} scale={scale}>
+      <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile'}>
+        <div className="screen" style={screenStyle(project, mode, wireframe)} onClick={() => onSelect?.(undefined)}>
+          <div style={{ display: 'contents' }}>
+            {screen.blocks.map((b) => (
+              <div
+                key={b.id}
+                data-block-id={b.id}
+                className={`blk ${selectedBlockId === b.id ? 'selected' : ''}`}
+                style={maxW && b.type !== 'navbar' ? { width: '100%', maxWidth: maxW, alignSelf: 'center' } : undefined}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelect?.(b.id);
+                }}
+              >
+                <BlockView project={project} block={b} mode={mode} wireframe={wireframe} />
+                {measures && selectedBlockId === b.id && <Measure />}
+              </div>
+            ))}
+            {!screen.blocks.length && <div className="screen-empty">Pantalla vacía. Agrega componentes desde el explorador.</div>}
+          </div>
+          {overlay}
         </div>
-        {overlay}
-      </div>
+      </PhoneChrome>
     </ScaledFrame>
   );
 }
