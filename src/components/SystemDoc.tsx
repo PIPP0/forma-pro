@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Block, Mode, Project } from '../lib/model';
 import { STYLE_KEYS, TYPE_ROLE_LABEL } from '../lib/model';
-import { CATEGORIES, coverage, entryForComponent, sampleContent } from '../lib/catalog';
+import { categoryOf, componentSample, componentSummary, coverage, entryForComponent, projectCategories } from '../lib/catalog';
 import { contrast, parseRef, resolve } from '../lib/tokens';
 import { BlockView } from './BlockView';
 
@@ -145,8 +145,8 @@ export function SystemDoc({ p, onDone }: { p: Project; onDone: () => void }) {
           </table>
         </div>
 
-        {CATEGORIES.map((cat) => {
-          const items = p.components.filter((c) => entryForComponent(c).category === cat.id);
+        {projectCategories(p).map((cat) => {
+          const items = p.components.filter((c) => categoryOf(c, p) === cat.id);
           if (!items.length) return null;
           return (
             <section key={cat.id} className="doc-section">
@@ -156,11 +156,11 @@ export function SystemDoc({ p, onDone }: { p: Project; onDone: () => void }) {
                 return (
                   <div key={c.id} className="doc-comp">
                     <div className="doc-preview" style={{ background: bg('light') }}>
-                      <BlockView project={p} block={{ id: `doc-${c.id}`, type: c.type, componentId: c.id, ...sampleContent(c.type, c.variant, p.brand) } as Block} mode="light" />
+                      <BlockView project={p} block={{ id: `doc-${c.id}`, type: c.type, componentId: c.id, ...componentSample(c, p.brand) } as Block} mode="light" />
                     </div>
                     <div>
                       <h3>{c.name}</h3>
-                      <p>{e.summary}</p>
+                      <p>{componentSummary(c)}</p>
                       <p className="doc-meta">
                         <strong>Úsalo para:</strong> {e.use.join(' ')} <strong>Evítalo cuando:</strong> {e.avoid.join(' ')}
                       </p>

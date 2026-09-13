@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Block, Component, Mode, Project } from '../lib/model';
-import { completeSystem, ensureColors, sampleContent, variantKey } from '../lib/catalog';
+import { completeSystem, componentSample, ensureColors, variantKey } from '../lib/catalog';
 import { ROLES, buildTokens, candidatesFromText, emptyCandidates, mergeCandidates, mode as mostCommon, suggestMapping, validComponents, type Candidates } from '../lib/systemIO';
 import { candidatesFromImage, candidatesFromPdf } from '../lib/pdfExtract';
 import { extractSystem, fileToImage, fileToPdf, getAiKey, type ExtractedSystem } from '../lib/ai';
@@ -428,7 +428,7 @@ export function ImportSystemModal({ p, open, onClose }: { p: Project; open: bool
                 if (!comp) return null;
                 return (
                   <FitPreview key={k} width={343}>
-                    <BlockView project={preview} block={{ id: `imp-${k}`, type: comp.type, componentId: comp.id, ...sampleContent(comp.type, comp.variant, p.brand) } as Block} mode={previewMode} />
+                    <BlockView project={preview} block={{ id: `imp-${k}`, type: comp.type, componentId: comp.id, ...componentSample(comp, p.brand) } as Block} mode={previewMode} />
                   </FitPreview>
                 );
               })}

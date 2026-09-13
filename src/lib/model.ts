@@ -180,6 +180,17 @@ export interface Component {
   states: Record<StateName, StyleProps>;
   /** Versión de los estados base con que se creó o actualizó el componente. */
   rev?: number;
+  /** Categoría del catálogo o creada en el proyecto. Si falta, la del patrón. */
+  category?: string;
+  /** Descripción propia; si falta, la del patrón. */
+  description?: string;
+  /** Contenido de ejemplo propio: se usa en vistas previas y al insertarlo en una pantalla. */
+  sample?: Partial<Pick<Block, 'label' | 'detail' | 'value' | 'options' | 'linkLabel'>>;
+}
+
+export interface ComponentCategory {
+  id: string;
+  label: string;
 }
 
 export interface Screen {
@@ -218,6 +229,8 @@ export interface Project {
   tokens: Tokens;
   screens: Screen[];
   components: Component[];
+  /** Categorías de componentes creadas por el equipo, además de las del catálogo. */
+  categories?: ComponentCategory[];
   library?: { releaseId: string; version: string; sourceProjectId: string };
   createdAt: number;
   updatedAt: number;

@@ -12,7 +12,7 @@ import { checkProject } from '../lib/flowCheck';
 import { adoption, tokenUses } from '../lib/metrics';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
-import { CATEGORIES, coverage, entryForComponent } from '../lib/catalog';
+import { categoryOf, componentSummary, coverage, entryForComponent, projectCategories } from '../lib/catalog';
 import { exportDtcg, exportSystemJson, exportTailwind } from '../lib/systemIO';
 import { ColorCell, CommitInput, CommitNumber } from '../components/inputs';
 import { Badge, Button, CopyButton, Field, PageHead, Tabs } from '../components/ui';
@@ -377,7 +377,9 @@ function FoundationsTab({ p, editable, mode, onImport }: { p: Project; editable:
 
 function DocsTab({ p, editable }: { p: Project; editable: boolean }) {
   const instances = (id: string) => p.screens.reduce((n, s) => n + s.blocks.filter((b) => b.componentId === id).length, 0);
-  const groups = CATEGORIES.map((cat) => ({ cat, items: p.components.filter((c) => entryForComponent(c).category === cat.id) })).filter((g) => g.items.length);
+  const groups = projectCategories(p)
+    .map((cat) => ({ cat, items: p.components.filter((c) => categoryOf(c, p) === cat.id) }))
+    .filter((g) => g.items.length);
   return (
     <div className="found-grid">
       {groups.map(({ cat, items }, gi) => (
@@ -392,7 +394,7 @@ function DocsTab({ p, editable }: { p: Project; editable: boolean }) {
                   <IconDiamond size={16} />
                   <span className="doc-text">
                     <strong>{c.name}</strong>
-                    <span>{e.summary}</span>
+                    <span>{componentSummary(c)}</span>
                     <span className="doc-use">
                       <b>Úsalo para:</b> {e.use[0]} <b>Evítalo:</b> {e.avoid[0]}
                     </span>

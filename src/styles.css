@@ -4435,3 +4435,66 @@ dialog.modal {
   font-size: 12.5px;
   color: var(--ink-3);
 }
+
+/* ---------- Nuevo componente, categorías y contenido ---------- */
+.cs-new {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+.cs-new-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 14px;
+  background: var(--panel);
+}
+.cs-new-preview .seg {
+  flex-wrap: wrap;
+}
+.cs-section {
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  padding: 10px 14px 14px;
+}
+.cs-section > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 0 10px;
+}
+.cs-section[open] > summary {
+  margin-bottom: 4px;
+}
+.cs-section > .field,
+.cs-section > .seg {
+  margin-bottom: 10px;
+}
+.cs-newcat {
+  gap: 6px;
+}
+.cs-group-empty {
+  display: block;
+  padding: 2px 10px 6px;
+  font-size: 12.5px;
+  color: var(--ink-3);
+}
+.cs-cats li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.cs-cats li > :first-child {
+  flex: 1;
+}
+@media (max-width: 900px) {
+  .cs-new {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

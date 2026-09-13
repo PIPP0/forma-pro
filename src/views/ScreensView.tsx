@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Block, BlockType, Breakpoint, Mode, OpInput, Project, Role, Screen } from '../lib/model';
+import type { Block, BlockType, Breakpoint, Component, Mode, OpInput, Project, Role, Screen } from '../lib/model';
 import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
 import { addComment, applyOps, canRedo, canUndo, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
@@ -11,7 +11,7 @@ import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
 import { FONT_INTER } from '../lib/seed';
-import { CATEGORIES, entryForComponent, sampleContent } from '../lib/catalog';
+import { OPTION_HINT, categoryOf, componentSample, componentSummary, projectCategories, sampleContent } from '../lib/catalog';
 import { ScreenCanvas } from '../components/ScreenCanvas';
 import { Runner } from '../components/Runner';
 import { BlockView } from '../components/BlockView';
@@ -41,15 +41,11 @@ import {
   IconUndo,
 } from '../components/icons';
 
-const OPTION_HINT: Partial<Record<BlockType, string>> = {
-  tabBar: 'Una por línea: Etiqueta|ícono. Ícono «plus» para el botón central.',
-  menuList: 'Una por línea: Título|Subtítulo|ícono.',
-  accountCard: 'Filas: Etiqueta|Valor|Detalle|in, out o up.',
-  creditCard: 'Columnas: Etiqueta|Monto|Monto en dólares.',
-  carousel: 'Contactos: Iniciales|Nombre|Detalle. Promociones: emoji|Texto. Destacado: emoji|Título|Descripción|Enlace.',
-  financeCard: 'Métricas: Etiqueta|Valor|in o up.',
-  iconGrid: 'Una por línea: Etiqueta|ícono.',
-};
+
+/** Bloque que instancia un componente, con su contenido de ejemplo propio. */
+function blockFromComponent(c: Component, brand?: string): Block {
+  return { id: uid('b_'), type: c.type, ...componentSample(c, brand), ...(c.variant ? { variant: c.variant } : {}), componentId: c.id } as Block;
+}
 
 /** Bloque nuevo con el contenido de ejemplo de su patrón y variante (el mismo de las vistas previas del sistema). */
 function newBlock(type: BlockType, componentId?: string, variant?: string, brand?: string): Block {
@@ -181,14 +177,14 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 
   const addScreen = () => {
     const nav = project.components.find((c) => c.type === 'navbar' && c.variant === 'title') ?? project.components.find((c) => c.type === 'navbar');
-    const navBlock = newBlock('navbar', nav?.id, nav?.variant, project.brand);
+    const navBlock = nav ? blockFromComponent(nav, project.brand) : newBlock('navbar', undefined, undefined, project.brand);
     if (nav?.variant === 'title') Object.assign(navBlock, { label: 'Nueva pantalla', value: undefined, detail: undefined });
     const heading = project.components.find((c) => c.type === 'heading' && c.variant !== 'display');
     const s: Screen = {
       id: uid('s_'),
       name: 'Nueva pantalla',
       breakpoint: 'mobile',
-      blocks: [navBlock, { ...newBlock('heading', heading?.id, 'title', project.brand), label: 'Título de la pantalla', detail: 'Texto de apoyo' }],
+      blocks: [navBlock, { ...(heading ? blockFromComponent(heading, project.brand) : newBlock('heading', undefined, 'title', project.brand)), label: 'Título de la pantalla', detail: 'Texto de apoyo' }],
     };
     const ops = [edit.addScreen(project, s)];
     if (!project.screens.some((x) => x.id === project.startScreenId)) ops.push(edit.project('startScreenId', s.id));
@@ -445,8 +441,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <span>{project.components.length}</span>
               </div>
               {editable && <p className="lib-help">Toca un componente para agregarlo a «{screen.name}».</p>}
-              {CATEGORIES.map((cat) => {
-                const items = project.components.filter((c) => entryForComponent(c).category === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
+              {projectCategories(project).map((cat) => {
+                const items = project.components.filter((c) => categoryOf(c, project) === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
                 if (!items.length) return null;
                 return (
                   <div key={cat.id} className="lib-group">
@@ -454,7 +450,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                       {cat.label} <span>{items.length}</span>
                     </div>
                     {items.map((c) => {
-                      const add = () => editable && insertBlock(newBlock(c.type, c.id, c.variant, project.brand));
+                      const add = () => editable && insertBlock(blockFromComponent(c, project.brand));
                       return (
                         <div
                           key={c.id}
@@ -463,7 +459,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           aria-disabled={!editable}
                           aria-label={`Agregar ${c.name} a ${screen.name}`}
                           className="lib-tile"
-                          title={entryForComponent(c).summary}
+                          title={componentSummary(c)}
                           onClick={add}
                           onKeyDown={(e) => {
                             if (e.key === 'Enter' || e.key === ' ') {
@@ -474,7 +470,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                         >
                           <span className="lib-tile-view" aria-hidden="true" style={{ backgroundColor: colorValue(project.tokens, 'background', 'light', '#FFFFFF') }}>
                             <FitPreview width={343}>
-                              <BlockView project={project} block={{ id: `lib-${c.id}`, type: c.type, componentId: c.id, ...sampleContent(c.type, c.variant, project.brand) } as Block} mode="light" />
+                              <BlockView project={project} block={{ id: `lib-${c.id}`, type: c.type, componentId: c.id, ...componentSample(c, project.brand) } as Block} mode="light" />
                             </FitPreview>
                           </span>
                           <span className="lib-tile-meta">
@@ -961,7 +957,7 @@ function ScreenProps({
         <Section title={`Agregar a «${screen.name}»`}>
           <div className="palette">
             {project.components.map((c) => (
-              <button key={c.id} type="button" className="chip" onClick={() => onAdd(newBlock(c.type, c.id, c.variant, project.brand))}>
+              <button key={c.id} type="button" className="chip" onClick={() => onAdd(blockFromComponent(c, project.brand))}>
                 {c.name}
               </button>
             ))}

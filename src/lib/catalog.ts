@@ -1,4 +1,4 @@
-import type { Block, BlockType, ColorToken, Component, Mode, Project, StateName, StyleProps, Tokens } from './model';
+import type { Block, BlockType, ColorToken, Component, ComponentCategory, Mode, Project, StateName, StyleProps, Tokens } from './model';
 import { builtInStyle, componentStyle, contrast, hexToRgb, resolve } from './tokens';
 
 // Catálogo de patrones: la biblioteca completa que tiene cada proyecto, con su guía de uso
@@ -6,7 +6,7 @@ import { builtInStyle, componentStyle, contrast, hexToRgb, resolve } from './tok
 
 export type Category = 'navegacion' | 'acciones' | 'formularios' | 'contenido' | 'listas' | 'finanzas';
 
-export const CATEGORIES: { id: Category; label: string }[] = [
+export const CATEGORIES: { id: Category | string; label: string }[] = [
   { id: 'navegacion', label: 'Navegación' },
   { id: 'acciones', label: 'Acciones' },
   { id: 'formularios', label: 'Formularios' },
@@ -770,6 +770,64 @@ export function catalogEntry(type: BlockType, variant?: string): CatalogEntry {
 }
 
 export const entryForComponent = (c: Pick<Component, 'type' | 'variant'>) => catalogEntry(c.type, c.variant);
+
+// ---------- Categorías y contenido propios del proyecto ----------
+
+export const projectCategories = (p: Pick<Project, 'categories'>): ComponentCategory[] => [...CATEGORIES, ...(p.categories ?? [])];
+
+/** Categoría efectiva: la elegida si existe; si no, la del patrón. */
+export function categoryOf(c: Pick<Component, 'type' | 'variant' | 'category'>, p?: Pick<Project, 'categories'>): string {
+  if (c.category && (CATEGORIES.some((x) => x.id === c.category) || p?.categories?.some((x) => x.id === c.category))) return c.category;
+  return catalogEntry(c.type, c.variant).category;
+}
+
+export const componentSummary = (c: Pick<Component, 'type' | 'variant' | 'description'>) => c.description?.trim() || catalogEntry(c.type, c.variant).summary;
+
+/** Contenido de ejemplo de un componente: el propio sobre el del patrón. */
+export function componentSample(c: Pick<Component, 'type' | 'variant' | 'sample'>, brand?: string): Partial<Block> {
+  const own = Object.fromEntries(Object.entries(c.sample ?? {}).filter(([, v]) => v !== undefined));
+  return { ...sampleContent(c.type, c.variant, brand), ...own };
+}
+
+/** Qué contenido se puede editar en cada patrón. */
+export function contentFields(type: BlockType, variant?: string): { detail: boolean; value?: string; options: boolean; linkLabel: boolean } {
+  const VALUE: Partial<Record<BlockType, string>> = {
+    balance: 'Monto',
+    progress: 'Porcentaje (0 a 100)',
+    tabs: 'Opción seleccionada',
+    tabBar: 'Opción seleccionada',
+    iconGrid: 'Acceso activo',
+    accountCard: 'Monto',
+    creditCard: 'Red de la tarjeta',
+    financeCard: 'Gráfico: donut, bars o vacío',
+    rating: 'Valor (1 a 5)',
+    radio: 'Opción seleccionada',
+    checkbox: 'Marcada: escribe true',
+    switch: 'Encendido: escribe true',
+  };
+  let value = VALUE[type];
+  if (type === 'navbar' && variant === 'title') value = 'Ícono a la derecha (ej: info, gear)';
+  if (type === 'listItem' && variant === 'icon') value = 'Ícono (ej: coin, card, info)';
+  if (type === 'listItem' && variant === 'notification') value = 'Estado: escribe read si ya se leyó';
+  if (type === 'menuList' && !variant) value = 'Ilustración (money, rocket, deposit…)';
+  return {
+    detail: ['navbar', 'heading', 'balance', 'help', 'card', 'input', 'textarea', 'amount', 'select', 'listItem', 'alert', 'avatar', 'progress', 'menuList', 'accountCard', 'creditCard', 'financeCard'].includes(type),
+    value,
+    options: ['select', 'radio', 'tabs', 'tabBar', 'menuList', 'accountCard', 'creditCard', 'carousel', 'financeCard', 'iconGrid', 'balance'].includes(type),
+    linkLabel: ['accountCard', 'creditCard', 'financeCard'].includes(type),
+  };
+}
+
+export const OPTION_HINT: Partial<Record<BlockType, string>> = {
+  tabBar: 'Una por línea: Etiqueta|ícono. Ícono «plus» para el botón central.',
+  menuList: 'Una por línea: Título|Subtítulo|ícono.',
+  accountCard: 'Filas: Etiqueta|Valor|Detalle|in, out o up.',
+  creditCard: 'Columnas: Etiqueta|Monto|Monto en dólares.',
+  carousel: 'Contactos: Iniciales|Nombre|Detalle. Promociones: emoji|Texto. Destacado: emoji|Título|Descripción|Enlace.',
+  financeCard: 'Métricas: Etiqueta|Valor|in o up.',
+  iconGrid: 'Una por línea: Etiqueta|ícono.',
+  balance: 'Referencia de la cuenta, ej: •• 2840.',
+};
 
 /** Contenido de ejemplo listo para un bloque, con la marca del proyecto donde corresponde. */
 export function sampleContent(type: BlockType, variant?: string, brand?: string): Partial<Block> {

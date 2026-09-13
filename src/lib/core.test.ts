@@ -311,6 +311,26 @@ describe('estados de los componentes', () => {
   });
 });
 
+describe('categorías y contenido propios', () => {
+  it('usa la categoría propia si existe, vuelve a la del patrón si no, y aplica contenido y descripción propios', async () => {
+    const { categoryOf, componentSample, componentSummary, projectCategories } = await import('./catalog');
+    const p = transferProject('u1');
+    const c = {
+      ...p.components.find((x) => x.type === 'tabBar')!,
+      category: 'cat_campanas',
+      sample: { label: 'Menú de campaña', options: ['Hoy|wallet', 'Ofertas|gift'] },
+      description: 'Barra para la campaña de verano.',
+    };
+    expect(categoryOf(c, p)).toBe('navegacion');
+    const withCat = { ...p, categories: [{ id: 'cat_campanas', label: 'Campañas' }] };
+    expect(categoryOf(c, withCat)).toBe('cat_campanas');
+    expect(projectCategories(withCat).at(-1)?.label).toBe('Campañas');
+    expect(componentSample(c, 'Austral').options).toEqual(['Hoy|wallet', 'Ofertas|gift']);
+    expect(componentSample(c, 'Austral').value).toBe('Inicio');
+    expect(componentSummary(c)).toBe('Barra para la campaña de verano.');
+  });
+});
+
 describe('importar sistemas', () => {
   it('lee variables CSS con modo oscuro, SCSS y selectores', async () => {
     const { candidatesFromText } = await import('./systemIO');
