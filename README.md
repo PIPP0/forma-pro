@@ -31,6 +31,10 @@ Implementación del [PRD v1.0](PRD.md). Publicado en https://pipp0.github.io/for
 
 [`examples/proyecto-qa-completo.json`](examples/proyecto-qa-completo.json) es el proyecto construido durante el QA: sistema de diseño ajustado, 7 pantallas con variantes, versiones, biblioteca publicada y adoptada, equipo con tres roles, un estudio con 2 tareas y 8 sesiones con resultados. Para verlo, entra al sitio y ve a **Ajustes › Importar respaldo** (reemplaza los datos de ese navegador) y entra como `valentina.rojas@banco.cl`. El detalle de la prueba está en [QA.md](QA.md).
 
+### Banco New
+
+[`examples/banco-new-completo.json`](examples/banco-new-completo.json) suma el proyecto **Banco New**: una app bancaria móvil de 19 pantallas (cuentas, tarjetas, mis finanzas, transferencias, créditos con simulación, encuesta, inversiones, menú y notificaciones) con 34 componentes. Incluye un estudio de 4 tareas con 6 sesiones y sus resultados. Los datos son ficticios. También puedes crearlo desde cero con **Nuevo proyecto › Banco New · app móvil**. Para mostrar en una pantalla lo que la persona escribió en otra, usa `{{id-del-bloque|ejemplo}}` en textos u opciones.
+
 ## Correr en local
 
 ```bash

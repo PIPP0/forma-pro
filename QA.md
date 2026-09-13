@@ -3,7 +3,7 @@
 **Fecha:** 13 de septiembre de 2026
 **Alcance:** recorrido completo como product designer senior, desde el acceso hasta los resultados de un estudio con personas.
 **Entorno:** servidor local (Vite) en navegador de escritorio (1440 × 900) y móvil (375 × 812), datos limpios desde cero. Verificación final en https://pipp0.github.io/forma-pro/
-**Automatización:** 14 pruebas unitarias (`npm test`), type-check estricto y build de producción en cada cambio.
+**Automatización:** 16 pruebas unitarias (`npm test`), type-check estricto y build de producción en cada cambio.
 
 ## Proyecto construido para la prueba
 
@@ -69,3 +69,63 @@
 2. **Arrastrar y soltar bloques en el lienzo**: hoy se reordena con Subir y Bajar; en una herramienta tipo Figma se espera arrastrar.
 3. **Umbral de duda configurable por estudio**: 3,5 s funciona para flujos bancarios, pero no para lectura de contratos.
 4. **Detección de sesiones duplicadas al importar**: hoy se evita por identificador; convendría avisar si la misma sesión llega con otro identificador.
+
+---
+
+# Segundo QA de punta a punta — Banco New
+
+**Fecha:** 13 de septiembre de 2026
+**Alcance:** proyecto nuevo construido a partir de 14 capturas de una app bancaria real (inicio, tarjetas, finanzas, accesos, transferencias, créditos, simulación, encuesta, inversiones, menú y notificaciones). Se replicó la estructura visual; **todos los datos son ficticios** y la marca es «New».
+**Entorno:** servidor local, participantes en móvil (430 × 932) y escritorio (1440 × 900).
+
+## Proyecto construido
+
+| Elemento | Resultado |
+|---|---|
+| Plantilla | «Banco New · app móvil», disponible al crear un proyecto |
+| Sistema de diseño | Tokens propios (azul #1A66CC, fondo celeste, Overpass), 34 componentes |
+| Componentes nuevos del framework | Barra inferior, lista de opciones, tarjeta de cuenta, tarjeta de crédito, carrusel (contactos, promociones, destacado), resumen financiero con gráfico, calificación con estrellas, grilla de accesos; variantes de barra (app, título, cierre), pestañas subrayadas, cuotas en fila, buscador, contacto, notificación, perfil y cerrar sesión |
+| Interacción | Cada opción de un componente navega a su propia pantalla (pestañas, barra inferior, menú, campana, carrusel); botón que se ve deshabilitado hasta completar los obligatorios; datos ingresados visibles en pantallas siguientes |
+| Pantallas | 19, todas alcanzables, sin errores del guardarraíl |
+| Estudio | «Banco New · Crédito, transferencia e inversiones», 4 tareas, pide audio |
+| Sesiones | 6 (4 en móvil, 2 en escritorio), 273 eventos |
+
+## Resultados del estudio
+
+| Tarea | Completada | Mediana | Toques sin acción | Dificultad |
+|---|---|---|---|---|
+| Simular y solicitar un crédito de $3.000.000 en 24 cuotas | 5 de 6 | 24 s | 0,2 por sesión | 2,7 de 5 |
+| Transferir $50.000 a Martina Rojas | 6 de 6 | 10 s | 0,0 | 1,7 de 5 |
+| Encontrar la rentabilidad de las inversiones | 5 de 6 | 7 s | 0,3 | 2,5 de 5 |
+| Evaluar la solicitud en la encuesta | 6 de 6 | 6 s | 0,0 | 1,5 de 5 |
+
+**Global:** 92 % de tareas completadas, mediana de 10 s por tarea, 9 dudas, 0,5 toques sin acción por sesión, dificultad percibida 2,1 de 5.
+
+## Hallazgos de diseño para Banco New
+
+| # | Evidencia | Recomendación |
+|---|---|---|
+| 1 | Créditos cuesta encontrarlo desde Inicio: 1 de 6 abandonó y hubo desvíos a Transferir, Menú, Mis Inversiones e Invierte. Es la tarea más difícil (2,7 de 5). | Llevar el crédito preaprobado a Inicio y a Accesos rápidos. La tarjeta de promoción funcionó como atajo en la sesión P5. |
+| 2 | La rentabilidad se buscó en Mis Finanzas y Tarjetas (4 desvíos) y 1 persona abandonó. | Mostrar un resumen de inversiones dentro de Mis Finanzas o en Inicio. |
+| 3 | El botón «Continuar» de la simulación se ve apagado, pero no dice qué falta: 1 persona intentó avanzar sin elegir cuotas. | Indicar junto al botón qué falta completar («Elige en cuántas cuotas»). |
+| 4 | Las tarjetas de contactos frecuentes se parecen: 1 persona eligió a otro destinatario y tuvo que volver. | Diferenciarlas con alias y últimos dígitos de la cuenta. |
+| 5 | En la encuesta, 1 persona tocó ENVIAR sin comentario y quedó bloqueada. | Hacer el comentario opcional o avisar antes que es obligatorio. |
+| — | 2 de 6 dudaron en «Solicitar crédito». Una de esas pausas incluye el tiempo de una captura durante la automatización. | Leerlo con cautela; repetir con personas reales. |
+
+## Hallazgos del framework durante este QA
+
+| # | Severidad | Hallazgo | Estado |
+|---|---|---|---|
+| 10 | Media | La confirmación de la transferencia decía «El monto que ingresaste» en vez del monto real. | Implementado: `{{id-del-bloque\|ejemplo}}` muestra lo que la persona escribió en pantallas anteriores |
+| 11 | Media | Los desvíos incluían caminos alternativos válidos («Transferir a destinatario» también lleva a la meta). | Corregido: solo es desvío una pantalla desde la que no se avanza hacia el objetivo |
+| 12 | Baja | Dos hallazgos con el mismo título («dudó en «Inversiones»») en pantallas distintas. | Corregido: se nombra la pantalla |
+| 13 | Baja | Entrega indicaba separación `space.md` y margen `space.lg`, distinto de lo aplicado. | Corregido: `space.lg` y `space.lg` + 4 |
+| 14 | Baja | Filas destacadas y botones deshabilitados mostraban el borde por defecto del navegador. | Corregido |
+| 15 | Baja | «$ 1.310.000» se cortaba en dos líneas en el resumen financiero. | Corregido |
+| — | Descartado | Saltos de pantalla en «Probar» y un error de consola: la automatización tocaba los marcos del lienzo detrás del modo prueba y la recarga en caliente aplicó un cambio en dos pasos. No se reproducen al recargar. | — |
+
+## Límites de este QA
+
+- **Sesiones automatizadas:** se simularon 6 perfiles de comportamiento (fluido, con dudas, con desvíos, con abandono, en escritorio y en móvil) sobre el prototipo real. Los eventos son reales, pero no reemplazan a personas.
+- **Audio:** se probó el interruptor y «Ahora no»; el navegador de pruebas no permite grabar.
+- **Buscador y filtros:** el prototipo no filtra listas. Queda como mejora del framework: visibilidad condicional por valor ingresado.

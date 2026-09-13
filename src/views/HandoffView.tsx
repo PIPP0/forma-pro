@@ -109,7 +109,8 @@ function BlockSpec({ p, screenId, blockId }: { p: Project; screenId: string; blo
   const comp = findComponent(p, block.componentId);
   const style = effectiveStyle(p, block, ['default']);
   const tt = typeToken(p.tokens, style.type);
-  const gap = p.tokens.space.find((s) => s.name === 'md');
+  // Mismos valores que aplica screenStyle: separación space.lg y margen lateral space.lg + 4.
+  const gap = p.tokens.space.find((s) => s.name === 'lg');
   const pad = p.tokens.space.find((s) => s.name === 'lg');
   const cls = comp ? componentCss(comp) : null;
   const inlineCss = [
@@ -127,7 +128,7 @@ function BlockSpec({ p, screenId, blockId }: { p: Project; screenId: string; blo
         {comp ? <Badge tone="accent">{comp.name}</Badge> : <Badge tone="warn">Bloque suelto</Badge>}
       </div>
       <p className="muted small">
-        El rótulo sobre el bloque muestra ancho × alto reales en px. La separación vertical entre bloques es el token <code>space.md</code> ({gap?.value ?? 12}px) y el margen de pantalla es <code>space.lg</code> ({pad?.value ?? 16}px).
+        El rótulo sobre el bloque muestra ancho × alto reales en px. La separación vertical entre bloques es el token <code>space.lg</code> ({gap?.value ?? 16}px) y el margen lateral de pantalla es <code>space.lg</code> + 4 ({(pad?.value ?? 16) + 4}px).
       </p>
       <div className="table-wrap">
         <table className="table">
