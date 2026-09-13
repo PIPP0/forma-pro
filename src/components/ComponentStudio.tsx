@@ -153,6 +153,9 @@ function PressableCard({ selected, onPress, className, children, label }: { sele
   );
 }
 
+/** Alto del campo según el texto: una línea si cabe en una, hasta cuatro si trae saltos. */
+const lineRows = (text: string | undefined, min: number) => Math.min(4, Math.max(min, (text ?? '').split('\n').length));
+
 /** Campos de contenido de ejemplo según el patrón. */
 function SampleFields({ type, variant, sample, disabled, onChange }: { type: BlockType; variant?: string; sample: Partial<Block>; disabled?: boolean; onChange: (key: SampleKey, value: string | string[] | undefined) => void }) {
   const fields = contentFields(type, variant);
@@ -160,12 +163,12 @@ function SampleFields({ type, variant, sample, disabled, onChange }: { type: Blo
     <>
       {type !== 'divider' && (
         <Field label="Texto principal" hint="Usa **negritas** para destacar.">
-          <CommitInput multiline value={sample.label ?? ''} disabled={disabled} onCommit={(v) => onChange('label', v)} />
+          <CommitInput multiline rows={lineRows(sample.label, 1)} value={sample.label ?? ''} disabled={disabled} onCommit={(v) => onChange('label', v)} />
         </Field>
       )}
       {fields.detail && (
         <Field label="Texto de apoyo">
-          <CommitInput multiline value={sample.detail ?? ''} disabled={disabled} onCommit={(v) => onChange('detail', v || undefined)} />
+          <CommitInput multiline rows={lineRows(sample.detail, 1)} value={sample.detail ?? ''} disabled={disabled} onCommit={(v) => onChange('detail', v || undefined)} />
         </Field>
       )}
       {fields.value && (
@@ -177,6 +180,7 @@ function SampleFields({ type, variant, sample, disabled, onChange }: { type: Blo
         <Field label="Opciones" hint={OPTION_HINT[type] ?? 'Una por línea.'}>
           <CommitInput
             multiline
+            rows={Math.min(6, Math.max(2, (sample.options ?? []).length))}
             value={(sample.options ?? []).join('\n')}
             disabled={disabled}
             onCommit={(v) =>
@@ -718,14 +722,16 @@ function draftFrom(p: Project, source: string): Draft {
 function NewComponentModal({ p, open, from, onClose, onCreated }: { p: Project; open: boolean; from?: Component; onClose: () => void; onCreated: (id: string) => void }) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(p, `cat:${CATALOG[0].key}`));
   const [editState, setEditState] = useState<StateName>('default');
-  const [previewState, setPreviewState] = useState<StateName | 'live'>('live');
+  const [panel, setPanel] = useState<'content' | 'styles'>('content');
   const [mode, setMode] = useState<Mode>('light');
+  // En «Contenido» la vista previa responde al cursor; en «Estilos» muestra el estado que se edita.
+  const previewState: StateName | 'live' = panel === 'styles' ? editState : 'live';
 
   useEffect(() => {
     if (!open) return;
     setDraft(draftFrom(p, `cat:${CATALOG[0].key}`));
     setEditState('default');
-    setPreviewState('live');
+    setPanel('content');
     // Al abrir se parte siempre desde el primer patrón; el proyecto puede cambiar mientras está cerrado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -800,9 +806,9 @@ function NewComponentModal({ p, open, from, onClose, onCreated }: { p: Project; 
       }
     >
       <div className="cs-new">
-        <div className="stack">
+        <div className="stack cs-new-form">
           <div className="grid-2">
-            <Field label="Punto de partida" hint="Un patrón del catálogo o una copia de un componente del proyecto.">
+            <Field label="Basado en">
               <select
                 value={draft.source}
                 onChange={(e) => {
@@ -811,7 +817,7 @@ function NewComponentModal({ p, open, from, onClose, onCreated }: { p: Project; 
                 }}
               >
                 {from && (
-                  <optgroup label="Duplicar del proyecto">
+                  <optgroup label="Copiar un componente del proyecto">
                     <option value={`dup:${from.id}`}>{from.name} (seleccionado)</option>
                     {p.components
                       .filter((x) => x.id !== from.id)
@@ -845,49 +851,53 @@ function NewComponentModal({ p, open, from, onClose, onCreated }: { p: Project; 
                 onPick={(id, created) => setDraft((d) => ({ ...d, category: id, newCategory: created ? { id, label: created.label } : d.newCategory?.id === id ? d.newCategory : undefined }))}
               />
             </Field>
-            <Field label="Descripción">
-              <input value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder={entry.summary} />
+            <Field label="Descripción (opcional)">
+              <input value={draft.description} onChange={(e) => setDraft((d) => ({ ...d, description: e.target.value }))} placeholder="Para qué sirve" title={entry.summary} />
             </Field>
           </div>
 
-          <details className="cs-section" open>
-            <summary>Contenido de ejemplo</summary>
-            <SampleFields
-              type={draft.type}
-              variant={draft.variant}
-              sample={draft.sample}
-              onChange={(key, v) => setDraft((d) => ({ ...d, sample: { ...d.sample, [key]: v } }))}
+          <div className="cs-new-panel">
+            <Tabs
+              label="Qué personalizar"
+              value={panel}
+              onChange={setPanel}
+              items={[
+                { id: 'content', label: 'Contenido' },
+                { id: 'styles', label: meta.interactive ? 'Estilos por estado' : 'Estilos' },
+              ]}
             />
-          </details>
-
-          <details className="cs-section" open>
-            <summary>Estilos {meta.interactive ? 'por estado' : 'en reposo'}</summary>
-            {meta.interactive && (
-              <Tabs
-                small
-                label="Estado a editar"
-                value={editState}
-                onChange={(s) => {
-                  setEditState(s);
-                  setPreviewState(s);
-                }}
-                items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))}
-              />
-            )}
-            <div className="picker-grid">
-              {STYLE_KEYS.map((k) => (
-                <ValuePicker
-                  key={`${editState}-${k.key}`}
-                  tokens={p.tokens}
-                  group={k.group}
-                  label={k.label}
-                  value={draft.states[editState]?.[k.key]}
-                  inherited={editState !== 'default' ? draft.states.default[k.key] : undefined}
-                  onChange={(v) => setDraft((d) => ({ ...d, states: { ...d.states, [editState]: { ...d.states[editState], [k.key]: v } } }))}
+            {panel === 'content' ? (
+              <div className="stack">
+                <SampleFields
+                  type={draft.type}
+                  variant={draft.variant}
+                  sample={draft.sample}
+                  onChange={(key, v) => setDraft((d) => ({ ...d, sample: { ...d.sample, [key]: v } }))}
                 />
-              ))}
-            </div>
-          </details>
+              </div>
+            ) : (
+              <div className="stack">
+                {meta.interactive ? (
+                  <Tabs small label="Estado a editar" value={editState} onChange={setEditState} items={STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))} />
+                ) : (
+                  <p className="muted small">Este patrón muestra contenido y no cambia al tocarlo: solo tiene estilo en reposo.</p>
+                )}
+                <div className="picker-grid">
+                  {STYLE_KEYS.map((k) => (
+                    <ValuePicker
+                      key={`${editState}-${k.key}`}
+                      tokens={p.tokens}
+                      group={k.group}
+                      label={k.label}
+                      value={draft.states[editState]?.[k.key]}
+                      inherited={editState !== 'default' ? draft.states.default[k.key] : undefined}
+                      onChange={(v) => setDraft((d) => ({ ...d, states: { ...d.states, [editState]: { ...d.states[editState], [k.key]: v } } }))}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <aside className="cs-new-preview">
@@ -904,15 +914,6 @@ function NewComponentModal({ p, open, from, onClose, onCreated }: { p: Project; 
               ]}
             />
           </div>
-          {meta.interactive && (
-            <Tabs
-              small
-              label="Estado de la vista previa"
-              value={previewState}
-              onChange={setPreviewState}
-              items={[{ id: 'live' as const, label: 'Interactiva' }, ...STATES.map((s) => ({ id: s, label: STATE_LABEL[s] }))]}
-            />
-          )}
           <div className="cs-stage cs-stage-sm" style={{ backgroundColor: stageBg }}>
             <FitPreview width={343}>
               <BlockView

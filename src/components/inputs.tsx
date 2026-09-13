@@ -9,9 +9,10 @@ export function CommitInput({
   value,
   onCommit,
   multiline,
+  rows = 3,
   className = 'input',
   ...rest
-}: { value: string; onCommit: (v: string) => void; multiline?: boolean } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
+}: { value: string; onCommit: (v: string) => void; multiline?: boolean; rows?: number } & Omit<InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) {
   const [draft, setDraft] = useState(value);
   useEffect(() => setDraft(value), [value]);
   const commit = () => {
@@ -32,7 +33,7 @@ export function CommitInput({
       <textarea
         className={className}
         value={draft}
-        rows={3}
+        rows={rows}
         disabled={rest.disabled}
         placeholder={rest.placeholder}
         aria-label={rest['aria-label']}
