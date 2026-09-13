@@ -409,7 +409,10 @@ export function suggestMapping(colors: ColorCandidate[], current: Tokens): Recor
   pick('danger', ([h, s, l]) => (h <= 15 || h >= 345) && s > 0.45 && l > 0.3 && l < 0.6);
   pick('warning', ([h, s, l]) => h > 25 && h < 55 && s > 0.5 && l > 0.3 && l < 0.65);
   pick('muted', ([, s, l]) => l >= 0.3 && l < 0.55 && s < 0.2);
-  const background = mapping.background ?? current.colors.find((c) => c.name === 'background')?.light ?? '#FFFFFF';
+  // Un fondo casi idéntico al actual (por ejemplo, el blanco de una captura) no aporta: se conserva el existente.
+  const currentBg = current.colors.find((c) => c.name === 'background')?.light;
+  if (mapping.background && currentBg && (contrast(mapping.background, currentBg) ?? 99) < 1.06) delete mapping.background;
+  const background = mapping.background ?? currentBg ?? '#FFFFFF';
   for (const role of ['onSurface', 'muted']) {
     if (mapping[role] && (contrast(mapping[role], background) ?? 21) < 4.5) delete mapping[role];
   }

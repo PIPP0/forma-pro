@@ -35,6 +35,15 @@ Implementación del [PRD v1.0](PRD.md). Publicado en https://pipp0.github.io/for
 
 [`examples/banco-new-completo.json`](examples/banco-new-completo.json) suma el proyecto **Banco New**: una app bancaria móvil de 19 pantallas (cuentas, tarjetas, mis finanzas, transferencias, créditos con simulación, encuesta, inversiones, menú y notificaciones) con 34 componentes. Incluye un estudio de 4 tareas con 6 sesiones y sus resultados. Los datos son ficticios. También puedes crearlo desde cero con **Nuevo proyecto › Banco New · app móvil**. Para mostrar en una pantalla lo que la persona escribió en otra, usa `{{id-del-bloque|ejemplo}}` en textos u opciones.
 
+## Sistema de diseño
+
+- **Biblioteca completa en cada proyecto:** 55 patrones en 6 categorías (navegación, acciones, formularios, contenido, listas y finanzas), cada uno con cinco estados, guía de uso, anatomía y accesibilidad. Los proyectos existentes se completan solos.
+- **Estudio de componente:** vista previa al ancho real de un teléfono, estados, modo interactivo, especificación con tokens y contraste AA, variantes, código y uso en pantallas.
+- **Importar sistema:** PDF de marca, JSON (Forma, W3C Design Tokens de Figma, Tokens Studio y Style Dictionary), CSS, SCSS, LESS, tailwind.config, HTML e imágenes. Se lee en el navegador y nada se aplica sin revisar. Con clave de IA también propone componentes desde PDF, capturas y código.
+- **Exportar:** sistema completo, tokens para Figma, CSS con modo oscuro, Tailwind, Style Dictionary y documentación en PDF.
+
+La auditoría con los hallazgos por nivel de criticidad está en [AUDITORIA.md](AUDITORIA.md).
+
 ## Correr en local
 
 ```bash

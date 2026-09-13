@@ -70,13 +70,15 @@ export async function readPdf(buffer: ArrayBuffer): Promise<PdfRead> {
   let m: RegExpExecArray | null;
   let scanned = 0;
   while ((m = re.exec(raw)) && scanned < 400) {
+    // «endstream» también contiene «stream»: esa coincidencia no abre un flujo.
+    if (raw.slice(Math.max(0, m.index - 3), m.index) === 'end') continue;
     const start = m.index + m[0].length;
     const end = raw.indexOf('endstream', start);
     if (end < 0) break;
     const dict = raw.slice(Math.max(0, m.index - 900), m.index);
     const dictStart = dict.lastIndexOf('<<');
     const head = dictStart >= 0 ? dict.slice(dictStart) : dict;
-    re.lastIndex = end;
+    re.lastIndex = end + 'endstream'.length;
     if (/\/Subtype\s*\/Image|\/Length[123]\b|\/FontFile|\/Type\s*\/XRef|\/Type\s*\/ObjStm|\/Subtype\s*\/(Type1C|CIDFontType0C|OpenType)/.test(head)) continue;
     let data = bytes.subarray(start, end);
     while (data.length && (data[data.length - 1] === 10 || data[data.length - 1] === 13)) data = data.subarray(0, data.length - 1);
