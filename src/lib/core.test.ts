@@ -191,6 +191,16 @@ describe('plantilla Banco New', () => {
   });
 });
 
+describe('datos ingresados en pantallas siguientes', () => {
+  it('muestra lo que escribió la persona o el ejemplo', async () => {
+    const { fillValues, plainText } = await import('./model');
+    expect(fillValues('Monto|{{bn-mo-monto|$ 50.000}}', { 'bn-mo-monto': '$ 75.000' })).toBe('Monto|$ 75.000');
+    expect(fillValues('Monto|{{bn-mo-monto|$ 50.000}}', {})).toBe('Monto|$ 50.000');
+    expect(fillValues('{{bn-mo-mensaje}}', { 'bn-mo-mensaje': '  ' })).toBe('');
+    expect(plainText('Recibirá **{{m|$ 1}}**')).toBe('Recibirá $ 1');
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

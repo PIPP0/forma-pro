@@ -189,17 +189,18 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
       });
     }
 
-    // Desvíos: pantallas fuera de cualquier camino más corto entre inicio y éxito.
-    const from = bfs(g, baseOf(task.startScreenId));
+    // Desvíos: pantallas desde las que no se avanza hacia el objetivo. Un camino alternativo que
+    // igual acerca a la meta (por ejemplo, elegir el contacto desde la lista) no es un desvío.
+    const start = baseOf(task.startScreenId);
     const to = bfs(reverse, baseOf(task.successScreenId));
-    const best = from.get(baseOf(task.successScreenId));
+    const best = to.get(start);
     if (best != null) {
-      const onPath = (id: string) => {
+      const progresses = (id: string) => {
         const b = baseOf(id);
-        return (from.get(b) ?? Infinity) + (to.get(b) ?? Infinity) === best;
+        return b === start || (to.get(b) ?? Infinity) < best;
       };
       for (const [screen, bySession] of group(
-        (e) => e.taskId === task.id && e.kind === 'navigate' && !onPath(e.screen),
+        (e) => e.taskId === task.id && e.kind === 'navigate' && !progresses(e.screen),
         (e) => baseOf(e.screen),
       )) {
         const list = [...bySession.values()];
@@ -207,7 +208,7 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
           id: `det-${task.id}-${screen}`,
           kind: 'detour',
           title: `${people(list.length, total, 'se desvió', 'se desviaron')} a «${screenName(p, screen)}» mientras ${list.length === 1 ? 'intentaba' : 'intentaban'} «${task.prompt.replace(/\.$/, '')}»`,
-          detail: 'Esa pantalla no está en el camino más corto hacia el objetivo de la tarea.',
+          detail: 'Desde esa pantalla no se avanza hacia el objetivo de la tarea: hay que volver o buscar por otro lado.',
           count: list.length,
           total,
           citations: list.map(cite),
@@ -245,6 +246,14 @@ export function analyzeStudy(study: Study, allSessions: Session[], allEvents: St
   const quotes: Quote[] = sessions.flatMap((s) =>
     s.feedback.filter((f) => f.comment?.trim()).map((f) => ({ sessionId: s.id, participant: s.participant, taskId: f.taskId, comment: f.comment!.trim(), difficulty: f.difficulty })),
   );
+
+  // Un mismo elemento puede aparecer en varias pantallas (por ejemplo, la barra inferior): se nombra la pantalla.
+  const repeated = new Map<string, number>();
+  for (const t of themes) repeated.set(t.title, (repeated.get(t.title) ?? 0) + 1);
+  for (const t of themes) {
+    const screen = t.screenId ?? (t.kind === 'hesitation' ? t.id.slice(4).split('|')[0] : undefined);
+    if ((repeated.get(t.title) ?? 0) > 1 && screen) t.title = `${t.title} de «${screenName(p, screen)}»`;
+  }
 
   themes.sort((a, b) => b.count - a.count);
   return { total, tasks, themes, quotes };

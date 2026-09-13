@@ -293,7 +293,12 @@ export function bancoNewScreens(): Screen[] {
         titleBar('bn-co-titulo', 'Confirma tu transferencia'),
         b('bn-co-resumen', 'menuList', 'Revisa antes de transferir', {
           componentId: 'cmp-bn-info',
-          options: ['Destinatario|Martina Rojas · Banco New|user', 'Monto|El monto que ingresaste|cashCard', 'Desde|Cuenta Corriente 1048 2201|wallet'],
+          options: [
+            'Destinatario|Martina Rojas · Banco New|user',
+            'Monto|{{bn-mo-monto|$ 50.000}}|cashCard',
+            'Mensaje|{{bn-mo-mensaje|Sin mensaje}}|doc',
+            'Desde|Cuenta Corriente 1048 2201|wallet',
+          ],
         }),
         b('bn-co-ayuda', 'help', 'Transferencia sin costo', { componentId: 'cmp-bn-help', detail: 'Llega en segundos a cuentas de cualquier banco.' }),
         b('bn-co-transferir', 'button', 'Transferir', { componentId: 'cmp-bn-button', action: 'navigate', target: 's-bn-transfer-exito' }),
@@ -305,7 +310,7 @@ export function bancoNewScreens(): Screen[] {
       name: 'Transferencia exitosa',
       breakpoint: 'mobile',
       terminal: true,
-      blocks: success('bn-te', '¡Transferencia exitosa!', 'Martina recibirá el dinero en segundos. Te enviamos el comprobante por correo.', ['Volver al inicio', 's-bn-inicio'], ['Hacer otra transferencia', 's-bn-transferir']),
+      blocks: success('bn-te', '¡Transferencia exitosa!', 'Martina recibirá {{bn-mo-monto|el dinero}} en segundos. Te enviamos el comprobante por correo.', ['Volver al inicio', 's-bn-inicio'], ['Hacer otra transferencia', 's-bn-transferir']),
     },
     {
       id: 's-bn-creditos',
@@ -355,7 +360,13 @@ export function bancoNewScreens(): Screen[] {
           componentId: 'cmp-bn-summary',
           detail: 'Primera cuota en octubre de 2026',
           value: '$ 246.900',
-          options: ['Tasa de interés mensual|1,29%', 'Carga anual equivalente (CAE)|17,4%', 'Costo total del crédito|$ 5.925.600'],
+          options: [
+            'Monto solicitado|{{bn-si-monto|$ 3.000.000}}',
+            'Cuotas|{{bn-si-cuotas|24}}',
+            'Tasa de interés mensual|1,29%',
+            'Carga anual equivalente (CAE)|17,4%',
+            'Costo total del crédito|$ 5.925.600',
+          ],
           action: 'none',
         }),
         b('bn-rc-ayuda', 'help', 'Simulación referencial', { componentId: 'cmp-bn-help', detail: 'Este prototipo no solicita ningún crédito real.' }),

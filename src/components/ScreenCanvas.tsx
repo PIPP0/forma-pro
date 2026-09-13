@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import type { Block, Mode, Project, Screen } from '../lib/model';
-import { breakpointOf } from '../lib/model';
+import { breakpointOf, withValues } from '../lib/model';
 import { colorValue, findComponent, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
 import { IconShield } from './icons';
@@ -180,7 +180,7 @@ export function ScreenCanvas({
                   onSelect?.(b.id);
                 }}
               >
-                <BlockView project={project} block={b} mode={mode} wireframe={wireframe} pendingRequired={b.type === 'button' && !!b.disableUntilValid && pendingRequired} />
+                <BlockView project={project} block={withValues(b)} mode={mode} wireframe={wireframe} pendingRequired={b.type === 'button' && !!b.disableUntilValid && pendingRequired} />
                 {measures && selectedBlockId === b.id && <Measure />}
               </div>
             ))}

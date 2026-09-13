@@ -455,7 +455,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
 
     case 'button':
       return (
-        <button type="button" tabIndex={tab} disabled={b.disabled} aria-disabled={pendingRequired || undefined} style={{ ...css, width: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor }} {...handlers}>
+        <button type="button" tabIndex={tab} disabled={b.disabled} aria-disabled={pendingRequired || undefined} style={{ ...css, border: css.border ?? 'none', width: '100%', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center', cursor }} {...handlers}>
           <span>{b.label}</span>
           {b.action === 'navigate' && variant !== 'secondary' && variant !== 'success' && !pendingRequired && (
             <IconChevronRight size={16} color={String(css.color ?? '#fff')} style={{ position: 'absolute', right: 14 }} />
@@ -514,7 +514,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
         );
       if (variant === 'profile' || variant === 'icon')
         return (
-          <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, boxShadow: shadow, width: '100%', display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor }} {...handlers}>
+          <button type="button" tabIndex={tab} disabled={b.disabled} style={{ ...css, border: css.border ?? 'none', boxShadow: shadow, width: '100%', display: 'flex', gap: 14, alignItems: 'center', textAlign: 'left', cursor }} {...handlers}>
             {variant === 'profile' ? (
               <svg width="30" height="30" viewBox="0 0 30 30" aria-hidden="true" style={{ flex: 'none' }}>
                 <circle cx="15" cy="15" r="15" fill={starColor} />
@@ -735,7 +735,7 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
               {metrics.map(([label, val, trend], i) => (
                 <span key={i} style={{ textAlign: i === metrics.length - 1 && metrics.length > 1 ? 'right' : 'left' }}>
                   <span style={{ ...noteCss, fontSize: 15 }}>{label}</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 22, fontWeight: 700, marginTop: 6 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 20, fontWeight: 700, marginTop: 6, whiteSpace: 'nowrap' }}>
                     {val}
                     {trend && <AppIcon name={trend === 'in' ? 'trendIn' : 'trendUp'} size={20} strokeWidth={2} color={trend === 'in' ? successColor : warningColor} />}
                   </span>

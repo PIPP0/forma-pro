@@ -392,7 +392,18 @@ export function optionKeys(type: BlockType, variant: string | undefined, options
 }
 
 /** Quita el marcado de negrita (**texto**) para mostrar etiquetas en texto plano. */
-export const plainText = (s: string) => s.replace(/\*\*/g, '');
+/** Reemplaza {{idDelBloque|ejemplo}} por lo que la persona escribió en ese bloque, o por el ejemplo. */
+export const fillValues = (s: string, values?: Record<string, string>) =>
+  s.replace(/\{\{([\w-]+)(?:\|([^}]*))?\}\}/g, (_m, id: string, example?: string) => values?.[id]?.trim() || example || '');
+
+/** El bloque con los datos que la persona ya ingresó en pantallas anteriores. */
+export function withValues(b: Block, values?: Record<string, string>): Block {
+  const has = (s?: string) => !!s && s.includes('{{');
+  if (!has(b.label) && !has(b.detail) && !b.options?.some(has)) return b;
+  return { ...b, label: fillValues(b.label, values), detail: b.detail && fillValues(b.detail, values), options: b.options?.map((o) => fillValues(o, values)) };
+}
+
+export const plainText = (s: string) => fillValues(s).replace(/\*\*/g, '');
 
 /** Resuelve la variante de una pantalla para un breakpoint, o la base si no existe. */
 export function screenFor(p: Project, id: string, bp: Breakpoint): Screen | undefined {

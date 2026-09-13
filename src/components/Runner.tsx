@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
-import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor } from '../lib/model';
+import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor, withValues } from '../lib/model';
 import { BlockView } from './BlockView';
 import { PhoneChrome, ScaledFrame, blockWrapperStyle, contentWidth, screenStyle } from './ScreenCanvas';
 
@@ -159,7 +159,7 @@ export function Runner({
         <div key={b.id} data-block-id={b.id} style={blockWrapperStyle(project, b, maxW)}>
           <BlockView
             project={project}
-            block={b}
+            block={withValues(b, values)}
             mode={mode}
             live
             value={values[b.id]}
