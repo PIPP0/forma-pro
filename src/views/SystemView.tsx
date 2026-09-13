@@ -1,12 +1,14 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import type { Block, BlockType, Mode, OpInput, Project, Role, StateName, StyleKey } from '../lib/model';
 import { BLOCK_TYPES, STATES, STATE_LABEL, STYLE_KEYS, TYPE_ROLE_LABEL, blockMeta } from '../lib/model';
-import { applyOps, saveVersion } from '../lib/store';
+import { applyOps, releasesFor, saveVersion, useDb } from '../lib/store';
 import { can } from '../lib/permissions';
 import { extractSystem, fileToImage, getAiKey, type ExtractedSystem, type ImageInput } from '../lib/ai';
-import { IconClose, IconSparkle, IconUpload } from '../components/icons';
+import { download } from '../lib/share';
+import { FONT_INTER } from '../lib/seed';
+import { IconCheck, IconClose, IconDiamond, IconDownload, IconUpload } from '../components/icons';
 import { edit, renameTokenOps } from '../lib/ops';
-import { builtInStyle, colorValue, contrast, isRaw, parseRef, refOf, resolve } from '../lib/tokens';
+import { builtInStyle, colorValue, contrast, exportCss, exportStyleDictionary, isRaw, parseRef, refOf, resolve } from '../lib/tokens';
 import { checkProject } from '../lib/flowCheck';
 import { adoption, tokenUses } from '../lib/metrics';
 import { importTokens, type TokenImport } from '../lib/importer';
@@ -15,60 +17,354 @@ import { uid } from '../lib/ids';
 import { href } from '../lib/router';
 import { BlockView } from '../components/BlockView';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
-import { Badge, Button, Empty, Field, Modal, Tabs, pickFile } from '../components/ui';
+import { Badge, Button, CopyButton, Empty, Field, Modal, PageHead, Tabs, pickFile } from '../components/ui';
 
-type Tab = 'tokens' | 'type' | 'components' | 'health';
+type Tab = 'foundations' | 'components' | 'docs';
 
 const validName = (n: string) => /^[A-Za-z][A-Za-z0-9_-]*$/.test(n);
 const ratio = (n: number | null) => (n == null ? 'n/a' : `${String(n).replace('.', ',')}:1`);
 
+const COLOR_LABEL: Record<string, string> = {
+  primary: 'Primario',
+  primaryHover: 'Primario hover',
+  primaryPressed: 'Primario presionado',
+  primarySubtle: 'Primario suave',
+  onPrimary: 'Texto sobre primario',
+  secondary: 'Secundario',
+  background: 'Fondo',
+  surface: 'Superficie',
+  subtle: 'Superficie sutil',
+  onSurface: 'Texto',
+  muted: 'Texto secundario',
+  border: 'Borde',
+  focus: 'Foco',
+  success: 'Éxito',
+  successSubtle: 'Éxito suave',
+  warning: 'Advertencia',
+  danger: 'Error',
+  dangerSubtle: 'Error suave',
+};
+const colorLabel = (name: string) => COLOR_LABEL[name] ?? name;
+
+const FONTS = [
+  { label: 'Inter', value: FONT_INTER },
+  { label: 'Sistema', value: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+  { label: 'Serif', value: "Georgia, 'Times New Roman', serif" },
+  { label: 'Monoespaciada', value: "'JetBrains Mono', ui-monospace, monospace" },
+];
+
+const DOC: Record<BlockType, string> = {
+  navbar: 'Encabezado de cada pantalla con la marca y, si corresponde, la acción de volver.',
+  heading: 'Título de la pantalla. Uno por pantalla, con texto de apoyo opcional.',
+  text: 'Explicaciones breves. Úsalo para contexto, no para acciones.',
+  balance: 'Muestra un saldo o monto destacado con su cuenta de referencia.',
+  help: 'Ayuda contextual antes de una decisión: tranquiliza o aclara el siguiente paso.',
+  card: 'Agrupa una opción navegable con ícono, título y descripción.',
+  input: 'Texto corto. Siempre con etiqueta visible y ejemplo dentro del campo.',
+  textarea: 'Texto largo, como comentarios o motivos.',
+  amount: 'Montos de dinero con formato automático.',
+  select: 'Elegir una opción entre muchas.',
+  radio: 'Elegir una opción entre pocas, todas visibles.',
+  checkbox: 'Aceptar condiciones o activar una opción independiente.',
+  switch: 'Encender o apagar una preferencia con efecto inmediato.',
+  tabs: 'Cambiar entre vistas de un mismo contenido.',
+  button: 'La acción principal o secundaria de la pantalla. Una principal por pantalla.',
+  link: 'Acciones terciarias o navegación dentro del texto.',
+  listItem: 'Filas de una lista, como contactos o movimientos.',
+  tag: 'Estado o categoría breve de un elemento.',
+  avatar: 'Identifica a una persona con sus iniciales.',
+  progress: 'Avance hacia una meta o paso de un proceso.',
+  statusIcon: 'Confirma visualmente el resultado de una acción.',
+  alert: 'Mensaje de éxito o error después de una acción.',
+  image: 'Ilustración o foto de apoyo.',
+  divider: 'Separa grupos de contenido.',
+};
+
 export function SystemView({ project, role }: { project: Project; role: Role }) {
-  const [tab, setTab] = useState<Tab>('tokens');
+  const db = useDb();
+  const [tab, setTab] = useState<Tab>('foundations');
   const [mode, setMode] = useState<Mode>('light');
   const [aiOpen, setAiOpen] = useState(false);
   const editable = can(role, 'edit');
+  const libVersion = project.library?.version ?? releasesFor(db, project.id)[0]?.version;
+  const fileSlug = project.name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-');
+
   return (
     <div className="page page-wide">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title">Sistema de diseño</h1>
-          <p className="page-sub">Una sola fuente de verdad. Lo que cambies aquí se refleja al instante en pantallas, prototipos y entrega.</p>
-        </div>
-        <div className="row">
-          <Tabs
-            small
-            label="Modo de vista previa"
-            value={mode}
-            onChange={setMode}
-            items={[
-              { id: 'light', label: 'Claro' },
-              { id: 'dark', label: 'Oscuro' },
-            ]}
-          />
-          {editable && (
-            <button type="button" className="btn-ai" onClick={() => setAiOpen(true)}>
-              <IconSparkle size={16} /> Crear sistema con IA
-            </button>
-          )}
-        </div>
-      </div>
-      <AiSystemModal p={project} open={aiOpen} onClose={() => setAiOpen(false)} />
-      {!editable && <p className="notice">Tu rol es de lectura: puedes revisar el sistema, pero no modificarlo.</p>}
-      <Tabs
-        label="Secciones del sistema"
-        value={tab}
-        onChange={setTab}
-        items={[
-          { id: 'tokens', label: 'Tokens' },
-          { id: 'type', label: 'Tipografía' },
-          { id: 'components', label: 'Componentes' },
-          { id: 'health', label: 'Salud del sistema' },
-        ]}
+      <PageHead
+        eyebrow="BIBLIOTECA DEL PROYECTO"
+        title="Un sistema completo. Una sola fuente de verdad."
+        sub="Fundamentos, tokens, componentes, estados e interacciones compartidos."
+        actions={
+          <>
+            <Button onClick={() => download(`${fileSlug}-tokens.json`, exportStyleDictionary(project.tokens))}>
+              <IconDownload size={17} /> JSON
+            </Button>
+            {editable && (
+              <Button tone="primary" onClick={() => setAiOpen(true)}>
+                <IconUpload size={17} /> Importar referencia
+              </Button>
+            )}
+          </>
+        }
       />
-      {tab === 'tokens' && <TokensTab p={project} editable={editable} />}
-      {tab === 'type' && <TypeTab p={project} editable={editable} mode={mode} />}
-      {tab === 'components' && <ComponentsTab p={project} editable={editable} mode={mode} />}
-      {tab === 'health' && <HealthTab p={project} editable={editable} />}
+      <AiSystemModal p={project} open={aiOpen} onClose={() => setAiOpen(false)} />
+
+      <section className="card lib-hero">
+        <span className="icon-tile lg">
+          <IconDiamond size={30} />
+        </span>
+        <div className="lib-hero-text">
+          <h2>
+            {project.brand} UI <span className="pill">{libVersion ? `v${libVersion}` : 'sin publicar'}</span>
+          </h2>
+          <p>
+            Sistema de diseño del proyecto «{project.name}». {project.footnote ? 'Sistema de exploración con datos ficticios.' : 'Cada cambio se refleja al instante en pantallas y prototipos.'}
+          </p>
+        </div>
+        <ul className="lib-checks">
+          <li>
+            <IconCheck size={15} /> {project.tokens.colors.length} tokens semánticos
+          </li>
+          <li>
+            <IconCheck size={15} /> {project.components.length} componentes
+          </li>
+          <li>
+            <IconCheck size={15} /> {STATES.length} estados interactivos
+          </li>
+        </ul>
+      </section>
+
+      {!editable && <p className="notice">Tu rol es de lectura: puedes revisar el sistema, pero no modificarlo.</p>}
+
+      <div className="system-tabs">
+        <Tabs
+          small
+          label="Secciones del sistema"
+          value={tab}
+          onChange={setTab}
+          items={[
+            { id: 'foundations', label: 'Fundamentos' },
+            { id: 'components', label: 'Componentes' },
+            { id: 'docs', label: 'Documentación' },
+          ]}
+        />
+        <Tabs
+          small
+          label="Modo de vista previa"
+          value={mode}
+          onChange={setMode}
+          items={[
+            { id: 'light', label: 'Claro' },
+            { id: 'dark', label: 'Oscuro' },
+          ]}
+        />
+      </div>
+
+      {tab === 'foundations' && <FoundationsTab p={project} editable={editable} mode={mode} />}
+      {tab === 'components' && (
+        <section className="card system-panel">
+          <ComponentsTab p={project} editable={editable} mode={mode} />
+        </section>
+      )}
+      {tab === 'docs' && <DocsTab p={project} editable={editable} />}
+    </div>
+  );
+}
+
+function CardHead({ n, title, hint }: { n: string; title: string; hint?: string }) {
+  return (
+    <div className="found-head">
+      <h2>
+        <span className="found-num">{n}</span> {title}
+      </h2>
+      {hint && <span className="found-hint">{hint}</span>}
+    </div>
+  );
+}
+
+function SwatchTile({ name, value, mode, editable, onCommit }: { name: string; value: string; mode: Mode; editable: boolean; onCommit: (v: string) => void }) {
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+  const full = /^#[0-9a-f]{6}$/i.test(draft) ? draft : '#000000';
+  return (
+    <div className="swatch-tile">
+      <label className="swatch-color" style={{ background: draft }}>
+        <input
+          type="color"
+          value={full}
+          disabled={!editable}
+          aria-label={`${colorLabel(name)}, modo ${mode === 'light' ? 'claro' : 'oscuro'}`}
+          onChange={(e) => {
+            const v = e.target.value.toUpperCase();
+            setDraft(v);
+            clearTimeout(timer.current);
+            timer.current = setTimeout(() => onCommit(v), 400);
+          }}
+        />
+      </label>
+      <strong>{colorLabel(name)}</strong>
+      <code>{draft}</code>
+    </div>
+  );
+}
+
+function TokenSlider({ label, value, min, max, disabled, onCommit }: { label: string; value: number; min: number; max: number; disabled: boolean; onCommit: (n: number) => void }) {
+  const [v, setV] = useState(value);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => setV(value), [value]);
+  return (
+    <label className="slider">
+      <span className="slider-head">
+        <span>{label}</span>
+        <strong>{v}px</strong>
+      </span>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={v}
+        disabled={disabled}
+        style={{ '--pct': `${((v - min) / (max - min)) * 100}%` } as CSSProperties}
+        onChange={(e) => {
+          const n = Number(e.target.value);
+          setV(n);
+          clearTimeout(timer.current);
+          timer.current = setTimeout(() => onCommit(n), 400);
+        }}
+      />
+    </label>
+  );
+}
+
+function FoundationsTab({ p, editable, mode }: { p: Project; editable: boolean; mode: Mode }) {
+  const t = p.tokens;
+  const display = t.type.find((x) => x.role === 'display');
+  const body = t.type.find((x) => x.role === 'body');
+  const ri = t.radius.findIndex((r) => r.name === 'lg');
+  const si = t.space.findIndex((s) => s.name === 'lg');
+  const fonts = FONTS.some((f) => f.value === t.fontFamily) ? FONTS : [...FONTS, { label: 'Personalizada', value: t.fontFamily }];
+  const css = exportCss(t);
+
+  return (
+    <div className="found-grid">
+      <section className="card found-card found-colors">
+        <CardHead n="01" title="Color semántico" hint="Edita cada rol sin romper el significado del sistema." />
+        <div className="swatches">
+          {t.colors.map((c, i) => (
+            <SwatchTile
+              key={c.name}
+              name={c.name}
+              value={c[mode]}
+              mode={mode}
+              editable={editable}
+              onCommit={(v) => applyOps(p.id, [edit.token('colors', i, mode, v)], `Cambiar ${colorLabel(c.name).toLowerCase()} (${mode === 'light' ? 'claro' : 'oscuro'})`)}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section className="card found-card">
+        <CardHead n="02" title="Tipografía" hint="Familia global para producto y prototipos." />
+        <div className="type-specimen">
+          <span className="type-aa" style={{ fontFamily: t.fontFamily }}>
+            Aa
+          </span>
+          <div>
+            {display && (
+              <>
+                <span className="type-meta">
+                  Display · {display.size}/{display.lineHeight}
+                </span>
+                <p style={{ fontFamily: t.fontFamily, fontSize: Math.min(display.size, 24), fontWeight: display.weight, margin: '4px 0 12px', letterSpacing: '-0.01em' }}>{p.tagline || 'Pequeños pasos, grandes metas.'}</p>
+              </>
+            )}
+            {body && (
+              <>
+                <span className="type-meta">
+                  Body · {body.size}/{body.lineHeight}
+                </span>
+                <p style={{ fontFamily: t.fontFamily, fontSize: body.size, margin: '4px 0 0', color: 'var(--ink-2)' }}>Información clara para tomar mejores decisiones.</p>
+              </>
+            )}
+          </div>
+        </div>
+        <select
+          className="input"
+          aria-label="Familia tipográfica"
+          value={t.fontFamily}
+          disabled={!editable}
+          onChange={(e) => applyOps(p.id, [{ kind: 'set', path: ['tokens', 'fontFamily'], value: e.target.value }], 'Cambiar tipografía')}
+        >
+          {fonts.map((f) => (
+            <option key={f.label} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </select>
+        <details className="found-more">
+          <summary>Ver escala tipográfica</summary>
+          <TypeTab p={p} editable={editable} mode={mode} />
+        </details>
+      </section>
+
+      <section className="card found-card">
+        <CardHead n="03" title="Geometría y ritmo" hint="Escala coherente para todas las pantallas." />
+        {ri >= 0 && <TokenSlider label="Radio de borde" value={t.radius[ri].value} min={0} max={32} disabled={!editable} onCommit={(n) => applyOps(p.id, [edit.token('radius', ri, 'value', n)], 'Cambiar radio de borde')} />}
+        {si >= 0 && <TokenSlider label="Espaciado base" value={t.space[si].value} min={4} max={32} disabled={!editable} onCommit={(n) => applyOps(p.id, [edit.token('space', si, 'value', n)], 'Cambiar espaciado base')} />}
+      </section>
+
+      <section className="card found-card">
+        <CardHead n="04" title="Tokens para desarrollo" hint="Exporta una base CSS lista para integrar." />
+        <pre className="code-dark">
+          <code>{css}</code>
+        </pre>
+        <div className="row">
+          <CopyButton text={css} label="Copiar CSS" done="Copiaste los tokens en CSS." />
+        </div>
+      </section>
+
+      <section className="card found-card found-wide">
+        <details className="found-more">
+          <summary>Editar todos los tokens: nombres, modo oscuro, espaciado, radios e importación</summary>
+          <TokensTab p={p} editable={editable} />
+        </details>
+      </section>
+    </div>
+  );
+}
+
+function DocsTab({ p, editable }: { p: Project; editable: boolean }) {
+  const instances = (id: string) => p.screens.reduce((n, s) => n + s.blocks.filter((b) => b.componentId === id).length, 0);
+  return (
+    <div className="found-grid">
+      <section className="card found-card found-wide">
+        <CardHead n="01" title="Guía de componentes" hint="Cuándo usar cada pieza del sistema." />
+        <ul className="doc-list">
+          {p.components.map((c) => (
+            <li key={c.id}>
+              <IconDiamond size={16} />
+              <span className="doc-text">
+                <strong>{c.name}</strong>
+                <span>{DOC[c.type]}</span>
+              </span>
+              <span className="muted small nowrap">
+                {instances(c.id)} {instances(c.id) === 1 ? 'uso' : 'usos'}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <section className="card found-card found-wide">
+        <CardHead n="02" title="Salud del sistema" hint="Contraste, foco, adopción y sobrescrituras." />
+        <HealthTab p={p} editable={editable} />
+      </section>
     </div>
   );
 }
@@ -701,7 +997,7 @@ function AiSystemModal({ p, open, onClose }: { p: Project; open: boolean; onClos
     <Modal
       open={open}
       wide
-      title="Crear sistema de diseño con IA"
+      title="Importar referencia"
       onClose={close}
       footer={
         <>

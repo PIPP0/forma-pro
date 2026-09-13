@@ -46,7 +46,7 @@ export function ProjectsView() {
             </Button>
           }
         >
-          Empieza en blanco o parte del flujo de ahorro de ejemplo, que ya trae un estudio con resultados.
+          Empieza en blanco o parte del flujo de ahorro de ejemplo.
         </Empty>
       ) : (
         <div className="table-wrap">
@@ -128,7 +128,7 @@ export function ProjectsView() {
             <input type="radio" name="tpl" checked={template === 'transfer'} onChange={() => setTemplate('transfer')} />
             <span>
               <strong>Flujo de ahorro</strong>
-              <span className="muted"> Cinco pantallas conectadas, 19 componentes y un estudio de ejemplo con 15 sesiones simuladas.</span>
+              <span className="muted"> Cinco pantallas conectadas y 19 componentes del sistema.</span>
             </span>
           </label>
         </fieldset>

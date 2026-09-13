@@ -102,7 +102,7 @@ const clampZoom = (z: number) => Math.round(Math.max(0.3, Math.min(1.25, z)) * 1
 
 type Panel = 'props' | 'comments' | 'ai';
 
-export function ScreensView({ project, role, initialScreen, openAi }: { project: Project; role: Role; initialScreen?: string; openAi?: boolean }) {
+export function ScreensView({ project, role, initialScreen, openAi, openPlay }: { project: Project; role: Role; initialScreen?: string; openAi?: boolean; openPlay?: boolean }) {
   const editable = can(role, 'edit');
   const db = useDb();
   const [screenId, setScreenId] = useState(() => (initialScreen && project.screens.some((s) => s.id === initialScreen) ? initialScreen : project.startScreenId));
@@ -122,6 +122,9 @@ export function ScreensView({ project, role, initialScreen, openAi }: { project:
   useEffect(() => {
     if (openAi) setPanel('ai');
   }, [openAi]);
+  useEffect(() => {
+    if (openPlay) setPlay(true);
+  }, [openPlay]);
   useEffect(() => {
     if (initialScreen && project.screens.some((s) => s.id === initialScreen)) setScreenId(initialScreen);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,53 +266,89 @@ export function ScreensView({ project, role, initialScreen, openAi }: { project:
           {explorer === 'screens' ? (
             <>
               <div className="lib-head">
-                <span>PANTALLAS DEL FLUJO</span>
+                <span>{(project.flowName || 'Flujo principal').toUpperCase()}</span>
                 <span>{bases.length}</span>
               </div>
-              {bases.map((s, i) =>
-                match(s.name) ? (
+              {bases.map((s, i) => {
+                const open = baseId(screen) === s.id;
+                const shown = open ? screen : s;
+                const blocks = shown.blocks.filter((b) => b.type !== 'navbar' && b.type !== 'divider');
+                if (!match(s.name) && !blocks.some((b) => match(b.label))) return null;
+                return (
                   <div key={s.id}>
                     <button
                       type="button"
-                      className="tree-row"
-                      aria-current={baseId(screen) === s.id && screen.breakpoint === s.breakpoint}
+                      className="tree-row tree-screen"
+                      aria-current={open && !blockId}
+                      aria-expanded={open}
                       onClick={() => {
-                        setBp('mobile');
-                        select(s.id);
+                        const variant = s.breakpoint === bp ? s : project.screens.find((v) => v.variantOf === s.id && v.breakpoint === bp);
+                        if (!variant) setBp(s.breakpoint);
+                        select((variant ?? s).id);
                         scrollToFrame(i);
                       }}
                     >
-                      <IconFrame size={14} />
+                      <IconFrame size={17} />
                       <span className="tree-name">
-                        {String(i + 1).padStart(2, '0')} {s.name}
+                        {String(i + 1).padStart(2, '0')} · {s.name}
                       </span>
-                      {s.id === project.startScreenId && <span className="tree-tag">Inicio</span>}
-                      {s.terminal && <span className="tree-tag neutral">Final</span>}
+                      {s.id === project.startScreenId && (
+                        <span className="tree-start" title="Pantalla de inicio">
+                          <IconPlay size={15} />
+                        </span>
+                      )}
                     </button>
-                    {project.screens
-                      .filter((v) => v.variantOf === s.id)
-                      .map((v) => (
-                        <button
-                          key={v.id}
-                          type="button"
-                          className="tree-row tree-sub"
-                          aria-current={screen.id === v.id}
-                          onClick={() => {
-                            setBp(v.breakpoint);
-                            select(v.id);
-                            scrollToFrame(i);
-                          }}
-                        >
-                          {BREAKPOINTS.find((b) => b.id === v.breakpoint)!.label}
-                        </button>
-                      ))}
+                    {open && (
+                      <div className="tree-children">
+                        {blocks
+                          .filter((b) => match(s.name) || match(b.label))
+                          .map((b) => (
+                            <button
+                              key={b.id}
+                              type="button"
+                              className="tree-row tree-block"
+                              aria-current={blockId === b.id}
+                              onClick={() => {
+                                setBlockId(b.id);
+                                setPanel('props');
+                              }}
+                            >
+                              <IconDiamond size={14} />
+                              <span className="tree-name">{b.label || blockMeta(b.type).label}</span>
+                            </button>
+                          ))}
+                        {project.screens
+                          .filter((v) => v.variantOf === s.id)
+                          .map((v) => (
+                            <button
+                              key={v.id}
+                              type="button"
+                              className="tree-row tree-block tree-variant"
+                              aria-current={screen.id === v.id && !blockId}
+                              onClick={() => {
+                                setBp(v.breakpoint);
+                                select(v.id);
+                                scrollToFrame(i);
+                              }}
+                            >
+                              <IconFrame size={13} />
+                              <span className="tree-name">Variante {BREAKPOINTS.find((b) => b.id === v.breakpoint)!.label.toLowerCase()}</span>
+                            </button>
+                          ))}
+                      </div>
+                    )}
                   </div>
-                ) : null,
-              )}
+                );
+              })}
               {editable && (
-                <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
-                  Importar pantalla desde HTML
-                </button>
+                <>
+                  <button type="button" className="tree-row tree-add" onClick={addScreen}>
+                    <IconPlus size={16} /> Nueva pantalla
+                  </button>
+                  <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
+                    Importar pantalla desde HTML
+                  </button>
+                </>
               )}
             </>
           ) : (

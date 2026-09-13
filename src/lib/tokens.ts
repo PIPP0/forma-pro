@@ -209,6 +209,17 @@ export function contrast(a?: string, b?: string): number | null {
   return Math.round(((l1 + 0.05) / (l2 + 0.05)) * 100) / 100;
 }
 
+const toGray = (hex: string) => {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  const l = Math.round(0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]);
+  const h = l.toString(16).padStart(2, '0').toUpperCase();
+  return `#${h}${h}${h}`;
+};
+
+/** Tokens en escala de grises: el wireframe usa el mismo dato y la misma jerarquía, sin color de marca. */
+export const grayTokens = (t: Tokens): Tokens => ({ ...t, colors: t.colors.map((c) => ({ ...c, light: toGray(c.light), dark: toGray(c.dark) })) });
+
 // ---------- Exportación de tokens ----------
 
 const kebab = (s: string) => s.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();

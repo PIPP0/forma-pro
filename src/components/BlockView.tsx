@@ -1,6 +1,6 @@
-import { useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import type { Block, Mode, Project, StateName } from '../lib/model';
-import { effectiveStyle, findComponent, resolve, toCss, typeToken } from '../lib/tokens';
+import { effectiveStyle, findComponent, grayTokens, resolve, toCss, typeToken } from '../lib/tokens';
 import { BrandMark, IconArrowLeft, IconArrowUpRight, IconBell, IconCheck, IconChevronRight, IconInfo, IconTarget, IconWallet } from './icons';
 
 export interface BlockViewProps {
@@ -40,7 +40,10 @@ function wire(css: CSSProperties, bordered: boolean): CSSProperties {
 }
 
 /** Un bloque renderizado con los tokens y estados del sistema. Es el mismo en el lienzo, el prototipo y el estudio. */
-export function BlockView({ project: p, block: b, mode, wireframe, forceState, live, value, checked, error, onValue }: BlockViewProps) {
+export function BlockView({ project: source, block: b, mode, wireframe: grayscale, forceState, live, value, checked, error, onValue }: BlockViewProps) {
+  // El wireframe es la misma pantalla en escala de grises, como en Forma Studio.
+  const p = useMemo(() => (grayscale ? { ...source, tokens: grayTokens(source.tokens) } : source), [grayscale, source]);
+  const wireframe = false;
   const [hover, setHover] = useState(false);
   const [pressed, setPressed] = useState(false);
   const [focus, setFocus] = useState(false);

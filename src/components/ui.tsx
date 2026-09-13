@@ -107,6 +107,32 @@ export function Empty({ title, children, action }: { title: string; children?: R
   );
 }
 
+/** Encabezado de página del estilo Forma Studio: rótulo, titular y bajada. */
+export function PageHead({ eyebrow, title, sub, actions }: { eyebrow: string; title: ReactNode; sub?: ReactNode; actions?: ReactNode }) {
+  return (
+    <header className="page-head">
+      <div>
+        <span className="page-eyebrow">{eyebrow}</span>
+        <h1 className="page-title">{title}</h1>
+        {sub && <p className="page-sub">{sub}</p>}
+      </div>
+      {actions && <div className="row page-actions">{actions}</div>}
+    </header>
+  );
+}
+
+/** Estado vacío en tarjeta punteada, con ícono y una sola acción. */
+export function EmptyCard({ icon, title, text, action }: { icon?: ReactNode; title: string; text?: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="empty-card">
+      {icon && <span className="empty-icon">{icon}</span>}
+      <h3>{title}</h3>
+      {text && <p>{text}</p>}
+      {action}
+    </div>
+  );
+}
+
 export function Badge({ tone = 'neutral', children }: { tone?: 'neutral' | 'ok' | 'warn' | 'err' | 'accent'; children: ReactNode }) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }

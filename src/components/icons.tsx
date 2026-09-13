@@ -188,6 +188,36 @@ export const IconMoon = (p: IconProps = {}) => svg(<path d="M20 14.5A8 8 0 019.5
 export const IconTrash = (p: IconProps = {}) => svg(<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" />, p);
 export const IconClose = (p: IconProps = {}) => svg(<path d="M6 6l12 12M18 6L6 18" />, p);
 
+export const IconRefresh = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M19.5 10A7.7 7.7 0 006 7.3L4.5 9" />
+      <path d="M4.5 4.5V9H9" />
+      <path d="M4.5 14A7.7 7.7 0 0018 16.7l1.5-1.7" />
+      <path d="M19.5 19.5V15H15" />
+    </>,
+    p,
+  );
+export const IconDownload = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M12 4v11" />
+      <path d="M7.5 10.5L12 15l4.5-4.5" />
+      <path d="M4 15v3.5A2.5 2.5 0 006.5 21h11a2.5 2.5 0 002.5-2.5V15" />
+    </>,
+    p,
+  );
+export const IconFileImage = (p: IconProps = {}) =>
+  svg(
+    <>
+      <path d="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8z" />
+      <path d="M14 3v5h5" />
+      <circle cx="10" cy="12" r="1.4" />
+      <path d="M18.5 17.5l-3.5-3.5-5.5 5.5" />
+    </>,
+    p,
+  );
+
 /** Marca genérica de tres barras para la barra superior del prototipo. */
 export function BrandMark({ colors }: { colors: string[] }) {
   return (

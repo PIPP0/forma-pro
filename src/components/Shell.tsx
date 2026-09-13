@@ -4,6 +4,7 @@ import { currentUser, projectsFor, redo, saveVersion, signOut, switchUser, undo,
 import { ROLE_LABEL, can } from '../lib/permissions';
 import { href } from '../lib/router';
 import { Button, Modal } from './ui';
+import { AssistantModal } from './AssistantModal';
 import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconSparkle, IconUpload } from './icons';
 
 const TABS = [
@@ -46,6 +47,7 @@ export function Shell({ project, role, active, children }: { project?: Project; 
   const user = currentUser(db);
   const [menu, setMenu] = useState<'user' | 'project' | null>(null);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [versionName, setVersionName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
   const projRef = useRef<HTMLDivElement>(null);
@@ -202,9 +204,9 @@ export function Shell({ project, role, active, children }: { project?: Project; 
               </a>
             ))}
           </nav>
-          <a className="btn-ai" href={href(`/p/${project.id}/screens?ai=1`)}>
+          <button type="button" className="btn-ai" onClick={() => setAiOpen(true)}>
             <IconSparkle size={16} /> Asistente IA
-          </a>
+          </button>
         </div>
       )}
 
@@ -218,6 +220,8 @@ export function Shell({ project, role, active, children }: { project?: Project; 
           <IconShield size={13} /> {project?.footnote ? 'Demo con datos ficticios' : 'Datos guardados en este navegador'} <span className="foot-ver">v0.2</span>
         </span>
       </footer>
+
+      {project && role && <AssistantModal project={project} role={role} open={aiOpen} onClose={() => setAiOpen(false)} />}
 
       {project && (
         <Modal

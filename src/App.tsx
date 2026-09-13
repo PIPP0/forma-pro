@@ -8,7 +8,7 @@ import { Welcome } from './views/Welcome';
 import { ProjectsView } from './views/ProjectsView';
 import { SystemView } from './views/SystemView';
 import { ScreensView } from './views/ScreensView';
-import { StudiesView } from './views/StudiesView';
+import { ResultsView, StudiesView } from './views/StudiesView';
 import { ParticipantView } from './views/ParticipantView';
 import { HandoffView } from './views/HandoffView';
 import { LibraryView } from './views/LibraryView';
@@ -56,12 +56,19 @@ export default function App() {
       );
     } else {
       const section = c ?? 'screens';
-      const latestStudy = db.studies.filter((s) => s.projectId === project.id).sort((x, y) => y.created - x.created)[0];
       const views: Record<string, ReactNode> = {
         system: <SystemView project={project} role={role} />,
-        screens: <ScreensView project={project} role={role} initialScreen={route.query.get('s') ?? undefined} openAi={route.query.get('ai') === '1'} />,
-        studies: <StudiesView project={project} role={role} studyId={d} openNew={route.query.get('new') === '1'} />,
-        results: <StudiesView project={project} role={role} studyId={latestStudy?.id} />,
+        screens: (
+          <ScreensView
+            project={project}
+            role={role}
+            initialScreen={route.query.get('s') ?? undefined}
+            openAi={route.query.get('ai') === '1'}
+            openPlay={route.query.get('play') === '1'}
+          />
+        ),
+        studies: d ? <ResultsView project={project} role={role} studyId={d} /> : <StudiesView project={project} role={role} openNew={route.query.get('new') === '1'} />,
+        results: <ResultsView project={project} role={role} studyId={d} />,
         handoff: <HandoffView project={project} role={role} />,
         library: <LibraryView project={project} role={role} />,
         history: <HistoryView project={project} role={role} />,

@@ -59,6 +59,13 @@ if (typeof window !== 'undefined') {
 }
 
 export const getDb = () => db;
+
+/** Vuelve a leer lo guardado (por ejemplo, sesiones terminadas en otra pestaña). */
+export function refreshFromStorage() {
+  db = load();
+  listeners.forEach((l) => l());
+  notify('Datos actualizados.', 'success');
+}
 export const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -211,7 +218,7 @@ export function redo(projectId: string) {
 
 // ---------- Proyectos ----------
 
-export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank' }): string | undefined {
+export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank'; withExampleStudy?: boolean }): string | undefined {
   const user = currentUser();
   if (!user) return undefined;
   const name = opts.name.trim() || 'Proyecto sin nombre';
@@ -226,7 +233,8 @@ export function createProject(opts: { name: string; business: string; template: 
       { id: uid('v_'), projectId: project.id, label: 'Punto de partida', snapshot: clone(project), createdBy: user.id, createdAt: Date.now() },
     ],
   };
-  if (opts.template === 'transfer') {
+  // Sin sesiones ni métricas inventadas: el estudio de ejemplo solo se crea si se pide.
+  if (opts.withExampleStudy) {
     const ex = exampleStudy(project, user.id);
     next = { ...next, studies: [...next.studies, ex.study], sessions: [...next.sessions, ...ex.sessions], events: [...next.events, ...ex.events] };
   }
