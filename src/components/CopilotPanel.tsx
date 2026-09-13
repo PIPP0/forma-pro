@@ -1,0 +1,197 @@
+import { useMemo, useState } from 'react';
+import type { Project, Screen } from '../lib/model';
+import { applyOps } from '../lib/store';
+import { edit } from '../lib/ops';
+import { checkProject } from '../lib/flowCheck';
+import { critiqueScreen, generateScreen, getAiKey, proposalToScreen, type Critique, type ScreenProposal, type Turn } from '../lib/ai';
+import { notify } from '../lib/toast';
+import { href } from '../lib/router';
+import { ScreenCanvas } from './ScreenCanvas';
+import { Badge, Button, Empty, Tabs } from './ui';
+
+const conversations = new Map<string, Turn[]>();
+
+export function CopilotPanel({
+  project,
+  screen,
+  editable,
+  onApplied,
+  onSelectBlock,
+}: {
+  project: Project;
+  screen: Screen;
+  editable: boolean;
+  onApplied: (screenId: string) => void;
+  onSelectBlock: (blockId: string) => void;
+}) {
+  const [mode, setMode] = useState<'generate' | 'critique'>('generate');
+  const [prompt, setPrompt] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [turns, setTurns] = useState<Turn[]>(() => conversations.get(project.id) ?? []);
+  const [proposal, setProposal] = useState<ScreenProposal | null>(null);
+  const [critique, setCritique] = useState<Critique | null>(null);
+  const preview = useMemo(() => (proposal ? proposalToScreen(project, proposal) : null), [proposal, project]);
+
+  if (!getAiKey())
+    return (
+      <Empty
+        title="Conecta la IA"
+        action={
+          <a className="btn btn-default btn-sm" href={href('/settings')}>
+            Ir a Ajustes
+          </a>
+        }
+      >
+        El copiloto usa tu clave de API de Anthropic, que se guarda solo en este navegador.
+      </Empty>
+    );
+
+  const generate = async () => {
+    if (!prompt.trim() || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      const result = await generateScreen(project, turns, prompt.trim());
+      const next: Turn[] = [...turns, { role: 'user' as const, content: prompt.trim() }, { role: 'assistant' as const, content: JSON.stringify(result) }].slice(-12);
+      conversations.set(project.id, next);
+      setTurns(next);
+      setProposal(result);
+      setPrompt('');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runCritique = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      setCritique(await critiqueScreen(project, screen, checkProject(project).filter((i) => i.screenId === screen.id)));
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="stack">
+      <Tabs
+        small
+        label="Modo del copiloto"
+        value={mode}
+        onChange={setMode}
+        items={[
+          { id: 'generate', label: 'Proponer' },
+          { id: 'critique', label: 'Criticar' },
+        ]}
+      />
+
+      {mode === 'generate' && (
+        <>
+          {turns.filter((t) => t.role === 'user').length > 0 && (
+            <ol className="convo">
+              {turns
+                .filter((t) => t.role === 'user')
+                .map((t, i) => (
+                  <li key={i}>{t.content}</li>
+                ))}
+            </ol>
+          )}
+          <textarea
+            className="input"
+            rows={3}
+            aria-label="Qué pantalla necesitas"
+            placeholder={turns.length ? 'Pide un ajuste a la propuesta anterior' : 'Ej: pantalla para programar una transferencia recurrente'}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate();
+            }}
+          />
+          <div className="row">
+            <Button tone="primary" size="sm" disabled={busy || !prompt.trim()} onClick={generate}>
+              {busy ? 'Pensando…' : turns.length ? 'Pedir ajuste' : 'Proponer pantalla'}
+            </Button>
+            {turns.length > 0 && (
+              <Button
+                size="sm"
+                tone="ghost"
+                onClick={() => {
+                  conversations.delete(project.id);
+                  setTurns([]);
+                  setProposal(null);
+                }}
+              >
+                Nueva conversación
+              </Button>
+            )}
+          </div>
+          {proposal && preview && (
+            <div className="proposal">
+              <strong>{proposal.name}</strong>
+              <p className="muted small">{proposal.rationale}</p>
+              <div className="proposal-canvas">
+                <ScreenCanvas project={project} screen={preview} mode="light" />
+              </div>
+              <p className="muted small">Nada se aplica hasta que lo agregues.</p>
+              <div className="row">
+                <Button
+                  tone="primary"
+                  size="sm"
+                  disabled={!editable}
+                  onClick={() => {
+                    if (applyOps(project.id, [edit.addScreen(project, preview)], `Agregar pantalla propuesta: «${preview.name}»`)) {
+                      notify(`Agregaste «${preview.name}». Conecta sus acciones desde el inspector.`, 'success');
+                      onApplied(preview.id);
+                      setProposal(null);
+                    }
+                  }}
+                >
+                  Agregar como pantalla nueva
+                </Button>
+                <Button size="sm" tone="ghost" onClick={() => setProposal(null)}>
+                  Descartar
+                </Button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {mode === 'critique' && (
+        <>
+          <p className="muted small">El copiloto señala problemas en «{screen.name}». Tú decides qué cambiar.</p>
+          <Button size="sm" disabled={busy} onClick={runCritique}>
+            {busy ? 'Revisando…' : `Criticar «${screen.name}»`}
+          </Button>
+          {critique && (
+            <div className="stack">
+              <p>{critique.summary}</p>
+              <ul className="plain-list">
+                {critique.observations.map((o, i) => {
+                  const exists = screen.blocks.some((b) => b.id === o.block_id);
+                  return (
+                    <li key={i} className="observation">
+                      <Badge tone={o.severity === 'alta' ? 'err' : o.severity === 'media' ? 'warn' : 'neutral'}>Severidad {o.severity}</Badge>
+                      <p>{o.note}</p>
+                      {exists && (
+                        <button type="button" className="link-btn" onClick={() => onSelectBlock(o.block_id)}>
+                          Ver bloque
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
+      {error && <p className="error-text">{error}</p>}
+    </div>
+  );
+}
