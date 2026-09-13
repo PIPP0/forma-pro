@@ -3755,3 +3755,21 @@ dialog.modal {
     grid-column: 1 / -1;
   }
 }
+
+/* Hoja inferior (modal) en el prototipo */
+.sheet-animate {
+  animation: sheet-up 0.26s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sheet-animate {
+    animation: none;
+  }
+}

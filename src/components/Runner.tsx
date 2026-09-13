@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
 import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor, withValues } from '../lib/model';
 import { BlockView } from './BlockView';
-import { PhoneChrome, ScaledFrame, blockWrapperStyle, contentWidth, screenStyle } from './ScreenCanvas';
+import { PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
 
 export type RunnerEvent = Pick<StudyEvent, 'screen' | 'block' | 'option' | 'kind' | 'x' | 'y' | 'bx' | 'by' | 'dwell'>;
 
@@ -110,6 +110,11 @@ export function Runner({
 
   const onClick = (e: MouseEvent) => {
     const target = e.target as Element;
+    if (target.closest('[data-scrim]')) {
+      // Tocar fuera de la hoja inferior la cierra, como en una app real.
+      if (stack.length > 1) navigate({ id: '', type: 'button', label: '', action: 'back' });
+      return;
+    }
     const el = target.closest('[data-block-id]');
     const block = el ? current.blocks.find((b) => b.id === el.getAttribute('data-block-id')) : undefined;
     const c = coords(e, el);
@@ -153,23 +158,38 @@ export function Runner({
   };
 
   const maxW = contentWidth(current);
-  const body = (
+  const blocks = current.blocks.map((b) => (
+    <div key={b.id} data-block-id={b.id} style={blockWrapperStyle(project, b, maxW)}>
+      <BlockView
+        project={project}
+        block={withValues(b, values)}
+        mode={mode}
+        live
+        value={values[b.id]}
+        checked={checked[b.id]}
+        error={errors[b.id] || undefined}
+        onValue={(v) => setValue(b, v)}
+        pendingRequired={b.type === 'button' && !!b.disableUntilValid && pending}
+      />
+    </div>
+  ));
+  const sheet = current.presentation === 'sheet';
+  const body = sheet ? (
+    <SheetLayout
+      key={current.id}
+      project={project}
+      mode={mode}
+      backdrop={sheetBackdrop(project, current, stack.length > 1 ? stack[stack.length - 2] : undefined)}
+      hostRef={content}
+      onClick={onClick}
+      fill={fill}
+      animate
+    >
+      {blocks}
+    </SheetLayout>
+  ) : (
     <div ref={content} className="screen" style={screenStyle(project, mode)} onClick={onClick}>
-      {current.blocks.map((b) => (
-        <div key={b.id} data-block-id={b.id} style={blockWrapperStyle(project, b, maxW)}>
-          <BlockView
-            project={project}
-            block={withValues(b, values)}
-            mode={mode}
-            live
-            value={values[b.id]}
-            checked={checked[b.id]}
-            error={errors[b.id] || undefined}
-            onValue={(v) => setValue(b, v)}
-            pendingRequired={b.type === 'button' && !!b.disableUntilValid && pending}
-          />
-        </div>
-      ))}
+      {blocks}
     </div>
   );
 
@@ -186,7 +206,7 @@ export function Runner({
   return (
     <ScaledFrame width={bp.width} height={bp.height} fixed maxScale={maxScale}>
       <div className="device-scroll">
-        <PhoneChrome project={project} mode={mode} enabled={current.breakpoint === 'mobile'}>
+        <PhoneChrome project={project} mode={mode} enabled={current.breakpoint === 'mobile'} dim={sheet}>
           {body}
         </PhoneChrome>
       </div>

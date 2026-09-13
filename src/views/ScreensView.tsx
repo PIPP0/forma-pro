@@ -145,6 +145,10 @@ const VARIANTS: Partial<Record<BlockType, { v: string; l: string }[]>> = {
     { v: '', l: 'Cuenta' },
     { v: 'summary', l: 'Resumen' },
   ],
+  iconGrid: [
+    { v: '', l: 'En tarjeta' },
+    { v: 'flat', l: 'Sin tarjeta (para hojas)' },
+  ],
 };
 
 const FONTS = [
@@ -803,6 +807,33 @@ function ScreenProps({ project, screen, editable, onDelete, onAdd }: { project: 
           />
           <span>Pantalla final del flujo (no necesita salida)</span>
         </label>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={base.presentation === 'sheet'}
+            disabled={!editable}
+            onChange={(e) =>
+              apply(
+                [edit.screen(project, base.id, 'presentation', e.target.checked ? 'sheet' : undefined)],
+                e.target.checked ? `Abrir «${base.name}» como hoja inferior` : `Abrir «${base.name}» como pantalla completa`,
+              )
+            }
+          />
+          <span>Se abre como hoja inferior (modal sobre la pantalla anterior)</span>
+        </label>
+        {base.presentation === 'sheet' && (
+          <Field label="Fondo en el lienzo" hint="En el prototipo se ve de fondo la pantalla desde donde se abrió.">
+            <select value={base.sheetOver ?? project.startScreenId} disabled={!editable} onChange={(e) => apply([edit.screen(project, base.id, 'sheetOver', e.target.value)], `Cambiar el fondo de «${base.name}»`)}>
+              {project.screens
+                .filter((s) => !s.variantOf && s.id !== base.id)
+                .map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+                ))}
+            </select>
+          </Field>
+        )}
         <div className="row">
           {base.id !== project.startScreenId && (
             <Button size="sm" disabled={!editable} onClick={() => apply([edit.project('startScreenId', base.id)], `Usar «${base.name}» como inicio`)}>

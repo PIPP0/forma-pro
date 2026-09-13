@@ -775,7 +775,19 @@ export function BlockView({ project: source, block: b, mode, wireframe: grayscal
       const items = (b.options ?? []).map(split);
       const current = live ? (value ?? b.value) : b.value;
       return (
-        <div style={{ backgroundColor: css.backgroundColor, borderRadius: css.borderRadius, boxShadow: shadow, padding: pad, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', rowGap: 26, columnGap: 6, fontFamily: t.fontFamily }}>
+        <div
+          style={{
+            backgroundColor: variant === 'flat' ? 'transparent' : css.backgroundColor,
+            borderRadius: css.borderRadius,
+            boxShadow: variant === 'flat' ? 'none' : shadow,
+            padding: variant === 'flat' ? `${padY} 0` : pad,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            rowGap: 26,
+            columnGap: 6,
+            fontFamily: t.fontFamily,
+          }}
+        >
           {items.map(([label, icon]) => {
             const on = current === label;
             const color = on ? primary : String(css.color ?? muted);

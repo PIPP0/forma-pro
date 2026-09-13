@@ -186,6 +186,10 @@ export interface Screen {
   breakpoint: Breakpoint;
   variantOf?: string;
   terminal?: boolean;
+  /** «sheet»: se abre como hoja inferior (modal) sobre la pantalla desde donde se llamó. */
+  presentation?: 'sheet';
+  /** Pantalla que se ve de fondo en el lienzo cuando es hoja inferior. */
+  sheetOver?: string;
   blocks: Block[];
 }
 

@@ -80,7 +80,7 @@ export function bancoNewComponents(): Component[] {
     comp('cmp-bn-contacts', 'Carrusel de contactos', 'carousel', 'contacts'),
     comp('cmp-bn-promos', 'Carrusel de promociones', 'carousel', 'promo'),
     comp('cmp-bn-feature', 'Destacado', 'carousel', 'feature'),
-    comp('cmp-bn-grid', 'Accesos rápidos', 'iconGrid'),
+    comp('cmp-bn-grid', 'Accesos rápidos', 'iconGrid', 'flat'),
     comp('cmp-bn-row', 'Fila destacada', 'listItem', 'icon'),
     comp('cmp-bn-profile', 'Fila de perfil', 'listItem', 'profile'),
     comp('cmp-bn-contact', 'Fila de contacto', 'listItem', 'contact'),
@@ -222,6 +222,8 @@ export function bancoNewScreens(): Screen[] {
       id: 's-bn-accesos',
       name: 'Accesos rápidos',
       breakpoint: 'mobile',
+      presentation: 'sheet',
+      sheetOver: 's-bn-inicio',
       blocks: [
         b('bn-ac-cerrar', 'navbar', 'Accesos rápidos', { componentId: 'cmp-bn-closebar', action: 'back' }),
         b('bn-ac-grid', 'iconGrid', 'Accesos rápidos', {
@@ -230,7 +232,6 @@ export function bancoNewScreens(): Screen[] {
           value: 'Inicio',
           optionTargets: { Inicio: 's-bn-inicio', Transferir: 's-bn-transferir', Créditos: 's-bn-creditos', Inversiones: 's-bn-inversiones' },
         }),
-        b('bn-ac-texto', 'text', 'Elige un acceso para ir directo a esa sección.', { variant: 'muted', align: 'center' }),
       ],
     },
     {

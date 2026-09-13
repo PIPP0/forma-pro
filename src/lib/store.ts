@@ -18,7 +18,7 @@ function load(): DB {
     const raw = globalThis.localStorage?.getItem(KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d?.schema === 1) return { ...emptyDb(), ...d };
+      if (d?.schema === 1) return migrate({ ...emptyDb(), ...d });
     }
   } catch {
     /* almacenamiento no disponible */
@@ -137,6 +137,29 @@ export async function ensureSamples() {
   }
 }
 
+/**
+ * Ajusta proyectos Banco New creados antes de que existieran las hojas inferiores: «Accesos rápidos»
+ * pasa a abrirse como modal sobre Inicio. Las copias congeladas de los estudios no se tocan.
+ */
+export function migrate(d: DB): DB {
+  const needs = (p: Project) => p.screens.some((s) => s.id === 's-bn-accesos' && !s.presentation);
+  if (!d.projects.some(needs)) return d;
+  return {
+    ...d,
+    projects: d.projects.map((p) =>
+      needs(p)
+        ? {
+            ...p,
+            components: p.components.map((c) => (c.id === 'cmp-bn-grid' && !c.variant ? { ...c, variant: 'flat' } : c)),
+            screens: p.screens.map((s) =>
+              s.id === 's-bn-accesos' ? { ...s, presentation: 'sheet' as const, sheetOver: 's-bn-inicio', blocks: s.blocks.filter((b) => b.id !== 'bn-ac-texto') } : s,
+            ),
+          }
+        : p,
+    ),
+  };
+}
+
 /** Copia el ejemplo con identificadores nuevos y la persona actual como dueña. */
 export function adoptSample(d: DB, user: User, s: SampleFile): DB {
   const users = d.users.map((u) => (u.id === user.id ? { ...u, samples: [...(u.samples ?? []), SAMPLE] } : u));
@@ -145,7 +168,7 @@ export function adoptSample(d: DB, user: User, s: SampleFile): DB {
   const studyIds = new Map(s.studies.map((x) => [x.id, uid('st_')]));
   const sessionIds = new Map(s.sessions.map((x) => [x.id, uid('se_')]));
   const own = (p: Project): Project => ({ ...p, id: projectId, owner: user.id });
-  return {
+  return migrateAdopted({
     ...d,
     users,
     projects: [...d.projects, { ...own(s.project), updatedAt: Date.now() }],
@@ -154,8 +177,10 @@ export function adoptSample(d: DB, user: User, s: SampleFile): DB {
     studies: [...d.studies, ...s.studies.map((x) => ({ ...x, id: studyIds.get(x.id)!, projectId, owner: user.id, snapshot: own(x.snapshot) }))],
     sessions: [...d.sessions, ...s.sessions.filter((x) => studyIds.has(x.studyId)).map((x) => ({ ...x, id: sessionIds.get(x.id)!, studyId: studyIds.get(x.studyId)! }))],
     events: [...d.events, ...s.events.filter((e) => sessionIds.has(e.sessionId)).map((e) => ({ ...e, id: uid('ev_'), sessionId: sessionIds.get(e.sessionId)! }))],
-  };
+  });
 }
+
+const migrateAdopted = (d: DB) => migrate(d);
 
 // Personas que ya tenían sesión abierta antes de que existiera el ejemplo.
 if (typeof window !== 'undefined') void Promise.resolve().then(ensureSamples);

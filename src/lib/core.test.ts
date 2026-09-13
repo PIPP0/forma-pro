@@ -222,6 +222,27 @@ describe('ejemplo Banco New en espacios existentes', () => {
   });
 });
 
+describe('hoja inferior', () => {
+  it('Accesos rápidos se abre como modal y los proyectos anteriores se ajustan una sola vez', async () => {
+    const { bancoNewProject } = await import('./seedBancoNew');
+    const { migrate } = await import('./store');
+    const { emptyDb } = await import('./model');
+    const p = bancoNewProject('u1');
+    expect(p.screens.find((s) => s.id === 's-bn-accesos')?.presentation).toBe('sheet');
+    const old = clone(p);
+    const acc = old.screens.find((s) => s.id === 's-bn-accesos')!;
+    delete acc.presentation;
+    delete acc.sheetOver;
+    acc.blocks.push({ id: 'bn-ac-texto', type: 'text', label: 'Elige un acceso' });
+    const once = migrate({ ...emptyDb(), projects: [old] });
+    const fixed = once.projects[0].screens.find((s) => s.id === 's-bn-accesos')!;
+    expect(fixed.presentation).toBe('sheet');
+    expect(fixed.sheetOver).toBe('s-bn-inicio');
+    expect(fixed.blocks.some((b) => b.id === 'bn-ac-texto')).toBe(false);
+    expect(migrate(once)).toBe(once);
+  });
+});
+
 describe('permisos', () => {
   it('el rol lector no edita', () => {
     expect(can('viewer', 'edit')).toBe(false);

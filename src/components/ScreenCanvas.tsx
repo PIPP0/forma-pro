@@ -1,6 +1,6 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactNode, type Ref } from 'react';
 import type { Block, Mode, Project, Screen } from '../lib/model';
-import { breakpointOf, withValues } from '../lib/model';
+import { baseId, breakpointOf, screenFor, withValues } from '../lib/model';
 import { colorValue, findComponent, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
 import { IconShield } from './icons';
@@ -90,8 +90,87 @@ export function blockWrapperStyle(p: Project, b: Block, maxW?: number): CSSPrope
   return undefined;
 }
 
+export const SCRIM = 'rgba(15, 23, 42, 0.5)';
+
+/** Pantalla que queda detrás de una hoja inferior: la anterior en el prototipo, o la elegida en el lienzo. */
+export function sheetBackdrop(p: Project, screen: Screen, previousId?: string): Screen | undefined {
+  if (screen.presentation !== 'sheet') return undefined;
+  const s = screenFor(p, previousId ?? screen.sheetOver ?? p.startScreenId, screen.breakpoint);
+  return s && baseId(s) !== baseId(screen) ? s : undefined;
+}
+
+/** Hoja inferior: la pantalla de fondo atenuada y el contenido en una hoja que sube desde abajo. */
+export function SheetLayout({
+  project,
+  mode,
+  wireframe,
+  backdrop,
+  children,
+  overlay,
+  hostRef,
+  onClick,
+  fill,
+  animate,
+  minHeight,
+}: {
+  project: Project;
+  mode: Mode;
+  wireframe?: boolean;
+  backdrop?: Screen;
+  children: ReactNode;
+  overlay?: ReactNode;
+  hostRef?: Ref<HTMLDivElement>;
+  onClick?: MouseEventHandler<HTMLDivElement>;
+  fill?: boolean;
+  animate?: boolean;
+  minHeight?: number;
+}) {
+  const pad = screenPadding(project);
+  const surface = wireframe ? '#FFFFFF' : colorValue(project.tokens, 'surface', mode, '#FFF');
+  return (
+    <div ref={hostRef} className="sheet-host" onClick={onClick} style={{ position: 'relative', flex: 1, height: fill ? '100%' : undefined, minHeight: minHeight ?? 0, overflow: 'hidden', fontFamily: project.tokens.fontFamily }}>
+      {backdrop && (
+        // isolation: la barra inferior fija del fondo no puede quedar sobre la hoja.
+        <div className="screen" aria-hidden="true" inert style={{ ...screenStyle(project, mode, wireframe), position: 'absolute', inset: 0, minHeight: 0, overflow: 'hidden', pointerEvents: 'none', isolation: 'isolate', zIndex: 0 }}>
+          {backdrop.blocks.map((b) => (
+            <div key={b.id} style={blockWrapperStyle(project, b)}>
+              <BlockView project={project} block={withValues(b)} mode={mode} wireframe={wireframe} />
+            </div>
+          ))}
+        </div>
+      )}
+      <div data-scrim="" aria-label="Cerrar" style={{ position: 'absolute', inset: 0, background: SCRIM, zIndex: 1 }} />
+      <div
+        role="dialog"
+        aria-modal="true"
+        className={`sheet${animate ? ' sheet-animate' : ''}`}
+        style={{
+          position: 'absolute',
+          zIndex: 2,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          maxHeight: '90%',
+          overflowY: 'auto',
+          background: surface,
+          borderRadius: '24px 24px 0 0',
+          boxShadow: '0 -10px 30px rgba(15, 23, 42, 0.18)',
+          padding: `10px ${pad.side}px ${pad.bottom}px`,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: spaceValue(project.tokens, 'lg', 16),
+        }}
+      >
+        <span aria-hidden="true" style={{ alignSelf: 'center', width: 40, height: 5, borderRadius: 3, background: '#C5CCD4', flex: 'none' }} />
+        {children}
+      </div>
+      {overlay}
+    </div>
+  );
+}
+
 /** Barra de estado, nota al pie e indicador de inicio de un teléfono. */
-export function PhoneChrome({ project, mode, wireframe, enabled, children }: { project: Project; mode: Mode; wireframe?: boolean; enabled: boolean; children: ReactNode }) {
+export function PhoneChrome({ project, mode, wireframe, enabled, dim, children }: { project: Project; mode: Mode; wireframe?: boolean; enabled: boolean; dim?: boolean; children: ReactNode }) {
   if (!enabled) return <>{children}</>;
   const gradient = project.backgroundStyle === 'gradient';
   const bg = wireframe ? '#FFFFFF' : colorValue(project.tokens, gradient ? 'surface' : 'background', mode, '#FFF');
@@ -128,6 +207,7 @@ export function PhoneChrome({ project, mode, wireframe, enabled, children }: { p
             <rect x="19.8" y="3.6" width="1.6" height="3.8" rx="0.8" fill={statusColor} fillOpacity="0.45" />
           </svg>
         </span>
+        {dim && <span aria-hidden="true" style={{ position: 'absolute', inset: 0, background: SCRIM }} />}
       </div>
       {children}
       {project.footnote && (
@@ -164,30 +244,40 @@ export function ScreenCanvas({
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
   const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
+  const sheet = screen.presentation === 'sheet';
+  const nodes = (
+    <>
+      {screen.blocks.map((b) => (
+        <div
+          key={b.id}
+          data-block-id={b.id}
+          className={`blk ${selectedBlockId === b.id ? 'selected' : ''}`}
+          style={blockWrapperStyle(project, b, maxW)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect?.(b.id);
+          }}
+        >
+          <BlockView project={project} block={withValues(b)} mode={mode} wireframe={wireframe} pendingRequired={b.type === 'button' && !!b.disableUntilValid && pendingRequired} />
+          {measures && selectedBlockId === b.id && <Measure />}
+        </div>
+      ))}
+      {!screen.blocks.length && <div className="screen-empty">Pantalla vacía. Agrega componentes desde el explorador.</div>}
+    </>
+  );
   return (
     <ScaledFrame width={bp.width} height={bp.height} scale={scale}>
-      <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile'}>
-        <div className="screen" style={screenStyle(project, mode, wireframe)} onClick={() => onSelect?.(undefined)}>
-          <div style={{ display: 'contents' }}>
-            {screen.blocks.map((b) => (
-              <div
-                key={b.id}
-                data-block-id={b.id}
-                className={`blk ${selectedBlockId === b.id ? 'selected' : ''}`}
-                style={blockWrapperStyle(project, b, maxW)}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onSelect?.(b.id);
-                }}
-              >
-                <BlockView project={project} block={withValues(b)} mode={mode} wireframe={wireframe} pendingRequired={b.type === 'button' && !!b.disableUntilValid && pendingRequired} />
-                {measures && selectedBlockId === b.id && <Measure />}
-              </div>
-            ))}
-            {!screen.blocks.length && <div className="screen-empty">Pantalla vacía. Agrega componentes desde el explorador.</div>}
+      <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile'} dim={sheet}>
+        {sheet ? (
+          <SheetLayout project={project} mode={mode} wireframe={wireframe} backdrop={sheetBackdrop(project, screen)} overlay={overlay} minHeight={bp.height - 90} onClick={() => onSelect?.(undefined)}>
+            {nodes}
+          </SheetLayout>
+        ) : (
+          <div className="screen" style={screenStyle(project, mode, wireframe)} onClick={() => onSelect?.(undefined)}>
+            <div style={{ display: 'contents' }}>{nodes}</div>
+            {overlay}
           </div>
-          {overlay}
-        </div>
+        )}
       </PhoneChrome>
     </ScaledFrame>
   );

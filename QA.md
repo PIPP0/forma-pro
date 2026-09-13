@@ -122,6 +122,7 @@
 | 13 | Baja | Entrega indicaba separación `space.md` y margen `space.lg`, distinto de lo aplicado. | Corregido: `space.lg` y `space.lg` + 4 |
 | 14 | Baja | Filas destacadas y botones deshabilitados mostraban el borde por defecto del navegador. | Corregido |
 | 15 | Baja | «$ 1.310.000» se cortaba en dos líneas en el resumen financiero. | Corregido |
+| 16 | Alta | «Accesos rápidos» es un modal en la app de referencia, pero se veía como una pantalla nueva. | Implementado: pantallas que se abren como hoja inferior sobre la pantalla anterior, con fondo atenuado, animación de entrada y cierre al tocar fuera. Los proyectos Banco New existentes se ajustan solos |
 | — | Descartado | Saltos de pantalla en «Probar» y un error de consola: la automatización tocaba los marcos del lienzo detrás del modo prueba y la recarga en caliente aplicó un cambio en dos pasos. No se reproducen al recargar. | — |
 
 ## Límites de este QA
