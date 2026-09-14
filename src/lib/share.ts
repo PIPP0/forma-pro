@@ -46,6 +46,8 @@ export async function decodeStudy(data: string): Promise<SharedStudy> {
 
 export async function studyLink(study: Study): Promise<string> {
   const base = `${location.origin}${location.pathname}`;
+  // En la nube, la copia congelada se descarga al abrir: el enlace solo lleva el id.
+  if (study.cloud && study.shortLink) return `${base}#/t/${study.id}`;
   return `${base}#/t/${study.id}?d=${await encodeStudy(study)}`;
 }
 

@@ -571,7 +571,7 @@ export async function importResults(text: string): Promise<number> {
 
 /** Marca un estudio como conectado a la nube: las sesiones remotas llegan solas a Resultados. */
 export function setStudyCloud(studyId: string, cloud: boolean) {
-  commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, cloud } : s)) });
+  commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, cloud, shortLink: cloud } : s)) });
 }
 
 /** Agrega las sesiones nuevas de la nube y actualiza las que avanzaron. Devuelve cuántas son nuevas. */

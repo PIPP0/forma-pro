@@ -306,6 +306,8 @@ export interface Study {
   status: 'open' | 'closed';
   /** Las sesiones de participantes remotos llegan solas a la nube de Forma. */
   cloud?: boolean;
+  /** La copia congelada está publicada en la nube: el enlace es corto (#/t/<id>). */
+  shortLink?: boolean;
   example?: boolean;
   created: number;
 }

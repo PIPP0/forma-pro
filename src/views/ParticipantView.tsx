@@ -4,7 +4,7 @@ import { baseId } from '../lib/model';
 import { getDb, nextParticipant, saveSession } from '../lib/store';
 import { blobToAudio, decodeStudy, download, megabytes, resultsFile, type AudioMap, type SharedStudy } from '../lib/share';
 import { clearDraft, loadDraft, saveAudio, saveDraft, saveDraftChunk, type SessionDraft } from '../lib/blobs';
-import { uploadAudioPart, uploadFullAudio, uploadSession } from '../lib/cloud';
+import { fetchSharedStudy, uploadAudioPart, uploadFullAudio, uploadSession } from '../lib/cloud';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { isIOS, isStandalone, promptInstall, rememberStudyLink, useInstallable } from '../lib/pwa';
@@ -31,7 +31,39 @@ export function ParticipantView({ studyId, data }: { studyId: string; data: stri
       return;
     }
     if (!data) {
-      setLoadError('Este enlace está incompleto. Pide a quien te invitó que te lo vuelva a enviar.');
+      // Enlace corto: la copia congelada se descarga de la nube y queda guardada para abrirla sin conexión.
+      const cacheKey = `formapro.shared.${studyId}`;
+      const cached = () => {
+        try {
+          return localStorage.getItem(cacheKey);
+        } catch {
+          return null;
+        }
+      };
+      fetchSharedStudy(studyId)
+        .then(async (r) => {
+          if (!r) return setLoadError('No encontramos esta prueba. Puede que la hayan eliminado; pide a quien te invitó un enlace nuevo.');
+          const s = await decodeStudy(r.payload);
+          if (s.id !== studyId) return setLoadError('Este enlace no corresponde a un estudio válido.');
+          try {
+            localStorage.setItem(cacheKey, r.payload);
+          } catch {
+            /* sin espacio: se abre igual */
+          }
+          setStudy({ ...s, status: r.status, cloud: true });
+        })
+        .catch(async () => {
+          const copy = cached();
+          if (copy) {
+            try {
+              const s = await decodeStudy(copy);
+              if (s.id === studyId) return setStudy(s);
+            } catch {
+              /* copia dañada */
+            }
+          }
+          setLoadError('No pudimos abrir la prueba. Revisa tu conexión a internet e inténtalo de nuevo.');
+        });
       return;
     }
     decodeStudy(data)

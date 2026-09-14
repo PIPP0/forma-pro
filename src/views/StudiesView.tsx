@@ -354,6 +354,14 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudLinked, study.id]);
 
+  // Estudios conectados antes del enlace corto: se publica su copia para que el enlace corto funcione.
+  useEffect(() => {
+    if (!cloudLinked || study.shortLink) return;
+    publishStudyToCloud(study)
+      .then(() => setStudyCloud(study.id, true))
+      .catch(() => undefined);
+  }, [cloudLinked, study]);
+
   const connectCloud = async () => {
     if (!account) {
       notify('Primero conecta la nube con tu correo.', 'info');
@@ -363,9 +371,9 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
     try {
       await publishStudyToCloud(study);
       setStudyCloud(study.id, true);
-      notify('Listo: las sesiones de este estudio llegarán solas. Copia de nuevo el enlace para compartir la versión conectada.', 'success');
-    } catch {
-      notify('No pudimos conectar el estudio a la nube. Revisa tu conexión.', 'error');
+      notify('Listo: el enlace ahora es corto y las sesiones llegarán solas. Cópialo de nuevo para compartirlo.', 'success');
+    } catch (e) {
+      notify(e instanceof Error && e.message.startsWith('El prototipo') ? e.message : 'No pudimos conectar el estudio a la nube. Revisa tu conexión.', 'error');
     }
   };
 
@@ -439,10 +447,9 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
 
       <div className="study-tools">
         <p className="muted small">
-          El enlace lleva la copia congelada del prototipo y se instala como app en el celular.{' '}
-          {study.cloud
-            ? `Las sesiones de quienes participan desde el enlace llegan solas aquí, con su audio. Si alguien pierde la conexión, puede enviarte el archivo de resultados.${account ? '' : ' Conecta la nube en Ajustes para verlas.'}`
-            : 'Si alguien participa desde otro dispositivo, te envía un archivo de resultados (con su audio, si lo grabó) que importas aquí.'}
+          {study.cloud && study.shortLink
+            ? `El enlace abre la copia congelada del prototipo y se instala como app en el celular. Las sesiones de quienes participan llegan solas aquí, con su audio.${account ? '' : ' Conecta la nube en Ajustes para verlas.'}`
+            : 'El enlace es largo porque lleva dentro la copia congelada del prototipo. Con «Recibir resultados en la nube» obtienes un enlace corto y las sesiones llegan solas aquí. Sin nube, quien participa desde otro dispositivo te envía un archivo de resultados que importas aquí.'}
         </p>
         <div className="row">
           <Button size="sm" onClick={exportJson}>

@@ -8,6 +8,18 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function studyData(id) { return get(/databases/$(database)/documents/studies/$(id)).data; }
 
+    // Copia congelada del prototipo para el enlace corto: se abre con el id (como el enlace largo), no se puede listar.
+    match /publicStudies/{studyId} {
+      allow get: if true;
+      allow create: if signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
     match /studies/{studyId} {
       allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn()

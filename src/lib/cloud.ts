@@ -9,6 +9,7 @@ import type { Firestore } from 'firebase/firestore/lite';
 import type { FirebaseStorage } from 'firebase/storage';
 import { FIREBASE_CONFIG } from './cloudConfig';
 import type { Session, Study, StudyEvent } from './model';
+import { encodeStudy } from './share';
 
 interface Cloud {
   auth: Auth;
@@ -106,8 +107,13 @@ async function designer(): Promise<Cloud & { uid: string; email: string }> {
 
 // ---------- Estudios (quien diseña) ----------
 
+/** Límite de un documento de Firestore (1 MiB), con margen. */
+const MAX_PAYLOAD = 1_000_000;
+
 export async function publishStudyToCloud(study: Study) {
   const c = await designer();
+  const payload = await encodeStudy({ ...study, cloud: true });
+  if (payload.length > MAX_PAYLOAD) throw new Error('El prototipo es demasiado grande para el enlace corto. Quita imágenes pesadas o sigue usando el enlace largo.');
   await c.fs.setDoc(c.fs.doc(c.db, 'studies', study.id), {
     ownerUid: c.uid,
     ownerEmail: c.email,
@@ -117,11 +123,23 @@ export async function publishStudyToCloud(study: Study) {
     created: study.created,
     updatedAt: Date.now(),
   });
+  // Copia congelada que abre el enlace corto (se puede leer con el id, no se puede listar).
+  await c.fs.setDoc(c.fs.doc(c.db, 'publicStudies', study.id), { ownerUid: c.uid, payload, status: study.status, updatedAt: Date.now() });
 }
 
 export async function setCloudStudyStatus(studyId: string, status: Study['status']) {
   const c = await designer();
   await c.fs.updateDoc(c.fs.doc(c.db, 'studies', studyId), { status, updatedAt: Date.now() });
+  await c.fs.updateDoc(c.fs.doc(c.db, 'publicStudies', studyId), { status, updatedAt: Date.now() }).catch(() => undefined);
+}
+
+/** Copia congelada de un estudio con enlace corto. No requiere cuenta. */
+export async function fetchSharedStudy(studyId: string): Promise<{ payload: string; status: Study['status'] } | null> {
+  const c = await cloud();
+  const snap = await c.fs.getDoc(c.fs.doc(c.db, 'publicStudies', studyId));
+  if (!snap.exists()) return null;
+  const x = snap.data();
+  return { payload: String(x.payload), status: x.status === 'closed' ? 'closed' : 'open' };
 }
 
 export interface CloudSession {
@@ -175,6 +193,7 @@ export async function deleteCloudStudy(studyId: string) {
     await Promise.all([...(parts?.items ?? []), ...(top?.items ?? [])].map((i) => c.st.deleteObject(i).catch(() => undefined)));
     await c.fs.deleteDoc(d.ref);
   }
+  await c.fs.deleteDoc(c.fs.doc(c.db, 'publicStudies', studyId)).catch(() => undefined);
   await c.fs.deleteDoc(c.fs.doc(c.db, 'studies', studyId));
 }
 
