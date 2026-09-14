@@ -3,7 +3,7 @@ import type { Breakpoint, Mode, Session, StudyEvent, TaskFeedback } from '../lib
 import { baseId } from '../lib/model';
 import { getDb, nextParticipant, saveSession } from '../lib/store';
 import { blobToAudio, decodeStudy, download, megabytes, resultsFile, type AudioMap, type SharedStudy } from '../lib/share';
-import { saveAudio } from '../lib/blobs';
+import { clearDraft, loadDraft, saveAudio, saveDraft, saveDraftChunk, type SessionDraft } from '../lib/blobs';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { isIOS, isStandalone, promptInstall, rememberStudyLink, useInstallable } from '../lib/pwa';
@@ -121,6 +121,8 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const chunks = useRef<Blob[]>([]);
   const audioBlob = useRef<Blob | null>(null);
   const [audioSize, setAudioSize] = useState(0);
+  const chunkIndex = useRef(0);
+  const [recovered, setRecovered] = useState<{ draft: SessionDraft; audio?: Blob }>();
 
   const task = study.tasks[taskIndex];
 
@@ -130,6 +132,36 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     },
     [],
   );
+
+  // Una prueba que quedó a medias en este navegador (pestaña cerrada, celular sin batería…).
+  useEffect(() => {
+    let alive = true;
+    loadDraft(study.id).then((r) => alive && r && r.draft.session.studyId === study.id && setRecovered(r));
+    return () => {
+      alive = false;
+    };
+  }, [study.id]);
+
+  /** Guarda el avance (sesión y eventos). El audio ya se guarda trozo a trozo al grabar. */
+  const saveDraftNow = () => {
+    if (!session.current) return;
+    void saveDraft(study.id, { session: session.current, events: [...events.current], mimeType: recorder.current?.mimeType, chunks: chunkIndex.current, savedAt: Date.now() }).catch(() => undefined);
+  };
+
+  useEffect(() => {
+    if (step !== 'task' && step !== 'rate') return;
+    const timer = window.setInterval(saveDraftNow, 3000);
+    const onHide = () => document.visibilityState === 'hidden' && saveDraftNow();
+    document.addEventListener('visibilitychange', onHide);
+    window.addEventListener('pagehide', saveDraftNow);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onHide);
+      window.removeEventListener('pagehide', saveDraftNow);
+    };
+    // saveDraftNow solo lee referencias; basta con reiniciar el temporizador al cambiar de paso.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   const persist = (status: Session['status']) => {
     if (!session.current) return;
@@ -154,7 +186,11 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const next = new MediaRecorder(stream);
-      next.ondataavailable = (e) => e.data.size && chunks.current.push(e.data);
+      next.ondataavailable = (e) => {
+        if (!e.data.size) return;
+        chunks.current.push(e.data);
+        if (session.current) void saveDraftChunk(session.current.id, chunkIndex.current++, e.data).catch(() => undefined);
+      };
       next.start(1000);
       recorder.current = next;
       setRecording(true);
@@ -185,8 +221,10 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       source: 'local',
       startedAt: Date.now(),
     };
+    chunkIndex.current = 0;
     if (audioWanted && study.askAudio) await startRecording();
     beginTask(0);
+    saveDraftNow();
   };
 
   const beginTask = (i: number) => {
@@ -210,6 +248,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     if (taskIndex + 1 < study.tasks.length) {
       persist('in_progress');
       beginTask(taskIndex + 1);
+      saveDraftNow();
       return;
     }
     const rec = recorder.current;
@@ -238,7 +277,46 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       }
     }
     persist('completed');
+    // En este navegador ya quedó guardada; desde el enlace se conserva hasta que envíe los resultados.
+    if (local) await clearDraft(study.id, session.current!.id);
+    else saveDraftNow();
     setStep('done');
+  };
+
+  /** Recupera una prueba a medias: guarda (aquí) o prepara el envío (enlace) de lo que alcanzó a hacer. */
+  const recoverResults = async () => {
+    if (!recovered) return;
+    const { draft, audio } = recovered;
+    const id = draft.session.id;
+    session.current = { ...draft.session, status: draft.session.status === 'completed' ? 'completed' : 'abandoned', endedAt: draft.session.endedAt ?? draft.savedAt, hasAudio: false };
+    events.current = draft.events;
+    if (local) {
+      if (audio) {
+        try {
+          await saveAudio(id, audio);
+          session.current = { ...session.current, hasAudio: true };
+        } catch {
+          notify('No hubo espacio en este navegador para guardar el audio. Tus respuestas sí quedaron guardadas.', 'error');
+        }
+      }
+      saveSession(session.current, events.current);
+      await clearDraft(study.id, id);
+    } else {
+      audioBlob.current = audio ?? null;
+      setAudioSize(audio?.size ?? 0);
+      session.current = { ...session.current, hasAudio: !!audio };
+    }
+    setRecovered(undefined);
+    setStep('done');
+  };
+
+  const discardRecovered = async () => {
+    if (!recovered) return;
+    const { draft } = recovered;
+    // Aquí la sesión ya estaba en los resultados: queda como abandonada, sin audio.
+    if (local && getDb().sessions.some((s) => s.id === draft.session.id)) saveSession({ ...draft.session, status: 'abandoned', hasAudio: false, endedAt: draft.savedAt }, draft.events);
+    await clearDraft(study.id, draft.session.id);
+    setRecovered(undefined);
   };
 
   const shareResults = async () => {
@@ -253,6 +331,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     }
     const sent = audio ? session.current : { ...session.current, hasAudio: false };
     const content = resultsFile(study.id, [sent], events.current, audio);
+    void clearDraft(study.id, sent.id);
     const name = `resultados-${study.id}.json`;
     const file = new File([content], name, { type: 'application/json' });
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
@@ -268,6 +347,28 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   };
 
   const successBase = task ? baseId(p.screens.find((s) => s.id === task.successScreenId) ?? { id: task.successScreenId, name: '', breakpoint: 'mobile', blocks: [] }) : '';
+
+  if (recovered && step === 'intro') {
+    const finished = recovered.draft.session.status === 'completed';
+    const done = recovered.draft.session.feedback.length;
+    return (
+      <div className="participant">
+        <div className="participant-card stack">
+          <BrandLockup />
+          <h1>{finished ? 'Te falta enviar tus resultados' : 'Tienes una prueba sin terminar'}</h1>
+          <p>
+            {finished ? `Terminaste ${study.tasks.length === 1 ? 'la tarea' : `las ${study.tasks.length} tareas`}` : `Completaste ${done} de ${study.tasks.length} ${study.tasks.length === 1 ? 'tarea' : 'tareas'}`}
+            {recovered.audio ? ' y quedó guardada la grabación de audio hasta ese momento' : ''}.{' '}
+            {local ? 'Puedes guardar lo que alcanzaste a hacer o empezar de nuevo.' : 'Puedes enviar lo que alcanzaste a hacer a quien te invitó o empezar de nuevo.'}
+          </p>
+          <Button tone="primary" onClick={recoverResults}>
+            {local ? 'Guardar lo que alcancé' : 'Preparar el envío'}
+          </Button>
+          <Button onClick={discardRecovered}>Empezar de nuevo</Button>
+        </div>
+      </div>
+    );
+  }
 
   if (study.status === 'closed')
     return (
