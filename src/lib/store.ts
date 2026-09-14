@@ -9,7 +9,8 @@ import { completeSystem, upgradeProjectStates } from './catalog';
 import { checkProject, hasBlockingErrors } from './flowCheck';
 import { uid } from './ids';
 import { notify } from './toast';
-import { deleteAudio } from './blobs';
+import { deleteAudio, saveAudio } from './blobs';
+import { audioToBlob, isAudioPayload, type AudioMap } from './share';
 
 const KEY = 'formapro.db.v1';
 const OPS_PER_PROJECT = 300;
@@ -514,8 +515,8 @@ export function saveSession(session: Session, events: StudyEvent[]) {
   return true;
 }
 
-export function importResults(text: string): number {
-  let data: { kind?: string; studyId?: string; sessions?: Session[]; events?: StudyEvent[] };
+export async function importResults(text: string): Promise<number> {
+  let data: { kind?: string; studyId?: string; sessions?: Session[]; events?: StudyEvent[]; audio?: AudioMap };
   try {
     data = JSON.parse(text);
   } catch {
@@ -531,13 +532,40 @@ export function importResults(text: string): number {
     notify('Estos resultados pertenecen a un estudio que no está en este espacio de trabajo.', 'error');
     return 0;
   }
-  const known = new Set(db.sessions.map((s) => s.id));
+  const known = new Map(db.sessions.map((s) => [s.id, s]));
   const fresh = data.sessions.filter((s) => s.studyId === study.id && !known.has(s.id)).map((s) => ({ ...s, source: 'import' as const }));
+  // Sesiones ya importadas sin grabación (por ejemplo, de un archivo anterior) reciben el audio si este archivo lo trae.
+  const late = data.sessions.filter((s) => s.studyId === study.id && known.has(s.id) && !known.get(s.id)!.hasAudio && isAudioPayload(data.audio?.[s.id])).map((s) => s.id);
+
+  const withAudio = new Set<string>();
+  let failed = 0;
+  for (const id of [...fresh.map((s) => s.id), ...late]) {
+    const a = data.audio?.[id];
+    if (!isAudioPayload(a)) continue;
+    try {
+      await saveAudio(id, audioToBlob(a));
+      withAudio.add(id);
+    } catch {
+      failed++;
+    }
+  }
+  fresh.forEach((s) => (s.hasAudio = withAudio.has(s.id)));
+
   const freshIds = new Set(fresh.map((s) => s.id));
   const count = db.sessions.filter((s) => s.studyId === study.id).length;
   fresh.forEach((s, i) => (s.participant = `P${count + i + 1}`));
-  commit({ ...db, sessions: [...db.sessions, ...fresh], events: [...db.events, ...data.events.filter((e) => freshIds.has(e.sessionId))] });
-  notify(fresh.length ? `Importaste ${fresh.length} ${fresh.length === 1 ? 'sesión' : 'sesiones'}.` : 'Esas sesiones ya estaban importadas.', fresh.length ? 'success' : 'info');
+  commit({
+    ...db,
+    sessions: [...db.sessions.filter((s) => !freshIds.has(s.id)).map((s) => (withAudio.has(s.id) ? { ...s, hasAudio: true } : s)), ...fresh],
+    events: [...db.events.filter((e) => !freshIds.has(e.sessionId)), ...data.events.filter((e) => freshIds.has(e.sessionId))],
+  });
+
+  const audioCount = fresh.filter((s) => s.hasAudio).length;
+  const lateCount = late.filter((id) => withAudio.has(id)).length;
+  if (fresh.length) notify(`Importaste ${fresh.length} ${fresh.length === 1 ? 'sesión' : 'sesiones'}${audioCount ? `, ${audioCount} con audio` : ''}.`, 'success');
+  else if (lateCount) notify(`Agregaste el audio a ${lateCount} ${lateCount === 1 ? 'sesión que ya estaba importada' : 'sesiones que ya estaban importadas'}.`, 'success');
+  else notify('Esas sesiones ya estaban importadas.', 'info');
+  if (failed) notify(`No hubo espacio en este navegador para ${failed === 1 ? 'una grabación' : `${failed} grabaciones`}. Las respuestas sí se importaron; libera espacio y vuelve a importar el archivo para agregar el audio.`, 'error');
   return fresh.length;
 }
 

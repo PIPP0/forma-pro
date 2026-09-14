@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Breakpoint, Mode, Session, StudyEvent, TaskFeedback } from '../lib/model';
 import { baseId } from '../lib/model';
 import { getDb, nextParticipant, saveSession } from '../lib/store';
-import { decodeStudy, download, resultsFile, type SharedStudy } from '../lib/share';
+import { blobToAudio, decodeStudy, download, megabytes, resultsFile, type AudioMap, type SharedStudy } from '../lib/share';
 import { saveAudio } from '../lib/blobs';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
@@ -119,6 +119,8 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const taskStart = useRef(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const audioBlob = useRef<Blob | null>(null);
+  const [audioSize, setAudioSize] = useState(0);
 
   const task = study.tasks[taskIndex];
 
@@ -219,12 +221,20 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     }
     rec?.stream.getTracks().forEach((t) => t.stop());
     setRecording(false);
-    if (rec && local && chunks.current.length) {
-      try {
-        await saveAudio(session.current!.id, new Blob(chunks.current, { type: rec.mimeType }));
+    if (rec && chunks.current.length) {
+      const blob = new Blob(chunks.current, { type: rec.mimeType });
+      if (local) {
+        try {
+          await saveAudio(session.current!.id, blob);
+          session.current = { ...session.current!, hasAudio: true };
+        } catch {
+          notify('No hubo espacio en este navegador para guardar el audio. Tus respuestas sí quedaron guardadas.', 'error');
+        }
+      } else {
+        // Desde el enlace, la grabación viaja dentro del archivo de resultados.
+        audioBlob.current = blob;
+        setAudioSize(blob.size);
         session.current = { ...session.current!, hasAudio: true };
-      } catch {
-        /* sin espacio para audio */
       }
     }
     persist('completed');
@@ -233,7 +243,16 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
 
   const shareResults = async () => {
     if (!session.current) return;
-    const content = resultsFile(study.id, [session.current], events.current);
+    let audio: AudioMap | undefined;
+    if (audioBlob.current) {
+      try {
+        audio = { [session.current.id]: await blobToAudio(audioBlob.current) };
+      } catch {
+        notify('No pudimos adjuntar el audio. Tus respuestas se enviarán sin la grabación.', 'error');
+      }
+    }
+    const sent = audio ? session.current : { ...session.current, hasAudio: false };
+    const content = resultsFile(study.id, [sent], events.current, audio);
     const name = `resultados-${study.id}.json`;
     const file = new File([content], name, { type: 'application/json' });
     const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
@@ -420,7 +439,11 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
           </>
         ) : (
           <>
-            <p>Envía tus resultados a quien te invitó. El archivo solo contiene lo que hiciste dentro del prototipo.</p>
+            <p>
+              Envía tus resultados a quien te invitó. El archivo solo contiene lo que hiciste dentro del prototipo
+              {audioSize ? ` y la grabación de audio (${megabytes(audioSize * 1.37)})` : ''}.
+            </p>
+            {audioSize > 20 * 1048576 && <p className="muted small">Es un archivo grande. Si tu correo no permite adjuntarlo, compártelo con un servicio de archivos como Drive.</p>}
             <Button tone="primary" onClick={shareResults}>
               Enviar resultados
             </Button>

@@ -6,7 +6,7 @@ import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
-import { download, resultsFile, studyLink, toCsv } from '../lib/share';
+import { blobToAudio, download, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
@@ -321,7 +321,14 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
     };
   }, [study]);
 
-  const exportJson = () => download(`${slug(study.name)}-resultados.json`, resultsFile(study.id, sessions, events));
+  const exportJson = async () => {
+    const audio: AudioMap = {};
+    for (const s of sessions.filter((x) => x.hasAudio)) {
+      const blob = await getAudio(s.id).catch(() => undefined);
+      if (blob) audio[s.id] = await blobToAudio(blob);
+    }
+    download(`${slug(study.name)}-resultados.json`, resultsFile(study.id, sessions, events, audio));
+  };
   const exportCsv = () => {
     const rows = [['sesion', 'participante', 'tarea', 'evento', 'pantalla', 'bloque', 'x', 'y', 'ms_desde_inicio', 'duda_ms']];
     for (const e of events) {
@@ -375,7 +382,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
 
       <div className="study-tools">
         <p className="muted small">
-          El enlace lleva la copia congelada del prototipo y se instala como app en el celular. Si alguien participa desde otro dispositivo, te envía un archivo de resultados que importas aquí.
+          El enlace lleva la copia congelada del prototipo y se instala como app en el celular. Si alguien participa desde otro dispositivo, te envía un archivo de resultados (con su audio, si lo grabó) que importas aquí.
         </p>
         <div className="row">
           <Button size="sm" onClick={exportJson}>
@@ -390,7 +397,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                 size="sm"
                 onClick={async () => {
                   const t = await pickFile('.json');
-                  if (t) importResults(t);
+                  if (t) await importResults(t);
                 }}
               >
                 Importar resultados
