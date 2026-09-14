@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../lib/model';
 import { baseId } from '../lib/model';
-import { createStudy, deleteStudy, importResults, refreshFromStorage, setStudyStatus, useDb, userName } from '../lib/store';
+import { createStudy, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
+import { deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
+import { useCloudAccount } from '../components/useCloudAccount';
+import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
-import { getAudio } from '../lib/blobs';
+import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
 import { Badge, Button, EmptyCard, Field, Modal, PageHead, Tabs, copyText, pickFile, timeAgo } from '../components/ui';
@@ -164,15 +167,25 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
   const [tasks, setTasks] = useState<Omit<StudyTask, 'id'>[]>([{ prompt: '', startScreenId: project.startScreenId, successScreenId: firstFinal }]);
   const issues = useMemo(() => checkProject(project), [project]);
   const blocked = hasBlockingErrors(issues);
+  const { account } = useCloudAccount();
 
   const update = (i: number, patch: Partial<Omit<StudyTask, 'id'>>) => setTasks((ts) => ts.map((t, j) => (j === i ? { ...t, ...patch } : t)));
 
-  const publish = () => {
+  const publish = async () => {
     const id = createStudy(project.id, { name, tasks, askAudio });
-    if (id) {
-      onClose();
-      go(`/p/${project.id}/results/${id}`);
+    if (!id) return;
+    // Con la nube conectada, el estudio nace listo para recibir sesiones remotas.
+    const study = account ? getDb().studies.find((s) => s.id === id) : undefined;
+    if (study) {
+      try {
+        await publishStudyToCloud(study);
+        setStudyCloud(id, true);
+      } catch {
+        notify('El estudio quedó creado, pero no pudimos conectarlo a la nube. Inténtalo desde Resultados.', 'error');
+      }
     }
+    onClose();
+    go(`/p/${project.id}/results/${id}`);
   };
 
   return (
@@ -312,6 +325,49 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [link, setLink] = useState('');
+  const { account } = useCloudAccount();
+  const [syncing, setSyncing] = useState(false);
+  const cloudLinked = !!study.cloud && !!account;
+
+  /** Trae las sesiones que llegaron a la nube (nuevas o que avanzaron). */
+  const syncCloud = async (quiet = false) => {
+    if (!study.cloud || !account) return;
+    setSyncing(true);
+    try {
+      const fresh = mergeCloudSessions(study.id, await fetchCloudSessions(study.id));
+      if (fresh || !quiet) notify(fresh ? `Llegaron ${fresh} ${fresh === 1 ? 'sesión nueva' : 'sesiones nuevas'} desde la nube.` : 'Los resultados ya están al día.', 'success');
+    } catch {
+      if (!quiet) notify('No pudimos traer los resultados de la nube. Revisa tu conexión.', 'error');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!cloudLinked) return;
+    void syncCloud(true);
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') void syncCloud(true);
+    }, 60000);
+    return () => window.clearInterval(timer);
+    // syncCloud lee el estudio y la cuenta actuales; basta con reiniciar al cambiar de estudio o conexión.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cloudLinked, study.id]);
+
+  const connectCloud = async () => {
+    if (!account) {
+      notify('Primero conecta la nube con tu correo.', 'info');
+      go('/settings');
+      return;
+    }
+    try {
+      await publishStudyToCloud(study);
+      setStudyCloud(study.id, true);
+      notify('Listo: las sesiones de este estudio llegarán solas. Copia de nuevo el enlace para compartir la versión conectada.', 'success');
+    } catch {
+      notify('No pudimos conectar el estudio a la nube. Revisa tu conexión.', 'error');
+    }
+  };
 
   useEffect(() => {
     let alive = true;
@@ -360,6 +416,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
             {study.status === 'open' ? <Badge tone="ok">Abierto</Badge> : <Badge>Cerrado</Badge>}
             {study.example && <Badge tone="warn">Datos de ejemplo simulados</Badge>}
             {study.askAudio && <Badge>Pide audio</Badge>}
+            {study.cloud && <Badge tone="ok">Resultados en la nube</Badge>}
           </div>
         </div>
         <div className="row">
@@ -382,7 +439,10 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
 
       <div className="study-tools">
         <p className="muted small">
-          El enlace lleva la copia congelada del prototipo y se instala como app en el celular. Si alguien participa desde otro dispositivo, te envía un archivo de resultados (con su audio, si lo grabó) que importas aquí.
+          El enlace lleva la copia congelada del prototipo y se instala como app en el celular.{' '}
+          {study.cloud
+            ? `Las sesiones de quienes participan desde el enlace llegan solas aquí, con su audio. Si alguien pierde la conexión, puede enviarte el archivo de resultados.${account ? '' : ' Conecta la nube en Ajustes para verlas.'}`
+            : 'Si alguien participa desde otro dispositivo, te envía un archivo de resultados (con su audio, si lo grabó) que importas aquí.'}
         </p>
         <div className="row">
           <Button size="sm" onClick={exportJson}>
@@ -402,7 +462,23 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
               >
                 Importar resultados
               </Button>
-              <Button size="sm" onClick={() => setStudyStatus(study.id, study.status === 'open' ? 'closed' : 'open')}>
+              {study.cloud ? (
+                <Button size="sm" disabled={syncing || !account} onClick={() => void syncCloud()}>
+                  {syncing ? 'Trayendo…' : 'Traer de la nube'}
+                </Button>
+              ) : (
+                <Button size="sm" onClick={connectCloud}>
+                  Recibir resultados en la nube
+                </Button>
+              )}
+              <Button
+                size="sm"
+                onClick={() => {
+                  const next: Study['status'] = study.status === 'open' ? 'closed' : 'open';
+                  setStudyStatus(study.id, next);
+                  if (study.cloud && account) setCloudStudyStatus(study.id, next).catch(() => notify('Cambiaste el estado aquí, pero no pudimos actualizarlo en la nube.', 'error'));
+                }}
+              >
                 {study.status === 'open' ? 'Cerrar estudio' : 'Reabrir estudio'}
               </Button>
               <Button size="sm" tone="danger" onClick={() => setConfirmDelete(true)}>
@@ -528,7 +604,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                             </span>
                           </td>
                           <td>{s.hasAudio ? 'Sí' : s.consent.audio ? 'Aceptó, sin archivo' : 'No'}</td>
-                          <td>{s.source === 'example' ? 'Ejemplo' : s.source === 'import' ? 'Importada' : 'Este navegador'}</td>
+                          <td>{s.source === 'example' ? 'Ejemplo' : s.source === 'import' ? 'Importada' : s.source === 'cloud' ? 'Nube' : 'Este navegador'}</td>
                           <td className="muted">{timeAgo(s.startedAt)}</td>
                         </tr>
                       ))}
@@ -561,6 +637,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
             <Button
               tone="danger"
               onClick={() => {
+                if (study.cloud && account) void deleteCloudStudy(study.id).catch(() => notify('Eliminaste el estudio aquí, pero no pudimos borrar sus datos de la nube. Inténtalo más tarde.', 'error'));
                 deleteStudy(study.id);
                 go(`/p/${project.id}/results`);
               }}
@@ -756,21 +833,34 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
 function SessionDrawer({ study, session, events, at, onClose }: { study: Study; session?: Session; events: StudyEvent[]; at?: number; onClose: () => void }) {
   const snap = study.snapshot;
   const [audio, setAudio] = useState<string>();
+  const [audioState, setAudioState] = useState<'idle' | 'loading' | 'missing'>('idle');
   useEffect(() => {
     if (!session?.hasAudio) return;
     let url: string | undefined;
-    getAudio(session.id)
-      .then((b) => {
-        if (b) {
-          url = URL.createObjectURL(b);
-          setAudio(url);
+    let alive = true;
+    (async () => {
+      let blob = await getAudio(session.id).catch(() => undefined);
+      if (!blob && session.source === 'cloud') {
+        setAudioState('loading');
+        const remote = await downloadCloudAudio(study.id, session.id).catch(() => undefined);
+        if (remote) {
+          blob = remote.blob;
+          // Solo se guarda la grabación final; la de una sesión en curso puede seguir creciendo.
+          if (remote.complete) void saveAudio(session.id, remote.blob).catch(() => undefined);
         }
-      })
-      .catch(() => undefined);
+      }
+      if (!alive) return;
+      if (blob) {
+        url = URL.createObjectURL(blob);
+        setAudio(url);
+        setAudioState('idle');
+      } else setAudioState('missing');
+    })();
     return () => {
+      alive = false;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [session]);
+  }, [session, study.id]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
@@ -803,7 +893,20 @@ function SessionDrawer({ study, session, events, at, onClose }: { study: Study; 
           <span>Consentimiento para participar: {session.consent.participate ? 'sí' : 'no'}</span>
           <span>Consentimiento para grabar audio: {session.consent.audio ? 'sí' : 'no'}</span>
         </div>
-        {session.hasAudio && (audio ? <audio controls src={audio} /> : <p className="muted small">La grabación está en el navegador donde se hizo la sesión.</p>)}
+        {session.hasAudio &&
+          (audio ? (
+            <audio controls src={audio} />
+          ) : (
+            <p className="muted small">
+              {audioState === 'loading'
+                ? 'Cargando la grabación desde la nube…'
+                : session.source === 'cloud'
+                  ? audioState === 'missing'
+                    ? 'No pudimos cargar la grabación. Revisa tu conexión y que la nube esté conectada en Ajustes.'
+                    : 'Cargando la grabación…'
+                  : 'La grabación está en el navegador donde se hizo la sesión.'}
+            </p>
+          ))}
         {session.feedback.map((f) => (
           <div key={f.taskId} className="feedback">
             <strong>{study.tasks.find((t) => t.id === f.taskId)?.prompt}</strong>

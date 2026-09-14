@@ -4,6 +4,7 @@ import { baseId } from '../lib/model';
 import { getDb, nextParticipant, saveSession } from '../lib/store';
 import { blobToAudio, decodeStudy, download, megabytes, resultsFile, type AudioMap, type SharedStudy } from '../lib/share';
 import { clearDraft, loadDraft, saveAudio, saveDraft, saveDraftChunk, type SessionDraft } from '../lib/blobs';
+import { uploadAudioPart, uploadFullAudio, uploadSession } from '../lib/cloud';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { isIOS, isStandalone, promptInstall, rememberStudyLink, useInstallable } from '../lib/pwa';
@@ -11,7 +12,7 @@ import { Runner, type RunnerEvent } from '../components/Runner';
 import { Button } from '../components/ui';
 import { BrandLockup } from '../components/Shell';
 
-type Step = 'intro' | 'consent' | 'task' | 'rate' | 'done';
+type Step = 'intro' | 'consent' | 'task' | 'rate' | 'sending' | 'done';
 
 const viewportBreakpoint = (): Breakpoint => (window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'desktop');
 
@@ -123,8 +124,36 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const [audioSize, setAudioSize] = useState(0);
   const chunkIndex = useRef(0);
   const [recovered, setRecovered] = useState<{ draft: SessionDraft; audio?: Blob }>();
+  // Nube: en estudios conectados, desde el enlace, la sesión y el audio suben mientras la persona avanza.
+  const cloudMode = !!study.cloud && !local;
+  const cloudReady = useRef<Promise<void>>(Promise.resolve());
+  const cloudPending = useRef<Blob[]>([]);
+  const cloudParts = useRef(0);
+  const [cloudSent, setCloudSent] = useState(false);
 
   const task = study.tasks[taskIndex];
+
+  /** Encola la subida de la sesión. Las subidas van en orden: el audio nunca llega antes que su sesión. */
+  const cloudSession = () => {
+    if (!cloudMode || !session.current) return;
+    const s = session.current;
+    const ev = [...events.current];
+    cloudReady.current = cloudReady.current.then(() => uploadSession(study.id, s, ev)).catch(() => undefined);
+  };
+
+  /** Sube como un trozo más el audio grabado desde la última subida. */
+  const cloudAudioPart = () => {
+    if (!cloudMode || !session.current || !cloudPending.current.length) return;
+    const blob = new Blob(cloudPending.current, { type: recorder.current?.mimeType || 'audio/webm' });
+    cloudPending.current = [];
+    const id = session.current.id;
+    const index = cloudParts.current++;
+    if (!session.current.hasAudio) {
+      session.current = { ...session.current, hasAudio: true };
+      cloudSession();
+    }
+    cloudReady.current = cloudReady.current.then(() => uploadAudioPart(study.id, id, index, blob)).catch(() => undefined);
+  };
 
   useEffect(
     () => () => {
@@ -145,17 +174,28 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   /** Guarda el avance (sesión y eventos). El audio ya se guarda trozo a trozo al grabar. */
   const saveDraftNow = () => {
     if (!session.current) return;
-    void saveDraft(study.id, { session: session.current, events: [...events.current], mimeType: recorder.current?.mimeType, chunks: chunkIndex.current, savedAt: Date.now() }).catch(() => undefined);
+    void saveDraft(study.id, { session: session.current, events: [...events.current], mimeType: recorder.current?.mimeType, chunks: chunkIndex.current, cloudParts: cloudParts.current, savedAt: Date.now() }).catch(() => undefined);
   };
 
   useEffect(() => {
     if (step !== 'task' && step !== 'rate') return;
     const timer = window.setInterval(saveDraftNow, 3000);
-    const onHide = () => document.visibilityState === 'hidden' && saveDraftNow();
+    // A la nube cada 30 s: pocas escrituras y subidas, dentro de la cuota gratuita.
+    const cloudTimer = window.setInterval(() => {
+      cloudSession();
+      cloudAudioPart();
+    }, 30000);
+    const onHide = () => {
+      if (document.visibilityState !== 'hidden') return;
+      saveDraftNow();
+      cloudSession();
+      cloudAudioPart();
+    };
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', saveDraftNow);
     return () => {
       window.clearInterval(timer);
+      window.clearInterval(cloudTimer);
       document.removeEventListener('visibilitychange', onHide);
       window.removeEventListener('pagehide', saveDraftNow);
     };
@@ -185,10 +225,12 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     if (rec && rec.state === 'recording') return true;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const next = new MediaRecorder(stream);
+      // 32 kbps: calidad de voz clara con archivos livianos (unos 14 MB por hora).
+      const next = new MediaRecorder(stream, { audioBitsPerSecond: 32000 });
       next.ondataavailable = (e) => {
         if (!e.data.size) return;
         chunks.current.push(e.data);
+        if (cloudMode) cloudPending.current.push(e.data);
         if (session.current) void saveDraftChunk(session.current.id, chunkIndex.current++, e.data).catch(() => undefined);
       };
       next.start(1000);
@@ -222,6 +264,9 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       startedAt: Date.now(),
     };
     chunkIndex.current = 0;
+    cloudParts.current = 0;
+    cloudPending.current = [];
+    cloudSession();
     if (audioWanted && study.askAudio) await startRecording();
     beginTask(0);
     saveDraftNow();
@@ -249,6 +294,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       persist('in_progress');
       beginTask(taskIndex + 1);
       saveDraftNow();
+      cloudSession();
       return;
     }
     const rec = recorder.current;
@@ -279,8 +325,30 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     persist('completed');
     // En este navegador ya quedó guardada; desde el enlace se conserva hasta que envíe los resultados.
     if (local) await clearDraft(study.id, session.current!.id);
-    else saveDraftNow();
+    else {
+      saveDraftNow();
+      if (cloudMode) await sendToCloud(audioBlob.current);
+    }
     setStep('done');
+  };
+
+  /** Envía la sesión y la grabación completa a la nube. Si falla, queda el envío por archivo. */
+  const sendToCloud = async (audio: Blob | null) => {
+    if (!session.current) return false;
+    setStep('sending');
+    const s = session.current;
+    try {
+      await cloudReady.current;
+      cloudPending.current = [];
+      if (audio) await uploadFullAudio(study.id, s.id, audio, cloudParts.current);
+      await uploadSession(study.id, { ...s, hasAudio: !!audio }, events.current);
+      await clearDraft(study.id, s.id);
+      setCloudSent(true);
+      return true;
+    } catch {
+      notify('No pudimos enviar tus resultados por internet. Puedes enviarlos como archivo.', 'error');
+      return false;
+    }
   };
 
   /** Recupera una prueba a medias: guarda (aquí) o prepara el envío (enlace) de lo que alcanzó a hacer. */
@@ -288,6 +356,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     if (!recovered) return;
     const { draft, audio } = recovered;
     const id = draft.session.id;
+    cloudParts.current = draft.cloudParts ?? 0;
     session.current = { ...draft.session, status: draft.session.status === 'completed' ? 'completed' : 'abandoned', endedAt: draft.session.endedAt ?? draft.savedAt, hasAudio: false };
     events.current = draft.events;
     if (local) {
@@ -307,6 +376,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       session.current = { ...session.current, hasAudio: !!audio };
     }
     setRecovered(undefined);
+    if (!local && cloudMode) await sendToCloud(audio ?? null);
     setStep('done');
   };
 
@@ -362,7 +432,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             {local ? 'Puedes guardar lo que alcanzaste a hacer o empezar de nuevo.' : 'Puedes enviar lo que alcanzaste a hacer a quien te invitó o empezar de nuevo.'}
           </p>
           <Button tone="primary" onClick={recoverResults}>
-            {local ? 'Guardar lo que alcancé' : 'Preparar el envío'}
+            {local ? 'Guardar lo que alcancé' : cloudMode ? 'Enviar lo que alcancé' : 'Preparar el envío'}
           </Button>
           <Button onClick={discardRecovered}>Empezar de nuevo</Button>
         </div>
@@ -499,6 +569,16 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       </div>
     );
 
+  if (step === 'sending')
+    return (
+      <div className="participant">
+        <div className="participant-card stack">
+          <h1>Enviando tus resultados…</h1>
+          <p className="muted">No cierres esta página. Tarda unos segundos.</p>
+        </div>
+      </div>
+    );
+
   if (step === 'rate')
     return (
       <div className="participant">
@@ -539,6 +619,9 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             </Button>
           </>
         ) : (
+          cloudSent ? (
+            <p>Tus resultados ya llegaron a quien te invitó{audioSize ? ', junto con la grabación de audio' : ''}. Ya puedes cerrar esta página.</p>
+          ) : (
           <>
             <p>
               Envía tus resultados a quien te invitó. El archivo solo contiene lo que hiciste dentro del prototipo
@@ -549,6 +632,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
               Enviar resultados
             </Button>
           </>
+          )
         )}
       </div>
     </div>

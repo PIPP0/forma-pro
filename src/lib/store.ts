@@ -569,6 +569,37 @@ export async function importResults(text: string): Promise<number> {
   return fresh.length;
 }
 
+/** Marca un estudio como conectado a la nube: las sesiones remotas llegan solas a Resultados. */
+export function setStudyCloud(studyId: string, cloud: boolean) {
+  commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, cloud } : s)) });
+}
+
+/** Agrega las sesiones nuevas de la nube y actualiza las que avanzaron. Devuelve cuántas son nuevas. */
+export function mergeCloudSessions(studyId: string, items: { session: Session; events: StudyEvent[]; updatedAt: number }[]): number {
+  if (!db.studies.some((s) => s.id === studyId)) return 0;
+  const known = new Map(db.sessions.map((s) => [s.id, s]));
+  let count = db.sessions.filter((s) => s.studyId === studyId).length;
+  let fresh = 0;
+  const changed = new Map<string, Session>();
+  const changedEvents: StudyEvent[] = [];
+  for (const it of [...items].filter((x) => x.session.studyId === studyId).sort((a, b) => a.session.startedAt - b.session.startedAt)) {
+    const prev = known.get(it.session.id);
+    // Una sesión que ya llegó por archivo o se hizo en este navegador no se pisa.
+    if (prev && prev.source !== 'cloud') continue;
+    if (prev && (prev.cloudUpdatedAt ?? 0) >= it.updatedAt) continue;
+    if (!prev) fresh++;
+    changed.set(it.session.id, { ...it.session, source: 'cloud', participant: prev?.participant ?? `P${++count}`, cloudUpdatedAt: it.updatedAt });
+    changedEvents.push(...it.events.map((e) => ({ ...e, sessionId: it.session.id })));
+  }
+  if (!changed.size) return 0;
+  commit({
+    ...db,
+    sessions: [...db.sessions.filter((s) => !changed.has(s.id)), ...changed.values()],
+    events: [...db.events.filter((e) => !changed.has(e.sessionId)), ...changedEvents],
+  });
+  return fresh;
+}
+
 export function nextParticipant(studyId: string) {
   return `P${db.sessions.filter((s) => s.studyId === studyId).length + 1}`;
 }

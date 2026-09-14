@@ -304,6 +304,8 @@ export interface Study {
   askAudio: boolean;
   owner: string;
   status: 'open' | 'closed';
+  /** Las sesiones de participantes remotos llegan solas a la nube de Forma. */
+  cloud?: boolean;
   example?: boolean;
   created: number;
 }
@@ -325,7 +327,9 @@ export interface Session {
   hasAudio?: boolean;
   feedback: TaskFeedback[];
   status: 'in_progress' | 'completed' | 'abandoned';
-  source: 'local' | 'import' | 'example';
+  source: 'local' | 'import' | 'example' | 'cloud';
+  /** Última actualización recibida desde la nube (solo sesiones que llegaron solas). */
+  cloudUpdatedAt?: number;
   startedAt: number;
   endedAt?: number;
 }

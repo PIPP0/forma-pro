@@ -1,0 +1,26 @@
+rules_version = '2';
+// Forma Pro: grabaciones de audio de las pruebas.
+// studies/{studyId}/sessions/{sessionId}/parts/{n}  trozos que se suben mientras la persona participa
+// studies/{studyId}/sessions/{sessionId}/audio      la grabación completa al terminar
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /studies/{studyId}/sessions/{sessionId}/{path=**} {
+      function owner() {
+        return firestore.get(/databases/(default)/documents/studies/$(studyId)).data.ownerUid == request.auth.uid;
+      }
+      function participant() {
+        return firestore.exists(/databases/(default)/documents/studies/$(studyId)/sessions/$(sessionId))
+          && firestore.get(/databases/(default)/documents/studies/$(studyId)/sessions/$(sessionId)).data.participantUid == request.auth.uid;
+      }
+
+      // Solo la persona dueña del estudio escucha las grabaciones.
+      allow read: if request.auth != null && owner();
+      // La persona participante sube audio a su propia sesión (máximo 200 MB por archivo).
+      allow create, update: if request.auth != null
+        && participant()
+        && request.resource.contentType.matches('audio/.*')
+        && request.resource.size < 200 * 1024 * 1024;
+      allow delete: if request.auth != null && (participant() || owner());
+    }
+  }
+}

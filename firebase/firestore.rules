@@ -1,0 +1,32 @@
+rules_version = '2';
+// Forma Pro: resultados de pruebas en la nube.
+// - Cada estudio pertenece a quien lo publicó (cuenta con correo verificado).
+// - Participantes anónimos solo pueden crear y actualizar SU sesión, y solo en estudios abiertos.
+// - Solo la persona dueña del estudio puede leer o borrar las sesiones.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function studyData(id) { return get(/databases/$(database)/documents/studies/$(id)).data; }
+
+    match /studies/{studyId} {
+      allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.auth.token.firebase.sign_in_provider != 'anonymous'
+        && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == request.auth.uid;
+
+      match /sessions/{sessionId} {
+        allow read, delete: if signedIn() && studyData(studyId).ownerUid == request.auth.uid;
+        allow create: if signedIn()
+          && exists(/databases/$(database)/documents/studies/$(studyId))
+          && studyData(studyId).status == 'open'
+          && request.resource.data.participantUid == request.auth.uid;
+        allow update: if signedIn()
+          && resource.data.participantUid == request.auth.uid
+          && request.resource.data.participantUid == request.auth.uid;
+      }
+    }
+  }
+}

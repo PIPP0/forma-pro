@@ -5,6 +5,8 @@ import { download } from '../lib/share';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { Badge, Button, Field, Modal, pickFile } from '../components/ui';
+import { disconnectCloud, sendAccessLink } from '../lib/cloud';
+import { setCloudAccountCache, useCloudAccount } from '../components/useCloudAccount';
 
 export function SettingsView() {
   const db = useDb();
@@ -24,6 +26,8 @@ export function SettingsView() {
           </p>
         </div>
       </div>
+
+      <CloudSection email={user?.email ?? ''} />
 
       <section className="section">
         <h2 className="section-title">Inteligencia artificial</h2>
@@ -85,7 +89,7 @@ export function SettingsView() {
       <section className="section">
         <h2 className="section-title">Sobre esta versión</h2>
         <p className="muted">
-          Forma Pro corre completo en el navegador: el modelo de datos, el guardado por operación, los permisos y el análisis de estudios son los mismos que usará el servidor. Lo que necesita backend para funcionar entre personas y dispositivos (acceso por correo con código, sesiones de prueba que llegan solas, colaboración en vivo) está descrito en el README del repositorio.
+          Forma Pro corre en el navegador: proyectos, versiones y análisis viven aquí. Con la nube conectada, las sesiones y grabaciones de las pruebas remotas llegan solas. La colaboración en vivo entre personas todavía no está disponible.
         </p>
       </section>
 
@@ -136,5 +140,62 @@ export function SettingsView() {
         <p>Se eliminarán perfiles, proyectos, versiones, estudios y resultados de este navegador. No se puede deshacer.</p>
       </Modal>
     </div>
+  );
+}
+
+function CloudSection({ email }: { email: string }) {
+  const { account, loading } = useCloudAccount();
+  const [to, setTo] = useState(email);
+  const [sentTo, setSentTo] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  return (
+    <section className="section">
+      <h2 className="section-title">Resultados en la nube</h2>
+      <p className="muted">
+        Las sesiones de quienes participan desde el enlace llegan solas a Resultados, con su grabación de audio. Solo tú puedes verlas y escucharlas; quienes participan no necesitan cuenta.
+      </p>
+      {loading ? (
+        <p className="muted small">Revisando la conexión…</p>
+      ) : account ? (
+        <div className="row">
+          <Badge tone="ok">Conectada con {account.email}</Badge>
+          <Button
+            tone="ghost"
+            onClick={async () => {
+              await disconnectCloud().catch(() => undefined);
+              setCloudAccountCache(null);
+              notify('Desconectaste la nube en este navegador. Tus resultados siguen guardados en la nube.', 'success');
+            }}
+          >
+            Desconectar
+          </Button>
+        </div>
+      ) : (
+        <form
+          className="row add-row"
+          onSubmit={async (e) => {
+            e.preventDefault();
+            const clean = to.trim().toLowerCase();
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return notify('Escribe un correo válido.', 'error');
+            setBusy(true);
+            try {
+              await sendAccessLink(clean);
+              setSentTo(clean);
+            } catch {
+              notify('No pudimos enviar el enlace. Revisa el correo y tu conexión.', 'error');
+            } finally {
+              setBusy(false);
+            }
+          }}
+        >
+          <input className="input grow" type="email" aria-label="Correo para conectar la nube" value={to} onChange={(e) => setTo(e.target.value)} />
+          <Button tone="primary" type="submit" disabled={busy}>
+            {busy ? 'Enviando…' : 'Enviarme el enlace de acceso'}
+          </Button>
+        </form>
+      )}
+      {sentTo && !account && <p className="small">Te enviamos un enlace a {sentTo}. Ábrelo en este mismo navegador para terminar de conectar. Si no llega en un par de minutos, revisa la carpeta de spam.</p>}
+    </section>
   );
 }

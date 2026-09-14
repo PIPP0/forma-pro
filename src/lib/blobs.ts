@@ -49,6 +49,8 @@ export interface SessionDraft {
   events: StudyEvent[];
   mimeType?: string;
   chunks: number;
+  /** Trozos de audio que ya subieron a la nube (para borrarlos al subir la grabación completa). */
+  cloudParts?: number;
   savedAt: number;
 }
 

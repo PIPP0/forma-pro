@@ -21,7 +21,7 @@ async function pipe(data: BlobPart, stream: CompressionStream | DecompressionStr
   return new Response(new Blob([data]).stream().pipeThrough(stream)).arrayBuffer();
 }
 
-export type SharedStudy = Pick<Study, 'id' | 'name' | 'tasks' | 'snapshot' | 'askAudio' | 'status'>;
+export type SharedStudy = Pick<Study, 'id' | 'name' | 'tasks' | 'snapshot' | 'askAudio' | 'status' | 'cloud'>;
 
 export async function encodeStudy(study: Study): Promise<string> {
   const payload: SharedStudy = {
@@ -31,6 +31,7 @@ export async function encodeStudy(study: Study): Promise<string> {
     snapshot: study.snapshot,
     askAudio: study.askAudio,
     status: study.status,
+    ...(study.cloud ? { cloud: true } : {}),
   };
   const buf = await pipe(JSON.stringify({ v: 1, study: payload }), new CompressionStream('deflate-raw'));
   return toB64Url(new Uint8Array(buf));
