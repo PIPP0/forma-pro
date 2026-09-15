@@ -22,6 +22,85 @@ if (typeof window !== 'undefined') {
   });
 }
 
+// ---------- Pantalla completa durante la prueba ----------
+
+type FsElement = HTMLElement & { webkitRequestFullscreen?: () => void };
+type FsDocument = Document & { webkitFullscreenElement?: Element | null; webkitExitFullscreen?: () => void; webkitFullscreenEnabled?: boolean };
+
+/**
+ * Cómo ocultar el navegador durante la prueba.
+ * fullscreen: el navegador lo permite · ios: iPhone solo lo logra agregando la prueba a la pantalla de inicio ·
+ * in-app: WhatsApp, Instagram y similares no lo permiten (hay que abrir el enlace en el navegador) · none: ya no hay barra.
+ */
+export type ImmersiveMode = 'fullscreen' | 'ios' | 'in-app' | 'none';
+
+export function immersiveMode(ua: string, standalone: boolean, fullscreenSupported: boolean): ImmersiveMode {
+  if (standalone) return 'none';
+  const ios = /iphone|ipad|ipod/i.test(ua);
+  const android = /android/i.test(ua);
+  const inApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|WhatsApp|Snapchat|TikTok|MicroMessenger|; wv\)/i.test(ua);
+  if ((ios || android) && inApp) return 'in-app';
+  if (fullscreenSupported) return 'fullscreen';
+  if (ios) return 'ios';
+  return 'none';
+}
+
+const fullscreenSupported = () => {
+  if (typeof document === 'undefined') return false;
+  const d = document as FsDocument;
+  const el = document.documentElement as FsElement;
+  return !!(d.fullscreenEnabled || d.webkitFullscreenEnabled) && !!(el.requestFullscreen || el.webkitRequestFullscreen);
+};
+
+export function useImmersiveMode(): ImmersiveMode {
+  if (typeof navigator === 'undefined') return 'none';
+  // iPadOS se presenta como Mac: se reconoce por la pantalla táctil.
+  const ua = /Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1 ? `${navigator.userAgent} iPad` : navigator.userAgent;
+  return immersiveMode(ua, isStandalone(), fullscreenSupported());
+}
+
+const fullscreenElement = () => (typeof document === 'undefined' ? null : document.fullscreenElement ?? (document as FsDocument).webkitFullscreenElement ?? null);
+
+export async function enterFullscreen(): Promise<boolean> {
+  const el = document.documentElement as FsElement;
+  try {
+    if (el.requestFullscreen) {
+      // Algunos navegadores dejan el pedido sin respuesta: tras 2 s se considera rechazado para avisar a la persona.
+      const answered = await Promise.race([el.requestFullscreen({ navigationUI: 'hide' }).then(() => true), new Promise<boolean>((r) => setTimeout(() => r(false), 2000))]);
+      return answered || !!fullscreenElement();
+    }
+    if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+export function exitFullscreen() {
+  if (!fullscreenElement()) return;
+  const d = document as FsDocument;
+  if (d.exitFullscreen) void d.exitFullscreen().catch(() => undefined);
+  else d.webkitExitFullscreen?.();
+}
+
+export function useIsFullscreen() {
+  return useSyncExternalStore(
+    (l) => {
+      document.addEventListener('fullscreenchange', l);
+      document.addEventListener('webkitfullscreenchange', l);
+      return () => {
+        document.removeEventListener('fullscreenchange', l);
+        document.removeEventListener('webkitfullscreenchange', l);
+      };
+    },
+    () => !!fullscreenElement(),
+    () => false,
+  );
+}
+
 export const canInstall = () => !!deferred;
 
 export const isStandalone = () =>

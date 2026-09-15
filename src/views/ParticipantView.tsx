@@ -7,9 +7,9 @@ import { clearDraft, loadDraft, saveAudio, saveDraft, saveDraftChunk, type Sessi
 import { fetchSharedStudy, uploadAudioPart, uploadFullAudio, uploadSession } from '../lib/cloud';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
-import { isIOS, isStandalone, promptInstall, rememberStudyLink, useInstallable } from '../lib/pwa';
+import { enterFullscreen, exitFullscreen, rememberStudyLink, useImmersiveMode, useIsFullscreen } from '../lib/pwa';
 import { Runner, type RunnerEvent } from '../components/Runner';
-import { Button } from '../components/ui';
+import { Button, copyText } from '../components/ui';
 import { BrandLockup } from '../components/Shell';
 
 type Step = 'intro' | 'consent' | 'task' | 'rate' | 'sending' | 'done';
@@ -91,31 +91,64 @@ export function ParticipantView({ studyId, data }: { studyId: string; data: stri
   return <Flow key={run} study={study} local={local} onRestart={() => setRun((r) => r + 1)} />;
 }
 
-function InstallCard() {
-  const installable = useInstallable();
-  if (isStandalone()) return null;
-  if (installable)
-    return (
-      <div className="install-card">
+function FullscreenCard() {
+  const mode = useImmersiveMode();
+  const full = useIsFullscreen();
+  const [help, setHelp] = useState(false);
+  if (mode === 'none' || full) return null;
+  return (
+    <div className="install-card install-card-stack">
+      <div className="install-card-row">
         <div>
-          <strong>Instálalo en tu celular</strong>
-          <p className="muted small">Se abre como una app, a pantalla completa y sin la barra del navegador.</p>
+          <strong>Hazla en pantalla completa</strong>
+          <p className="muted small">El navegador se oculta mientras haces la prueba y vuelve a aparecer al terminar.</p>
         </div>
-        <Button size="sm" onClick={() => promptInstall()}>
-          Instalar
+        <Button
+          size="sm"
+          aria-expanded={mode === 'fullscreen' ? undefined : help}
+          onClick={async () => {
+            if (mode !== 'fullscreen') return setHelp((v) => !v);
+            if (!(await enterFullscreen())) notify('Tu navegador no permitió la pantalla completa. Puedes hacer la prueba igual.', 'info');
+          }}
+        >
+          Pantalla completa
         </Button>
       </div>
-    );
-  if (isIOS())
-    return (
-      <div className="install-card">
-        <div>
-          <strong>Instálalo en tu iPhone</strong>
-          <p className="muted small">Toca Compartir y luego «Agregar a pantalla de inicio». Se abrirá como una app.</p>
-        </div>
-      </div>
-    );
-  return null;
+      {/* iPhone y apps como WhatsApp no dejan ocultar el navegador desde la página: pasos para lograrlo. */}
+      {help && mode !== 'fullscreen' && (
+        <>
+          <ol className="install-steps">
+            {mode === 'ios' && (
+              <>
+                <li>En iPhone, Safari solo oculta su barra si abres la prueba desde tu pantalla de inicio.</li>
+                <li>
+                  Toca <strong>Compartir</strong>, el cuadrado con una flecha hacia arriba, y elige <strong>Agregar a pantalla de inicio</strong>.
+                </li>
+                <li>
+                  Abre <strong>Forma</strong> desde el ícono: la prueba se verá a pantalla completa.
+                </li>
+              </>
+            )}
+            {mode === 'in-app' && (
+              <>
+                <li>
+                  Esta app no permite la pantalla completa. Toca el menú <strong>⋯</strong> y elige <strong>Abrir en el navegador</strong>, o copia el enlace y pégalo en Safari o Chrome.
+                </li>
+                <li>
+                  Ya en el navegador, vuelve a tocar <strong>Pantalla completa</strong>.
+                </li>
+              </>
+            )}
+          </ol>
+          {mode === 'in-app' && (
+            <Button size="sm" onClick={() => copyText(location.href, 'Copiaste el enlace. Pégalo en Safari o Chrome.')}>
+              Copiar enlace
+            </Button>
+          )}
+        </>
+      )}
+    </div>
+  );
 }
 
 
@@ -219,6 +252,14 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     // saveDraftNow solo lee referencias; basta con reiniciar el temporizador al cambiar de paso.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
+
+  const immersive = useImmersiveMode();
+  const fullscreen = useIsFullscreen();
+  // Al terminar el flujo, el navegador vuelve a aparecer.
+  useEffect(() => {
+    if (step === 'done') exitFullscreen();
+  }, [step]);
+  useEffect(() => () => exitFullscreen(), []);
 
   const persist = (status: Session['status']) => {
     if (!session.current) return;
@@ -479,7 +520,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             Vas a usar un prototipo y completar {study.tasks.length === 1 ? 'una tarea breve' : `${study.tasks.length} tareas breves`}. No evaluamos a ti: evaluamos el diseño. Si algo no se entiende, es justo lo que queremos saber.
           </p>
           <p className="muted">Toma unos 5 minutos. No necesitas crear una cuenta.</p>
-          <InstallCard />
+          <FullscreenCard />
           <Button tone="primary" onClick={() => setStep('consent')}>
             Continuar
           </Button>
@@ -528,6 +569,11 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             <p className="task-prompt">{task.prompt}</p>
           </div>
           <div className="task-actions">
+            {immersive === 'fullscreen' && !fullscreen && (
+              <Button size="sm" aria-label="Volver a pantalla completa" title="Pantalla completa" onClick={() => void enterFullscreen()}>
+                ⛶
+              </Button>
+            )}
             {study.askAudio && (
               <button
                 type="button"
