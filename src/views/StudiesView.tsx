@@ -388,13 +388,31 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
     };
   }, [study, waitingShortLink]);
 
+  const [exporting, setExporting] = useState(false);
   const exportJson = async () => {
+    setExporting(true);
     const audio: AudioMap = {};
-    for (const s of sessions.filter((x) => x.hasAudio)) {
-      const blob = await getAudio(s.id).catch(() => undefined);
-      if (blob) audio[s.id] = await blobToAudio(blob);
+    let missing = 0;
+    try {
+      for (const s of sessions.filter((x) => x.hasAudio)) {
+        let blob = await getAudio(s.id).catch(() => undefined);
+        // Grabaciones que todavía no se escuchan en este navegador: se bajan de la nube.
+        if (!blob && s.source === 'cloud') {
+          const remote = await downloadCloudAudio(study.id, s.id).catch(() => undefined);
+          if (remote) {
+            blob = remote.blob;
+            if (remote.complete) void saveAudio(s.id, remote.blob).catch(() => undefined);
+          }
+        }
+        if (blob) audio[s.id] = await blobToAudio(blob);
+        else missing++;
+      }
+      download(`${slug(study.name)}-resultados.json`, resultsFile(study.id, sessions, events, audio));
+      if (missing)
+        notify(`Exportaste los resultados, pero ${missing === 1 ? 'una grabación no se pudo incluir' : `${missing} grabaciones no se pudieron incluir`}. Revisa tu conexión y vuelve a exportar.`, 'error');
+    } finally {
+      setExporting(false);
     }
-    download(`${slug(study.name)}-resultados.json`, resultsFile(study.id, sessions, events, audio));
   };
   const exportCsv = () => {
     const rows = [['sesion', 'participante', 'tarea', 'evento', 'pantalla', 'bloque', 'x', 'y', 'ms_desde_inicio', 'duda_ms']];
@@ -449,8 +467,8 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
 
       <div className="study-tools">
         <div className="row">
-          <Button size="sm" onClick={exportJson}>
-            Exportar JSON
+          <Button size="sm" disabled={exporting} onClick={() => void exportJson()}>
+            {exporting ? 'Preparando archivo…' : 'Exportar JSON'}
           </Button>
           <Button size="sm" onClick={exportCsv}>
             Exportar CSV
