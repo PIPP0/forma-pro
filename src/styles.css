@@ -4530,29 +4530,11 @@ dialog.modal {
   }
 }
 
-/* Consentimiento de la prueba: un solo mensaje de autorización */
-.consent-block {
-  display: grid;
-  gap: 6px;
-}
-.consent-block strong {
-  font-size: 14px;
-}
-.consent-list {
-  margin: 0;
-  padding-left: 18px;
-  display: grid;
-  gap: 4px;
-  font-size: 14px;
-  line-height: 1.45;
-}
-.participant-card .consent-authorize {
-  padding: 12px 14px;
-  border: 1px solid var(--accent-line);
-  background: var(--accent-soft);
-  border-radius: 12px;
-  font-weight: 600;
-  line-height: 1.4;
+/* Aceptación en la vista inicial: continuar es autorizar */
+.participant-card .consent-note {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-2);
 }
 
 /* Instalar en el celular: botón siempre visible y pasos cuando el navegador no trae su diálogo */

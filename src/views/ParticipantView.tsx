@@ -12,7 +12,7 @@ import { Runner, type RunnerEvent } from '../components/Runner';
 import { Button, copyText } from '../components/ui';
 import { BrandLockup } from '../components/Shell';
 
-type Step = 'intro' | 'consent' | 'task' | 'rate' | 'sending' | 'done';
+type Step = 'intro' | 'task' | 'rate' | 'sending' | 'done';
 
 const viewportBreakpoint = (): Breakpoint => (window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'desktop');
 
@@ -524,38 +524,13 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
           </p>
           <p className="muted">Toma unos 5 minutos. No necesitas crear una cuenta.</p>
           <FullscreenCard />
-          <Button tone="primary" onClick={() => setStep('consent')}>
-            Continuar
-          </Button>
-        </div>
-      </div>
-    );
-
-  if (step === 'consent')
-    return (
-      <div className="participant">
-        <div className="participant-card stack">
-          <h1>Antes de empezar</h1>
-          <p className="muted">Esta prueba es parte de un estudio para mejorar el diseño de un producto. Evaluamos el diseño, no a ti.</p>
-          <div className="consent-block">
-            <strong>Qué se registra</strong>
-            <ul className="consent-list">
-              <li>Tus toques, el tiempo que tomas y tus respuestas dentro de este prototipo.</li>
-              {study.askAudio && <li>El audio de tu voz mientras pruebas, para entender qué piensas. Tu navegador te pedirá permiso para usar el micrófono y puedes pausar la grabación cuando quieras.</li>}
-              <li>El tipo y el tamaño de tu pantalla.</li>
-            </ul>
-          </div>
-          <div className="consent-block">
-            <strong>Cómo se usa</strong>
-            <ul className="consent-list">
-              <li>Solo la revisa el equipo que te invitó y únicamente con fines de estudio.</li>
-              <li>No te pedimos nombre, correo ni otros datos personales, y no se registra nada fuera del prototipo.</li>
-              <li>Participar es voluntario: puedes dejar la prueba en cualquier momento.</li>
-            </ul>
-          </div>
-          <p className="consent-authorize">Al continuar, acepto y autorizo que utilicen esta información para fines de estudio.</p>
+          {/* Continuar es la aceptación: no hay una pantalla aparte de consentimiento. */}
+          <p className="consent-note">
+            Al continuar, aceptas y autorizas que se registren tus toques, tiempos y respuestas{study.askAudio ? ', y el audio de tu voz,' : ''} dentro de este prototipo, solo con fines de estudio.
+            {study.askAudio ? ' Tu navegador te pedirá permiso para usar el micrófono y puedes pausar la grabación cuando quieras.' : ''} No te pedimos datos personales y puedes dejar la prueba en cualquier momento.
+          </p>
           <Button tone="primary" onClick={start}>
-            Acepto y autorizo
+            Continuar
           </Button>
         </div>
       </div>
