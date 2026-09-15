@@ -1,5 +1,5 @@
 // Service worker de Forma Studio: permite instalar la app y abrir prototipos sin conexión.
-const CACHE = 'forma-v1';
+const CACHE = 'forma-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((c) => c.addAll(['./', './index.html', './manifest.webmanifest', './favicon.svg'])));

@@ -122,10 +122,13 @@ function FullscreenCard() {
               <>
                 <li>En iPhone, Safari solo oculta su barra si abres la prueba desde tu pantalla de inicio.</li>
                 <li>
-                  Toca <strong>Compartir</strong>, el cuadrado con una flecha hacia arriba, y elige <strong>Agregar a pantalla de inicio</strong>.
+                  Toca <strong>Compartir</strong>. En Safari nuevo está dentro del menú <strong>⋯</strong>, abajo a la derecha.
                 </li>
                 <li>
-                  Abre <strong>Forma</strong> desde el ícono: la prueba se verá a pantalla completa.
+                  Elige <strong>Agregar a Inicio</strong> (o <strong>Agregar a pantalla de inicio</strong>). Si no la ves, toca <strong>Ver más</strong>.
+                </li>
+                <li>
+                  Toca <strong>Agregar</strong> y abre <strong>Forma</strong> desde el ícono: la prueba se verá a pantalla completa.
                 </li>
               </>
             )}
