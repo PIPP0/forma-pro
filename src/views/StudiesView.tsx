@@ -290,7 +290,12 @@ export function ResultsView({ project, role, studyId }: { project: Project; role
         title="Cada interacción cuenta."
         sub="Resultados reales de tus pruebas. Sin sesiones ni métricas inventadas."
         actions={
-          <Button onClick={refreshFromStorage}>
+          <Button
+            onClick={() => {
+              refreshFromStorage();
+              window.dispatchEvent(new Event('forma:sync-cloud'));
+            }}
+          >
             <IconRefresh size={16} /> Actualizar
           </Button>
         }
@@ -325,21 +330,20 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [link, setLink] = useState('');
-  const { account } = useCloudAccount();
-  const [syncing, setSyncing] = useState(false);
+  const { account, loading: cloudLoading } = useCloudAccount();
+  const [cloudFailed, setCloudFailed] = useState(false);
   const cloudLinked = !!study.cloud && !!account;
+  // Mientras se publica la copia en la nube no se ofrece el enlace largo; sin conexión, sí.
+  const waitingShortLink = !(study.cloud && study.shortLink) && !cloudFailed && (cloudLoading || !!account);
 
   /** Trae las sesiones que llegaron a la nube (nuevas o que avanzaron). */
   const syncCloud = async (quiet = false) => {
     if (!study.cloud || !account) return;
-    setSyncing(true);
     try {
       const fresh = mergeCloudSessions(study.id, await fetchCloudSessions(study.id));
       if (fresh || !quiet) notify(fresh ? `Llegaron ${fresh} ${fresh === 1 ? 'sesión nueva' : 'sesiones nuevas'} desde la nube.` : 'Los resultados ya están al día.', 'success');
     } catch {
       if (!quiet) notify('No pudimos traer los resultados de la nube. Revisa tu conexión.', 'error');
-    } finally {
-      setSyncing(false);
     }
   };
 
@@ -349,41 +353,40 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
     const timer = window.setInterval(() => {
       if (document.visibilityState === 'visible') void syncCloud(true);
     }, 60000);
-    return () => window.clearInterval(timer);
+    // «Actualizar» de la cabecera también trae lo que llegó a la nube.
+    const onSync = () => void syncCloud(true);
+    window.addEventListener('forma:sync-cloud', onSync);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('forma:sync-cloud', onSync);
+    };
     // syncCloud lee el estudio y la cuenta actuales; basta con reiniciar al cambiar de estudio o conexión.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cloudLinked, study.id]);
 
-  // Estudios conectados antes del enlace corto: se publica su copia para que el enlace corto funcione.
+  // Cada estudio se publica solo en la nube: enlace corto y sesiones que llegan solas.
   useEffect(() => {
-    if (!cloudLinked || study.shortLink) return;
+    if (!account || (study.cloud && study.shortLink)) return;
+    let alive = true;
     publishStudyToCloud(study)
       .then(() => setStudyCloud(study.id, true))
-      .catch(() => undefined);
-  }, [cloudLinked, study]);
-
-  const connectCloud = async () => {
-    if (!account) {
-      notify('Primero conecta la nube con tu correo.', 'info');
-      go('/settings');
-      return;
-    }
-    try {
-      await publishStudyToCloud(study);
-      setStudyCloud(study.id, true);
-      notify('Listo: el enlace ahora es corto y las sesiones llegarán solas. Cópialo de nuevo para compartirlo.', 'success');
-    } catch (e) {
-      notify(e instanceof Error && e.message.startsWith('El prototipo') ? e.message : 'No pudimos conectar el estudio a la nube. Revisa tu conexión.', 'error');
-    }
-  };
+      .catch(() => alive && setCloudFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [account, study]);
 
   useEffect(() => {
+    if (waitingShortLink) {
+      setLink('');
+      return;
+    }
     let alive = true;
     studyLink(study).then((l) => alive && setLink(l));
     return () => {
       alive = false;
     };
-  }, [study]);
+  }, [study, waitingShortLink]);
 
   const exportJson = async () => {
     const audio: AudioMap = {};
@@ -424,7 +427,6 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
             {study.status === 'open' ? <Badge tone="ok">Abierto</Badge> : <Badge>Cerrado</Badge>}
             {study.example && <Badge tone="warn">Datos de ejemplo simulados</Badge>}
             {study.askAudio && <Badge>Pide audio</Badge>}
-            {study.cloud && <Badge tone="ok">Resultados en la nube</Badge>}
           </div>
         </div>
         <div className="row">
@@ -440,17 +442,12 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
             </Button>
           )}
           <Button tone="primary" disabled={!link || study.status !== 'open'} onClick={() => copyText(link, 'Copiaste el enlace público del estudio.')}>
-            Copiar enlace
+            {link || study.status !== 'open' ? 'Copiar enlace' : 'Preparando enlace…'}
           </Button>
         </div>
       </section>
 
       <div className="study-tools">
-        <p className="muted small">
-          {study.cloud && study.shortLink
-            ? `El enlace abre la copia congelada del prototipo y se instala como app en el celular. Las sesiones de quienes participan llegan solas aquí, con su audio.${account ? '' : ' Conecta la nube en Ajustes para verlas.'}`
-            : 'El enlace es largo porque lleva dentro la copia congelada del prototipo. Con «Recibir resultados en la nube» obtienes un enlace corto y las sesiones llegan solas aquí. Sin nube, quien participa desde otro dispositivo te envía un archivo de resultados que importas aquí.'}
-        </p>
         <div className="row">
           <Button size="sm" onClick={exportJson}>
             Exportar JSON
@@ -469,15 +466,6 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
               >
                 Importar resultados
               </Button>
-              {study.cloud ? (
-                <Button size="sm" disabled={syncing || !account} onClick={() => void syncCloud()}>
-                  {syncing ? 'Trayendo…' : 'Traer de la nube'}
-                </Button>
-              ) : (
-                <Button size="sm" onClick={connectCloud}>
-                  Recibir resultados en la nube
-                </Button>
-              )}
               <Button
                 size="sm"
                 onClick={() => {

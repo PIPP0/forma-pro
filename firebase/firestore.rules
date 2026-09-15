@@ -1,6 +1,6 @@
 rules_version = '2';
 // Forma Pro: resultados de pruebas en la nube.
-// - Cada estudio pertenece a quien lo publicó (cuenta con correo verificado).
+// - Cada estudio pertenece a la cuenta que lo publicó (la del navegador de quien diseña, anónima o con correo).
 // - Participantes anónimos solo pueden crear y actualizar SU sesión, y solo en estudios abiertos.
 // - Solo la persona dueña del estudio puede leer o borrar las sesiones.
 service cloud.firestore {
@@ -11,9 +11,7 @@ service cloud.firestore {
     // Copia congelada del prototipo para el enlace corto: se abre con el id (como el enlace largo), no se puede listar.
     match /publicStudies/{studyId} {
       allow get: if true;
-      allow create: if signedIn()
-        && request.auth.token.firebase.sign_in_provider != 'anonymous'
-        && request.resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == request.auth.uid;
@@ -22,9 +20,7 @@ service cloud.firestore {
 
     match /studies/{studyId} {
       allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
-      allow create: if signedIn()
-        && request.auth.token.firebase.sign_in_provider != 'anonymous'
-        && request.resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
       allow update: if signedIn()
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == request.auth.uid;

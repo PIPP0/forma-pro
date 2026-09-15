@@ -157,21 +157,26 @@ function CloudSection({ email }: { email: string }) {
       </p>
       {loading ? (
         <p className="muted small">Revisando la conexión…</p>
-      ) : account ? (
+      ) : !account ? (
+        <p className="muted small">Sin conexión con la nube. Los enlaces y resultados se sincronizan al volver a conectarte.</p>
+      ) : account.email ? (
         <div className="row">
-          <Badge tone="ok">Conectada con {account.email}</Badge>
+          <Badge tone="ok">Acceso guardado con {account.email}</Badge>
           <Button
             tone="ghost"
             onClick={async () => {
               await disconnectCloud().catch(() => undefined);
               setCloudAccountCache(null);
-              notify('Desconectaste la nube en este navegador. Tus resultados siguen guardados en la nube.', 'success');
+              notify('Cerraste el acceso en este navegador. Para volver a ver tus resultados, entra de nuevo con tu correo.', 'success');
             }}
           >
-            Desconectar
+            Cerrar acceso
           </Button>
         </div>
       ) : (
+        <p className="muted small">Activa en este navegador. Guarda tu acceso con tu correo para no perder tus resultados si borras los datos del navegador o cambias de equipo.</p>
+      )}
+      {account && !account.email && (
         <form
           className="row add-row"
           onSubmit={async (e) => {
@@ -191,11 +196,11 @@ function CloudSection({ email }: { email: string }) {
         >
           <input className="input grow" type="email" aria-label="Correo para conectar la nube" value={to} onChange={(e) => setTo(e.target.value)} />
           <Button tone="primary" type="submit" disabled={busy}>
-            {busy ? 'Enviando…' : 'Enviarme el enlace de acceso'}
+            {busy ? 'Enviando…' : 'Guardar mi acceso'}
           </Button>
         </form>
       )}
-      {sentTo && !account && <p className="small">Te enviamos un enlace a {sentTo}. Ábrelo en este mismo navegador para terminar de conectar. Si no llega en un par de minutos, revisa la carpeta de spam.</p>}
+      {sentTo && !account?.email && <p className="small">Te enviamos un enlace a {sentTo}. Ábrelo en este mismo navegador para terminar de conectar. Si no llega en un par de minutos, revisa la carpeta de spam.</p>}
     </section>
   );
 }

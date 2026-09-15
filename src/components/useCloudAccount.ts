@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { cloudAccount, cloudWasConnected, type CloudAccount } from '../lib/cloud';
+import { ensureCloudAccount, type CloudAccount } from '../lib/cloud';
 
-// Estado compartido de la cuenta en la nube: se consulta una vez y lo actualizan conectar y desconectar.
+// Cuenta en la nube compartida por toda la app: se crea sola (anónima) y la actualiza guardar el acceso con correo.
 let cached: CloudAccount | null | undefined;
 let pending: Promise<void> | undefined;
 const listeners = new Set<() => void>();
@@ -12,13 +12,10 @@ export function setCloudAccountCache(account: CloudAccount | null) {
 }
 
 function load() {
-  if (cached !== undefined || pending) return;
-  if (!cloudWasConnected()) {
-    cached = null;
-    return;
-  }
-  pending = cloudAccount()
+  if (cached || pending) return;
+  pending = ensureCloudAccount()
     .then(setCloudAccountCache)
+    // Sin conexión: se reintenta la próxima vez que una vista la pida.
     .catch(() => setCloudAccountCache(null))
     .finally(() => {
       pending = undefined;
@@ -31,10 +28,9 @@ export function useCloudAccount(): { account: CloudAccount | null; loading: bool
     const l = () => force((n) => n + 1);
     listeners.add(l);
     load();
-    l();
     return () => {
       listeners.delete(l);
     };
   }, []);
-  return { account: cached ?? null, loading: cached === undefined };
+  return { account: cached ?? null, loading: !!pending || cached === undefined };
 }

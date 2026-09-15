@@ -40,11 +40,11 @@ function cloud(): Promise<Cloud> {
 
 export interface CloudAccount {
   uid: string;
-  email: string;
+  /** null: cuenta anónima de este navegador (sin correo guardado). */
+  email: string | null;
 }
 
 const EMAIL_KEY = 'formapro.cloud.email';
-const CONNECTED_KEY = 'formapro.cloud.connected';
 
 const readLocal = (k: string) => {
   try {
@@ -62,14 +62,12 @@ const writeLocal = (k: string, v: string | null) => {
   }
 };
 
-/** Evita cargar Firebase en navegadores que nunca conectaron la nube. */
-export const cloudWasConnected = () => readLocal(CONNECTED_KEY) === '1';
-
-export async function cloudAccount(): Promise<CloudAccount | null> {
-  if (!cloudWasConnected()) return null;
+/** Cuenta en la nube de este navegador. Si no hay, se crea una anónima: los estudios quedan a su nombre. */
+export async function ensureCloudAccount(): Promise<CloudAccount> {
   const c = await cloud();
-  const u = c.auth.currentUser;
-  return u && !u.isAnonymous && u.email ? { uid: u.uid, email: u.email } : null;
+  if (!c.auth.currentUser) await c.fa.signInAnonymously(c.auth);
+  const u = c.auth.currentUser!;
+  return { uid: u.uid, email: u.isAnonymous ? null : u.email };
 }
 
 /** Envía el enlace de acceso. Al abrirlo en este navegador, la nube queda conectada. */
@@ -86,23 +84,35 @@ export async function completeAccessLink(): Promise<CloudAccount> {
   if (!c.fa.isSignInWithEmailLink(c.auth, location.href)) throw new Error('El enlace de acceso no es válido o ya se usó. Pide uno nuevo desde Ajustes.');
   const email = readLocal(EMAIL_KEY);
   if (!email) throw new Error('Abre el enlace en el mismo navegador donde lo pediste, o pide uno nuevo desde Ajustes.');
-  const cred = await c.fa.signInWithEmailLink(c.auth, email, location.href);
-  writeLocal(CONNECTED_KEY, '1');
+  const current = c.auth.currentUser;
+  let user;
+  if (current?.isAnonymous) {
+    // Se vincula el correo a la cuenta anónima: los estudios y resultados siguen siendo suyos.
+    try {
+      user = (await c.fa.linkWithCredential(current, c.fa.EmailAuthProvider.credentialWithLink(email, location.href))).user;
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if (code !== 'auth/email-already-in-use' && code !== 'auth/credential-already-in-use') throw e;
+      // El correo ya tenía acceso (por ejemplo, desde otro equipo): se entra con esa cuenta.
+      user = (await c.fa.signInWithEmailLink(c.auth, email, location.href)).user;
+    }
+  } else {
+    user = (await c.fa.signInWithEmailLink(c.auth, email, location.href)).user;
+  }
   writeLocal(EMAIL_KEY, null);
-  return { uid: cred.user.uid, email: cred.user.email ?? email };
+  return { uid: user.uid, email: user.email ?? email };
 }
 
 export async function disconnectCloud() {
-  writeLocal(CONNECTED_KEY, null);
   const c = await cloud();
   await c.fa.signOut(c.auth);
 }
 
 async function designer(): Promise<Cloud & { uid: string; email: string }> {
   const c = await cloud();
-  const u = c.auth.currentUser;
-  if (!u || u.isAnonymous || !u.email) throw new Error('Conecta la nube desde Ajustes para recibir resultados.');
-  return { ...c, uid: u.uid, email: u.email };
+  if (!c.auth.currentUser) await c.fa.signInAnonymously(c.auth);
+  const u = c.auth.currentUser!;
+  return { ...c, uid: u.uid, email: u.isAnonymous ? '' : (u.email ?? '') };
 }
 
 // ---------- Estudios (quien diseña) ----------
