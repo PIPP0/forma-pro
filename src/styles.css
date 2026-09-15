@@ -4529,3 +4529,28 @@ dialog.modal {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Consentimiento de la prueba: un solo mensaje de autorización */
+.consent-block {
+  display: grid;
+  gap: 6px;
+}
+.consent-block strong {
+  font-size: 14px;
+}
+.consent-list {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.participant-card .consent-authorize {
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  border-radius: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}

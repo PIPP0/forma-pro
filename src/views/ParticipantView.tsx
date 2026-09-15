@@ -118,25 +118,10 @@ function InstallCard() {
   return null;
 }
 
-function SwitchRow({ checked, onChange, label, detail }: { checked: boolean; onChange: (v: boolean) => void; label: string; detail?: string }) {
-  return (
-    <button type="button" role="switch" aria-checked={checked} className="switch-row" onClick={() => onChange(!checked)}>
-      <span>
-        <strong>{label}</strong>
-        {detail && <span className="muted small">{detail}</span>}
-      </span>
-      <span className={`switch ${checked ? 'on' : ''}`} aria-hidden="true">
-        <i />
-      </span>
-    </button>
-  );
-}
 
 function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean; onRestart: () => void }) {
   const p = study.snapshot;
   const [step, setStep] = useState<Step>('intro');
-  const [participate, setParticipate] = useState(false);
-  const [audioWanted, setAudioWanted] = useState(false);
   const [taskIndex, setTaskIndex] = useState(0);
   const [outcome, setOutcome] = useState<'success' | 'giveup'>('success');
   const [difficulty, setDifficulty] = useState<number>();
@@ -299,7 +284,8 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
     cloudParts.current = 0;
     cloudPending.current = [];
     cloudSession();
-    if (audioWanted && study.askAudio) await startRecording();
+    // La autorización incluye el audio: la grabación empieza sola (si el micrófono no está disponible, sigue sin grabar).
+    if (study.askAudio) await startRecording();
     beginTask(0);
     saveDraftNow();
   };
@@ -506,22 +492,26 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
       <div className="participant">
         <div className="participant-card stack">
           <h1>Antes de empezar</h1>
-          <label className="check">
-            <input type="checkbox" checked={participate} onChange={(e) => setParticipate(e.target.checked)} />
-            <span>
-              <strong>Acepto participar.</strong> Se registrarán mis toques, el tiempo que tomo y mis respuestas dentro de este prototipo. No se registra nada fuera de él.
-            </span>
-          </label>
-          {study.askAudio && (
-            <SwitchRow
-              checked={audioWanted}
-              onChange={setAudioWanted}
-              label="¿Quieres grabar el audio mientras pruebas?"
-              detail="Es opcional y aparte de tu participación. Puedes encenderlo o apagarlo en cualquier momento durante la prueba."
-            />
-          )}
-          <Button tone="primary" disabled={!participate} onClick={start}>
-            Empezar la prueba
+          <p className="muted">Esta prueba es parte de un estudio para mejorar el diseño de un producto. Evaluamos el diseño, no a ti.</p>
+          <div className="consent-block">
+            <strong>Qué se registra</strong>
+            <ul className="consent-list">
+              <li>Tus toques, el tiempo que tomas y tus respuestas dentro de este prototipo.</li>
+              {study.askAudio && <li>El audio de tu voz mientras pruebas, para entender qué piensas. Tu navegador te pedirá permiso para usar el micrófono y puedes pausar la grabación cuando quieras.</li>}
+              <li>El tipo y el tamaño de tu pantalla.</li>
+            </ul>
+          </div>
+          <div className="consent-block">
+            <strong>Cómo se usa</strong>
+            <ul className="consent-list">
+              <li>Solo la revisa el equipo que te invitó y únicamente con fines de estudio.</li>
+              <li>No te pedimos nombre, correo ni otros datos personales, y no se registra nada fuera del prototipo.</li>
+              <li>Participar es voluntario: puedes dejar la prueba en cualquier momento.</li>
+            </ul>
+          </div>
+          <p className="consent-authorize">Al continuar, acepto y autorizo que utilicen esta información para fines de estudio.</p>
+          <Button tone="primary" onClick={start}>
+            Acepto y autorizo
           </Button>
         </div>
       </div>
