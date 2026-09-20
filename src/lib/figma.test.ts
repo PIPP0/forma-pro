@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { alcanzablesDesde, framesFromPage, hotspotsIn, interaccionesDe, parseFigmaUrl, planImportacion, startFrameOf, type FigmaNode } from './figma';
+import { alcanzablesDesde, framesFromPage, hotspotsIn, interaccionesDe, ordenarPorFlujo, parseFigmaUrl, planImportacion, startFrameOf, type FigmaNode } from './figma';
 
 const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
 const alTocar = (destino: string, navegacion = 'NAVIGATE') => [{ trigger: { type: 'ON_CLICK' }, actions: [{ type: 'NODE', destinationId: destino, navigation: navegacion }] }];
@@ -65,8 +65,8 @@ describe('importar desde Figma', () => {
   it('toma solo las interacciones que cambian de pantalla', () => {
     const zonas = framesFromPage(page)[0].hotspots;
     expect(zonas.map((z) => z.id).sort()).toEqual(['1:3', '1:5', '1:6']);
-    // La más chica queda primero para que se pueda tocar aunque otra la contenga.
-    expect(zonas[0]).toMatchObject({ id: '1:6', destino: '1:30', overlay: true });
+    // La más chica queda al final: en pantalla se dibuja encima y recibe el toque.
+    expect(zonas[zonas.length - 1]).toMatchObject({ id: '1:6', destino: '1:30', overlay: true });
     expect(zonas.find((z) => z.id === '1:5')).toMatchObject({ destino: '1:10', x: 0.1, y: 0.118, w: 0.5 });
     // Hover, desplazar, abrir URL y lo oculto no son zonas tocables.
     expect(zonas.some((z) => ['1:7', '1:8', '1:9', '1:12'].includes(z.id))).toBe(false);
@@ -93,12 +93,24 @@ describe('importar desde Figma', () => {
   });
 
   it('sigue las flechas desde el inicio y deja fuera los frames sueltos', () => {
-    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', width: 390, height: 844, hotspots: [] }];
-    // Inicio → Meta creada (toque) → Inicio (automática); Inicio → Hoja de ayuda (superposición).
-    expect(alcanzablesDesde(frames, '1:2')).toEqual(['1:2', '1:10', '1:30']);
+    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [] }];
+    // Inicio → Hoja de ayuda (la zona más arriba) y → Meta creada; se recorre en ese orden.
+    expect(alcanzablesDesde(frames, '1:2')).toEqual(['1:2', '1:30', '1:10']);
     // Desde una pantalla sin salidas, solo ella.
     expect(alcanzablesDesde(frames, '9:9')).toEqual(['9:9']);
     expect(alcanzablesDesde([], '1:2')).toEqual([]);
+  });
+
+  it('ordena las pantallas como se recorren y deja las sueltas al final', () => {
+    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [] }];
+    expect(ordenarPorFlujo(frames, '1:2').map((f) => f.id)).toEqual(['1:2', '1:30', '1:10', '9:9']);
+  });
+
+  it('toma el toque puesto sobre el frame completo', () => {
+    const completo: FigmaNode = { id: '5:1', name: 'Aviso', type: 'FRAME', absoluteBoundingBox: box(0, 0, 390, 844), interactions: alTocar('1:2') };
+    const zonas = hotspotsIn(completo);
+    expect(zonas).toHaveLength(1);
+    expect(zonas[0]).toMatchObject({ id: '5:1', destino: '1:2', x: 0, y: 0, w: 1, h: 1 });
   });
 
   it('usa la pantalla de inicio del prototipo', () => {

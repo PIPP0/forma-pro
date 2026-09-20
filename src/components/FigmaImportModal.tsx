@@ -6,7 +6,20 @@ import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { uploadPrototypeImage } from '../lib/cloud';
-import { alcanzablesDesde, FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, setFigmaToken, type FigmaFrame, type FigmaPage } from '../lib/figma';
+import {
+  alcanzablesDesde,
+  FigmaError,
+  frameImages,
+  getFigmaToken,
+  listPages,
+  loadPage,
+  ordenarPorFlujo,
+  parseFigmaUrl,
+  planImportacion,
+  setFigmaToken,
+  type FigmaFrame,
+  type FigmaPage,
+} from '../lib/figma';
 import { Button, Field, Modal } from './ui';
 
 const breakpointFor = (w: number): Breakpoint => (w < 600 ? 'mobile' : w < 1100 ? 'tablet' : 'desktop');
@@ -22,7 +35,8 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const [startId, setStartId] = useState('');
   const [inicioDelEnlace, setInicioDelEnlace] = useState<string>();
   const [fueraDelFlujo, setFueraDelFlujo] = useState<string[]>([]);
-  const [asStart, setAsStart] = useState(!project.screens.length);
+  // Si el proyecto aún no tiene nada dibujado, el flujo importado pasa a ser el inicio.
+  const [asStart, setAsStart] = useState(!project.screens.some((s) => s.blocks.length || s.image));
   const [busy, setBusy] = useState('');
   const [token, setToken] = useState(getFigmaToken);
   const [tokenNuevo, setTokenNuevo] = useState('');
@@ -48,16 +62,18 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
     try {
       const { frames: fs, startId: start } = await loadPage(token, key, page);
       setPageId(page);
-      setFrames(fs);
       // El enlace de un prototipo ya dice por dónde empieza: se respeta.
       const delEnlace = inicio ?? inicioDelEnlace;
       const desde = delEnlace && fs.some((f) => f.id === delEnlace) ? delEnlace : (start ?? fs[0].id);
       setStartId(desde);
+      // Quedan en el orden del recorrido: primero el flujo, después las sueltas.
+      const ordenadas = ordenarPorFlujo(fs, desde);
+      setFrames(ordenadas);
       // En un archivo con muchos frames sueltos se marca solo el flujo que sale del inicio.
-      const conectadas = alcanzablesDesde(fs, desde);
-      const soloFlujo = conectadas.length > 1 && conectadas.length < fs.length;
-      setFueraDelFlujo(soloFlujo ? fs.filter((f) => !conectadas.includes(f.id)).map((f) => f.id) : []);
-      setPicked(Object.fromEntries(fs.map((f) => [f.id, !soloFlujo || conectadas.includes(f.id)])));
+      const conectadas = alcanzablesDesde(ordenadas, desde);
+      const soloFlujo = conectadas.length > 1 && conectadas.length < ordenadas.length;
+      setFueraDelFlujo(soloFlujo ? ordenadas.filter((f) => !conectadas.includes(f.id)).map((f) => f.id) : []);
+      setPicked(Object.fromEntries(ordenadas.map((f) => [f.id, !soloFlujo || conectadas.includes(f.id)])));
     } catch (e) {
       setFrames([]);
       fail(e);
@@ -156,24 +172,28 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       if (!screens.length) throw new FigmaError('Figma no entregó imágenes de esas pantallas.');
 
       const first = ids.get(startId) ?? screens[0].id;
-      const ops: OpInput[] = [];
+      const importadas = new Set(screens.map((s) => s.id));
       let nuevas = 0;
       let actualizadas = 0;
-      for (const s of screens) {
-        if (project.screens.some((x) => x.id === s.id)) {
-          // Ya existía: se cambia lo que viene de Figma y se respeta su nombre y su lugar en el flujo.
-          ops.push(
-            edit.screen(project, s.id, 'image', s.image),
-            edit.screen(project, s.id, 'hotspots', s.hotspots),
-            edit.screen(project, s.id, 'figmaId', s.figmaId),
-            edit.screen(project, s.id, 'autoNext', s.autoNext),
-          );
-          actualizadas++;
-        } else {
-          ops.push(edit.addScreen(project, s, project.screens.length + nuevas++));
+      // Las pantallas quedan en el orden del recorrido; una ya importada conserva su nombre y lo suyo.
+      const enOrden = screens.map((s) => {
+        const previa = project.screens.find((x) => x.id === s.id);
+        if (!previa) {
+          nuevas++;
+          return s;
         }
-      }
-      if (asStart) ops.push(edit.project('startScreenId', first));
+        actualizadas++;
+        return { ...previa, image: s.image, hotspots: s.hotspots, figmaId: s.figmaId, autoNext: s.autoNext, presentation: s.presentation, sheetOver: s.sheetOver };
+      });
+      // Lo que no viene de Figma se conserva detrás. Solo se va una pantalla vacía a la que nadie llega.
+      const alguienLlega = (id: string) =>
+        project.screens.some(
+          (s) => s.sheetOver === id || s.autoNext?.target === id || s.blocks.some((b) => b.target === id) || (s.hotspots ?? []).some((h) => h.target === id),
+        );
+      const propias = project.screens.filter((x) => !importadas.has(x.id) && (x.blocks.length > 0 || !!x.image || alguienLlega(x.id)));
+      const ops: OpInput[] = [edit.project('screens', [...enOrden, ...propias])];
+      const inicioSigueVivo = [...enOrden, ...propias].some((x) => x.id === project.startScreenId);
+      if (asStart || !inicioSigueVivo) ops.push(edit.project('startScreenId', first));
       setBusy('');
       const resumen = [nuevas ? `${nuevas} ${nuevas === 1 ? 'pantalla nueva' : 'pantallas nuevas'}` : '', actualizadas ? `${actualizadas} ${actualizadas === 1 ? 'actualizada' : 'actualizadas'}` : ''].filter(Boolean).join(' y ');
       if (!applyOps(project.id, ops, `Importar desde Figma: ${resumen}`)) return;

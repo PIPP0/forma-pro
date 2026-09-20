@@ -76,6 +76,9 @@ export interface FigmaHotspot {
 export interface FigmaFrame {
   id: string;
   name: string;
+  /** Posición en el lienzo de Figma: ordena las pantallas sueltas. */
+  x: number;
+  y: number;
   width: number;
   height: number;
   hotspots: FigmaHotspot[];
@@ -136,6 +139,9 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
   const box = frame.absoluteBoundingBox;
   if (!box?.width || !box.height) return [];
   const out: FigmaHotspot[] = [];
+  // El frame completo puede llevar la interacción: se toca en cualquier parte.
+  const propia = interaccionesDe(frame).toque;
+  if (propia) out.push({ id: frame.id, name: frame.name, x: 0, y: 0, w: 1, h: 1, ...propia });
   const walk = (node: FigmaNode) => {
     if (node.visible === false) return;
     if (node !== frame) {
@@ -156,8 +162,8 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
     for (const c of node.children ?? []) walk(c);
   };
   walk(frame);
-  // Las zonas chicas quedan arriba para que no las tape una grande que las contiene.
-  return out.sort((a, b) => a.w * a.h - b.w * b.h);
+  // Las grandes se dibujan primero: así una zona chica queda encima y recibe el toque.
+  return out.sort((a, b) => b.w * b.h - a.w * a.h);
 }
 
 const FRAME_TYPES = ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE', 'SECTION'];
@@ -173,6 +179,8 @@ export function framesFromPage(page: FigmaNode): FigmaFrame[] {
     frames.push({
       id: node.id,
       name: node.name,
+      x: Math.round(box.x),
+      y: Math.round(box.y),
       width: Math.round(box.width),
       height: Math.round(box.height),
       hotspots: hotspotsIn(node),
@@ -201,15 +209,31 @@ export function alcanzablesDesde(frames: FigmaFrame[], startId: string | undefin
   while (cola.length) {
     const f = porId.get(cola.shift()!);
     if (!f) continue;
-    const destinos = [...f.hotspots.map((h) => h.destino), f.auto?.destino];
+    // Se sigue el orden en que se ven las zonas en la pantalla: de arriba abajo.
+    const porPosicion = [...f.hotspots].sort((a, b) => a.y - b.y || a.x - b.x);
+    const destinos = [...porPosicion.map((h) => h.destino), f.auto?.destino];
     for (const d of destinos) {
       if (!d || vistos.has(d) || !porId.has(d)) continue;
       vistos.add(d);
       cola.push(d);
     }
   }
-  // Se devuelven en el orden de la página para que la lista no se desordene.
-  return frames.filter((f) => vistos.has(f.id)).map((f) => f.id);
+  // Se devuelven en el orden en que se llega a ellas, que es el del recorrido.
+  return [...vistos];
+}
+
+/**
+ * Ordena las pantallas como se recorren: primero el flujo desde el inicio,
+ * después las sueltas según su lugar en el lienzo (de arriba abajo, de izquierda a derecha).
+ */
+export function ordenarPorFlujo(frames: FigmaFrame[], startId: string | undefined): FigmaFrame[] {
+  const porId = new Map(frames.map((f) => [f.id, f]));
+  const flujo = alcanzablesDesde(frames, startId)
+    .map((id) => porId.get(id)!)
+    .filter(Boolean);
+  const enFlujo = new Set(flujo.map((f) => f.id));
+  const sueltas = frames.filter((f) => !enFlujo.has(f.id)).sort((a, b) => a.y - b.y || a.x - b.x);
+  return [...flujo, ...sueltas];
 }
 
 /**
