@@ -202,8 +202,10 @@ export interface Hotspot {
   h: number;
   /** Pantalla a la que lleva. Sin destino, solo registra el toque. */
   target?: string;
-  /** Vuelve a la pantalla anterior. */
+  /** Vuelve a la pantalla anterior (o cierra la hoja). */
   back?: boolean;
+  /** La pantalla de destino se abre encima de la actual (superposición de Figma). */
+  overlay?: boolean;
   label?: string;
 }
 
@@ -222,6 +224,8 @@ export interface Screen {
   hotspots?: Hotspot[];
   /** Nodo de Figma del que viene, para volver a importarla. */
   figmaId?: string;
+  /** Transición automática: pasa sola a otra pantalla tras unos milisegundos. */
+  autoNext?: { ms: number; target?: string; back?: boolean };
   blocks: Block[];
 }
 

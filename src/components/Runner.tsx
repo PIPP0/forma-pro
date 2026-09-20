@@ -51,6 +51,18 @@ export function Runner({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current?.id]);
 
+  // Transición automática de Figma: la pantalla pasa sola después de unos segundos.
+  useEffect(() => {
+    const auto = current?.autoNext;
+    if (!auto) return;
+    const t = window.setTimeout(() => {
+      if (auto.back) navigate({ id: '', type: 'button', label: '', action: 'back' });
+      else if (auto.target) goTo(auto.target);
+    }, Math.max(0, auto.ms));
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current?.id]);
+
   if (!current) return <div className="empty">La pantalla de inicio de esta tarea ya no existe.</div>;
 
   const emit = (e: RunnerEvent) => onEvent?.(e);
@@ -198,9 +210,25 @@ export function Runner({
   ));
   const sheet = current.presentation === 'sheet';
   const body = current.image ? (
-    <div ref={content} className="screen screen-image" onClick={onImageClick}>
-      <ImageScreen screen={current} />
-    </div>
+    sheet ? (
+      // Superposición de Figma: la pantalla se ve encima de la anterior.
+      <SheetLayout
+        key={current.id}
+        project={project}
+        mode={mode}
+        backdrop={sheetBackdrop(project, current, stack.length > 1 ? stack[stack.length - 2] : undefined)}
+        hostRef={content}
+        onClick={onImageClick}
+        fill={fill}
+        animate
+      >
+        <ImageScreen screen={current} />
+      </SheetLayout>
+    ) : (
+      <div ref={content} className="screen screen-image" onClick={onImageClick}>
+        <ImageScreen screen={current} />
+      </div>
+    )
   ) : sheet ? (
     <SheetLayout
       key={current.id}

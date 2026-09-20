@@ -78,6 +78,9 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       // Un frame ya importado conserva su pantalla: así siguen valiendo los destinos que apuntaban a ella.
       const plan = planImportacion(chosen.map((f) => f.id), project.screens, () => uid('s_'));
       const ids = new Map(Object.entries(plan.idPorFrame));
+      // Una pantalla que solo se abre como superposición y es más baja que la de origen se muestra como hoja.
+      const overlayDe = new Map<string, string>();
+      for (const f of chosen) for (const h of f.hotspots) if (h.overlay && h.destino && !overlayDe.has(h.destino)) overlayDe.set(h.destino, f.id);
       const screens: Screen[] = [];
       let linked = 0;
       let done = 0;
@@ -101,10 +104,26 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           w: h.w,
           h: h.h,
           label: h.name,
-          ...(h.back ? { back: true } : {}),
-          ...(h.destination && ids.has(h.destination) ? { target: ids.get(h.destination) } : {}),
+          ...(h.volver ? { back: true } : {}),
+          ...(h.overlay ? { overlay: true } : {}),
+          ...(h.destino && ids.has(h.destino) ? { target: ids.get(h.destino) } : {}),
         }));
-        screens.push({ id: sid, name: f.name, breakpoint: breakpointFor(f.width), image: { url: image, width: f.width, height: f.height }, hotspots, figmaId: f.id, blocks: [] });
+        const destinoAuto = f.auto?.destino && ids.has(f.auto.destino) ? ids.get(f.auto.destino) : undefined;
+        const autoNext = f.auto && (destinoAuto || f.auto.volver) ? { ms: Math.round(f.auto.segundos * 1000), ...(destinoAuto ? { target: destinoAuto } : {}), ...(f.auto.volver ? { back: true } : {}) } : undefined;
+        const origen = overlayDe.get(f.id);
+        const fuente = origen ? chosen.find((x) => x.id === origen) : undefined;
+        const comoHoja = !!fuente && f.height < fuente.height * 0.75;
+        screens.push({
+          id: sid,
+          name: f.name,
+          breakpoint: breakpointFor(f.width),
+          image: { url: image, width: f.width, height: f.height },
+          hotspots,
+          figmaId: f.id,
+          blocks: [],
+          ...(autoNext ? { autoNext } : {}),
+          ...(comoHoja ? { presentation: 'sheet' as const, sheetOver: ids.get(origen!) } : {}),
+        });
       }
       if (!screens.length) throw new FigmaError('Figma no entregó imágenes de esas pantallas.');
 
@@ -115,7 +134,12 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       for (const s of screens) {
         if (project.screens.some((x) => x.id === s.id)) {
           // Ya existía: se cambia lo que viene de Figma y se respeta su nombre y su lugar en el flujo.
-          ops.push(edit.screen(project, s.id, 'image', s.image), edit.screen(project, s.id, 'hotspots', s.hotspots), edit.screen(project, s.id, 'figmaId', s.figmaId));
+          ops.push(
+            edit.screen(project, s.id, 'image', s.image),
+            edit.screen(project, s.id, 'hotspots', s.hotspots),
+            edit.screen(project, s.id, 'figmaId', s.figmaId),
+            edit.screen(project, s.id, 'autoNext', s.autoNext),
+          );
           actualizadas++;
         } else {
           ops.push(edit.addScreen(project, s, project.screens.length + nuevas++));

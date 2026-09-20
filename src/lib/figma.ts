@@ -47,7 +47,7 @@ export interface FigmaNode {
   /** Prototipado clásico. */
   transitionNodeID?: string | null;
   /** Prototipado actual. */
-  interactions?: { trigger?: { type?: string }; actions?: { type?: string; destinationId?: string | null; navigation?: string }[] }[];
+  interactions?: { trigger?: { type?: string; timeout?: number }; actions?: { type?: string; destinationId?: string | null; navigation?: string; url?: string }[] }[];
   prototypeStartNodeID?: string | null;
   flowStartingPoints?: { nodeId: string; name?: string }[];
 }
@@ -60,8 +60,9 @@ export interface FigmaHotspot {
   y: number;
   w: number;
   h: number;
-  destination?: string;
-  back?: boolean;
+  destino?: string;
+  volver?: boolean;
+  overlay?: boolean;
 }
 
 export interface FigmaFrame {
@@ -70,20 +71,56 @@ export interface FigmaFrame {
   width: number;
   height: number;
   hotspots: FigmaHotspot[];
+  /** Transición automática del frame: «después de N segundos». */
+  auto?: { segundos: number; destino?: string; volver?: boolean };
 }
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, Math.round(n * 1000) / 1000));
 
-/** Destino de un nodo: id de otro frame, «volver», o nada. */
-export function destinationOf(node: FigmaNode): { destination?: string; back?: boolean } | undefined {
-  for (const i of node.interactions ?? []) {
-    for (const a of i.actions ?? []) {
-      if (a.navigation === 'BACK' || a.type === 'BACK') return { back: true };
-      if (a.destinationId) return { destination: a.destinationId };
+/**
+ * Lo que hace una interacción de Figma. Solo cuentan las que cambian de pantalla:
+ * desplazar, cambiar de variante o abrir una URL no son navegación dentro del prototipo.
+ */
+export interface FigmaAccion {
+  destino?: string;
+  /** «Volver» o «cerrar superposición». */
+  volver?: boolean;
+  /** La pantalla se abre encima de la actual. */
+  overlay?: boolean;
+}
+
+/** Disparadores que una persona activa tocando. Los de hover son temporales en Figma: se omiten. */
+const TOQUE = new Set(['ON_CLICK', 'ON_PRESS', 'ON_DRAG', 'MOUSE_DOWN', 'MOUSE_UP']);
+const NAVEGA = new Set(['NAVIGATE', 'SWAP', 'OVERLAY']);
+
+function accionDe(acciones: NonNullable<NonNullable<FigmaNode['interactions']>[number]['actions']>): FigmaAccion | undefined {
+  for (const a of acciones) {
+    if (a.type === 'BACK' || a.type === 'CLOSE') return { volver: true };
+    if (a.type === 'NODE' || a.destinationId) {
+      const nav = a.navigation ?? 'NAVIGATE';
+      if (!NAVEGA.has(nav) || !a.destinationId) continue;
+      return { destino: a.destinationId, ...(nav === 'OVERLAY' ? { overlay: true } : {}) };
     }
   }
-  if (node.transitionNodeID) return { destination: node.transitionNodeID };
   return undefined;
+}
+
+/** Interacciones de un nodo: la de toque y la automática por tiempo. */
+export function interaccionesDe(node: FigmaNode): { toque?: FigmaAccion; tiempo?: { segundos: number; accion: FigmaAccion } } {
+  const out: { toque?: FigmaAccion; tiempo?: { segundos: number; accion: FigmaAccion } } = {};
+  for (const i of node.interactions ?? []) {
+    const tipo = i.trigger?.type ?? 'ON_CLICK';
+    const accion = accionDe(i.actions ?? []);
+    if (!accion) continue;
+    if (tipo === 'AFTER_TIMEOUT') {
+      if (!out.tiempo) out.tiempo = { segundos: Math.max(0, Number(i.trigger?.timeout ?? 0)), accion };
+    } else if (TOQUE.has(tipo) && !out.toque) {
+      out.toque = accion;
+    }
+  }
+  // Archivos antiguos: el destino venía en transitionNodeID, siempre al tocar.
+  if (!out.toque && node.transitionNodeID) out.toque = { destino: node.transitionNodeID };
+  return out;
 }
 
 /** Zonas tocables de un frame, en fracciones de su tamaño. */
@@ -94,9 +131,9 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
   const walk = (node: FigmaNode) => {
     if (node.visible === false) return;
     if (node !== frame) {
-      const dest = destinationOf(node);
+      const { toque } = interaccionesDe(node);
       const b = node.absoluteBoundingBox;
-      if (dest && b?.width && b.height) {
+      if (toque && b?.width && b.height) {
         out.push({
           id: node.id,
           name: node.name,
@@ -104,7 +141,7 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
           y: clamp01((b.y - box.y) / box.height),
           w: clamp01(b.width / box.width),
           h: clamp01(b.height / box.height),
-          ...dest,
+          ...toque,
         });
       }
     }
@@ -124,7 +161,15 @@ export function framesFromPage(page: FigmaNode): FigmaFrame[] {
     if (!FRAME_TYPES.includes(node.type) || node.visible === false) continue;
     const box = node.absoluteBoundingBox;
     if (!box?.width || !box.height) continue;
-    frames.push({ id: node.id, name: node.name, width: Math.round(box.width), height: Math.round(box.height), hotspots: hotspotsIn(node) });
+    const { tiempo } = interaccionesDe(node);
+    frames.push({
+      id: node.id,
+      name: node.name,
+      width: Math.round(box.width),
+      height: Math.round(box.height),
+      hotspots: hotspotsIn(node),
+      ...(tiempo ? { auto: { segundos: tiempo.segundos, destino: tiempo.accion.destino, volver: tiempo.accion.volver } } : {}),
+    });
   }
   return frames;
 }

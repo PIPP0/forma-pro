@@ -812,6 +812,12 @@ function HotspotsSection({
   return (
     <Section title="Zonas tocables" aside={hotspots.length ? `${hotspots.length}` : undefined}>
       {!hotspots.length && <p className="muted small">Esta pantalla no tiene zonas tocables. Llegan desde las flechas de prototipo de Figma, o las dibujas aquí sobre la imagen.</p>}
+      {screen.autoNext && (
+        <p className="muted small">
+          Avanza sola {screen.autoNext.back ? 'a la pantalla anterior' : `a «${project.screens.find((s) => s.id === screen.autoNext!.target)?.name ?? 'otra pantalla'}»`} después de{' '}
+          {(screen.autoNext.ms / 1000).toFixed(1).replace('.', ',')} s, como en Figma.
+        </p>
+      )}
       {editable && (
         <div className="row">
           <Button size="sm" tone={drawing ? 'primary' : undefined} aria-pressed={drawing} onClick={() => onDrawing(!drawing)}>

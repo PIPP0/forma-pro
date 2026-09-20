@@ -82,7 +82,8 @@ El siguiente paso para uso en equipo es un backend (por ejemplo Cloudflare Worke
 
 En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas del lienzo). Pega el enlace del archivo o del prototipo y trae cada frame como una pantalla-imagen:
 
-- Las flechas de prototipo de Figma llegan como **zonas tocables**; «Volver» también.
+- Se leen las transiciones del prototipo igual que en Maze: **al tocar → ir a**, **volver** y **cerrar superposición**, **abrir como superposición** (si es más baja que la pantalla, se muestra como hoja encima) y **después de N segundos** (la pantalla avanza sola).
+- Lo que no cambia de pantalla se ignora a propósito: al pasar el mouse, desplazar dentro de la misma pantalla, cambiar de variante y abrir una URL.
 - El destino de cada zona se edita en Propiedades → **Zonas tocables**.
 - Las imágenes se copian a la nube de Forma (las de Figma vencen a los 30 días).
 - Necesitas un **token personal de lectura** de Figma: Ajustes → Figma. Se guarda solo en ese navegador.
