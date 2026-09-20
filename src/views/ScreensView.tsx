@@ -282,6 +282,12 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     }
   };
 
+  /** Mover o ajustar una zona arrastrándola sobre la imagen. */
+  const moverZona = (id: string, r: { x: number; y: number; w: number; h: number }) => {
+    const zonas = (screen.hotspots ?? []).map((z) => (z.id === id ? { ...z, ...r } : z));
+    apply([edit.screen(project, screen.id, 'hotspots', zonas)], `Ajustar zona en «${screen.name}»`);
+  };
+
   const goIssue = (i: Issue) => {
     setGuardOpen(false);
     if (i.screenId) {
@@ -676,6 +682,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           measures={isSel}
                           drawing={isSel && dibujando && !!shown.image && editable}
                           onDrawn={agregarZona}
+                          onMoved={isSel && editable ? moverZona : undefined}
                         />
                       </div>
                     ) : (
@@ -890,6 +897,9 @@ function HotspotsSection({
           </Button>
           {drawing && <span className="muted small">Arrastra sobre la imagen para marcar dónde se toca.</span>}
         </div>
+      )}
+      {editable && hotspots.length > 0 && !drawing && (
+        <p className="muted small">Toca una zona en el lienzo para seleccionarla: se arrastra para moverla y tiene esquinas para ajustar su tamaño.</p>
       )}
       {hotspots.map((h, i) => (
         <Field key={h.id} label={h.label?.trim() || `Zona ${i + 1}`}>

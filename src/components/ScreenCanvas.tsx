@@ -1,5 +1,5 @@
-import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type ReactNode, type Ref } from 'react';
-import type { Block, Mode, Project, Screen } from '../lib/model';
+import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react';
+import type { Block, Hotspot, Mode, Project, Screen } from '../lib/model';
 import { baseId, breakpointOf, screenFor, withValues } from '../lib/model';
 import { colorValue, findComponent, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
@@ -221,6 +221,14 @@ export function PhoneChrome({ project, mode, wireframe, enabled, dim, children }
 }
 
 /** Pantalla importada como imagen (por ejemplo, de Figma), con sus zonas tocables. */
+/** Esquinas para achicar o agrandar una zona. */
+const ESQUINAS = ['nw', 'ne', 'sw', 'se'] as const;
+type Esquina = (typeof ESQUINAS)[number];
+type Caja = { x: number; y: number; w: number; h: number };
+const MIN_ZONA = 0.02;
+const tope = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
+const redondear = (c: Caja): Caja => ({ x: Math.round(c.x * 1000) / 1000, y: Math.round(c.y * 1000) / 1000, w: Math.round(c.w * 1000) / 1000, h: Math.round(c.h * 1000) / 1000 });
+
 export function ImageScreen({
   screen,
   editable,
@@ -228,6 +236,7 @@ export function ImageScreen({
   onSelect,
   drawing,
   onDrawn,
+  onMoved,
 }: {
   screen: Screen;
   editable?: boolean;
@@ -235,10 +244,16 @@ export function ImageScreen({
   onSelect?: (id: string | undefined) => void;
   /** Modo dibujo: arrastrar sobre la imagen crea una zona nueva. */
   drawing?: boolean;
-  onDrawn?: (rect: { x: number; y: number; w: number; h: number }) => void;
+  onDrawn?: (rect: Caja) => void;
+  /** La zona seleccionada se arrastra para moverla y tiene esquinas para ajustarla. */
+  onMoved?: (id: string, rect: Caja) => void;
 }) {
-  const [caja, setCaja] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [caja, setCaja] = useState<Caja | null>(null);
   const inicio = useRef<{ x: number; y: number } | null>(null);
+  const host = useRef<HTMLDivElement>(null);
+  // El arrastre vive en refs: los eventos llegan antes del siguiente render.
+  const arrastre = useRef<{ id: string; modo: 'mover' | Esquina; desde: { x: number; y: number }; original: Caja; actual: Caja } | null>(null);
+  const [ajuste, setAjuste] = useState<{ id: string; actual: Caja } | null>(null);
   if (!screen.image) return null;
 
   const punto = (e: { clientX: number; clientY: number }, host: HTMLElement) => {
@@ -252,27 +267,110 @@ export function ImageScreen({
     h: Math.abs(a.y - b.y),
   });
 
+  // Posición del puntero dentro de la imagen, en fracciones de su tamaño.
+  const enImagen = (e: { clientX: number; clientY: number }) => {
+    const b = host.current?.getBoundingClientRect();
+    if (!b?.width || !b.height) return { x: 0, y: 0 };
+    return { x: (e.clientX - b.left) / b.width, y: (e.clientY - b.top) / b.height };
+  };
+
+  const empezarAjuste = (e: ReactPointerEvent, h: Hotspot, modo: 'mover' | Esquina) => {
+    if (!editable || !onMoved) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const original = { x: h.x, y: h.y, w: h.w, h: h.h };
+    arrastre.current = { id: h.id, modo, desde: enImagen(e), original, actual: original };
+    setAjuste({ id: h.id, actual: original });
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* si el navegador no captura el puntero, el arrastre igual sigue mientras se está encima */
+    }
+  };
+
+  const seguirAjuste = (e: ReactPointerEvent) => {
+    const a = arrastre.current;
+    if (!a) return;
+    const p = enImagen(e);
+    const dx = p.x - a.desde.x;
+    const dy = p.y - a.desde.y;
+    const o = a.original;
+    let { x, y, w, h } = o;
+    if (a.modo === 'mover') {
+      x = tope(o.x + dx, 0, 1 - o.w);
+      y = tope(o.y + dy, 0, 1 - o.h);
+    } else {
+      const derecha = o.x + o.w;
+      const abajo = o.y + o.h;
+      if (a.modo.includes('w')) {
+        x = tope(o.x + dx, 0, derecha - MIN_ZONA);
+        w = derecha - x;
+      } else {
+        w = tope(derecha + dx, o.x + MIN_ZONA, 1) - o.x;
+      }
+      if (a.modo.includes('n')) {
+        y = tope(o.y + dy, 0, abajo - MIN_ZONA);
+        h = abajo - y;
+      } else {
+        h = tope(abajo + dy, o.y + MIN_ZONA, 1) - o.y;
+      }
+    }
+    a.actual = { x, y, w, h };
+    setAjuste({ id: a.id, actual: a.actual });
+  };
+
+  const terminarAjuste = () => {
+    const a = arrastre.current;
+    arrastre.current = null;
+    setAjuste(null);
+    if (!a) return;
+    const { actual: c, original: o } = a;
+    if (c.x !== o.x || c.y !== o.y || c.w !== o.w || c.h !== o.h) onMoved?.(a.id, redondear(c));
+  };
+
   return (
-    <div className="img-screen">
+    <div className="img-screen" ref={host}>
       <img src={screen.image.url} alt={screen.name} draggable={false} />
-      {(screen.hotspots ?? []).map((h) => (
-        <button
-          key={h.id}
-          type="button"
-          data-hotspot-id={h.id}
-          className={`hotspot${editable ? ' editable' : ''}${selectedId === h.id ? ' selected' : ''}`}
-          style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%`, width: `${h.w * 100}%`, height: `${h.h * 100}%` }}
-          aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
-          onClick={
-            editable
-              ? (e) => {
-                  e.stopPropagation();
-                  onSelect?.(h.id);
-                }
-              : undefined
-          }
-        />
-      ))}
+      {(screen.hotspots ?? []).map((h) => {
+        const sel = selectedId === h.id;
+        const c = ajuste?.id === h.id ? ajuste.actual : h;
+        const ajustable = editable && sel && !!onMoved && !drawing;
+        return (
+          <button
+            key={h.id}
+            type="button"
+            data-hotspot-id={h.id}
+            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${ajustable ? ' movible' : ''}`}
+            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%` }}
+            aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
+            onClick={
+              editable
+                ? (e) => {
+                    e.stopPropagation();
+                    onSelect?.(h.id);
+                  }
+                : undefined
+            }
+            onPointerDown={ajustable ? (e) => empezarAjuste(e, h, 'mover') : undefined}
+            onPointerMove={ajustable ? seguirAjuste : undefined}
+            onPointerUp={ajustable ? terminarAjuste : undefined}
+            onPointerCancel={ajustable ? terminarAjuste : undefined}
+          >
+            {ajustable &&
+              ESQUINAS.map((q) => (
+                <span
+                  key={q}
+                  className={`hs-handle hs-${q}`}
+                  role="presentation"
+                  onPointerDown={(e) => empezarAjuste(e, h, q)}
+                  onPointerMove={seguirAjuste}
+                  onPointerUp={terminarAjuste}
+                  onPointerCancel={terminarAjuste}
+                />
+              ))}
+          </button>
+        );
+      })}
       {drawing && (
         <div
           className="hotspot-draw"
@@ -320,6 +418,7 @@ export function ScreenCanvas({
   scale,
   drawing,
   onDrawn,
+  onMoved,
 }: {
   project: Project;
   screen: Screen;
@@ -332,13 +431,14 @@ export function ScreenCanvas({
   scale?: number;
   drawing?: boolean;
   onDrawn?: (rect: { x: number; y: number; w: number; h: number }) => void;
+  onMoved?: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
   const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
   const sheet = screen.presentation === 'sheet';
   const nodes = screen.image ? (
-    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} drawing={drawing} onDrawn={onDrawn} />
+    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} drawing={drawing} onDrawn={onDrawn} onMoved={onMoved} />
   ) : (
     <>
       {screen.blocks.map((b) => (

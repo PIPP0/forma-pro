@@ -4594,6 +4594,7 @@ dialog.modal {
   min-height: 100%;
 }
 .img-screen {
+  user-select: none;
   position: relative;
   line-height: 0;
 }
@@ -4604,6 +4605,8 @@ dialog.modal {
 }
 .hotspot {
   position: absolute;
+  user-select: none;
+  touch-action: none;
   border: 0;
   padding: 0;
   background: transparent;
@@ -4613,6 +4616,37 @@ dialog.modal {
 .hotspot.editable {
   background: rgba(93, 79, 240, 0.12);
   outline: 1px dashed rgba(93, 79, 240, 0.65);
+}
+.hotspot.movible {
+  cursor: move;
+}
+.hs-handle {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--panel, #fff);
+  border: 2px solid var(--accent, #5d4ff0);
+}
+.hs-nw {
+  left: -6px;
+  top: -6px;
+  cursor: nwse-resize;
+}
+.hs-ne {
+  right: -6px;
+  top: -6px;
+  cursor: nesw-resize;
+}
+.hs-sw {
+  left: -6px;
+  bottom: -6px;
+  cursor: nesw-resize;
+}
+.hs-se {
+  right: -6px;
+  bottom: -6px;
+  cursor: nwse-resize;
 }
 .hotspot.editable.selected {
   background: rgba(93, 79, 240, 0.22);
