@@ -15,7 +15,7 @@ import { href } from '../lib/router';
 import { categoryOf, componentSummary, coverage, entryForComponent, projectCategories } from '../lib/catalog';
 import { exportDtcg, exportSystemJson, exportTailwind } from '../lib/systemIO';
 import { ColorCell, CommitInput, CommitNumber } from '../components/inputs';
-import { Badge, Button, CopyButton, Field, PageHead, Tabs } from '../components/ui';
+import { Badge, Button, CopyButton, Field, Modal, PageHead, Tabs } from '../components/ui';
 import { ComponentStudio } from '../components/ComponentStudio';
 import { ImportSystemModal } from '../components/ImportSystemModal';
 import { SystemDoc } from '../components/SystemDoc';
@@ -64,6 +64,7 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
   const [mode, setMode] = useState<Mode>('light');
   const [importOpen, setImportOpen] = useState(false);
   const [printing, setPrinting] = useState(false);
+  const [quitarOpen, setQuitarOpen] = useState(false);
   const editable = can(role, 'edit');
   const libVersion = project.library?.version ?? releasesFor(db, project.id)[0]?.version;
   const cov = coverage(project);
@@ -82,6 +83,11 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
         actions={
           <>
             <ExportMenu p={project} slug={fileSlug} onPrint={() => setPrinting(true)} />
+            {editable && project.components.length > 0 && (
+              <Button tone="ghost" onClick={() => setQuitarOpen(true)}>
+                Quitar el sistema
+              </Button>
+            )}
             {editable && (
               <Button tone="primary" onClick={() => setImportOpen(true)}>
                 <IconUpload size={17} /> Importar sistema
@@ -91,6 +97,7 @@ export function SystemView({ project, role }: { project: Project; role: Role }) 
         }
       />
       <ImportSystemModal p={project} open={importOpen} onClose={() => setImportOpen(false)} />
+      <QuitarSistemaModal p={project} open={quitarOpen} onClose={() => setQuitarOpen(false)} />
       {printing && <SystemDoc p={project} onDone={() => setPrinting(false)} />}
 
       <section className="card lib-hero">
@@ -753,5 +760,45 @@ function HealthTab({ p, editable }: { p: Project; editable: boolean }) {
         )}
       </section>
     </>
+  );
+}
+
+/** Deja el proyecto sin biblioteca: útil cuando sus pantallas vienen de imágenes de Figma. */
+function QuitarSistemaModal({ p, open, onClose }: { p: Project; open: boolean; onClose: () => void }) {
+  const usados = p.screens.flatMap((s) => s.blocks.filter((b) => b.componentId).map((b) => ({ screenId: s.id, blockId: b.id })));
+  return (
+    <Modal
+      open={open}
+      title="Quitar el sistema de diseño"
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancelar</Button>
+          <Button
+            tone="danger"
+            onClick={() => {
+              const ops: OpInput[] = usados.map((u) => edit.block(p, u.screenId, u.blockId, 'componentId', undefined));
+              ops.push(edit.project('components', []), edit.project('noSystem', true));
+              if (applyOps(p.id, ops, 'Quitar el sistema de diseño')) {
+                notify('Este proyecto quedó sin sistema de diseño.', 'success');
+                onClose();
+              }
+            }}
+          >
+            Quitar el sistema
+          </Button>
+        </>
+      }
+    >
+      <p>
+        Se eliminan los {p.components.length} componentes de «{p.brand} UI». Las pantallas que vienen de imágenes de Figma no cambian, y los colores y la tipografía del proyecto se mantienen.
+      </p>
+      {usados.length > 0 && (
+        <p className="warn-text">
+          {usados.length} {usados.length === 1 ? 'bloque usa un componente' : 'bloques usan componentes'} de esta biblioteca. Conservan su contenido, pero pasan a dibujarse con el estilo base.
+        </p>
+      )}
+      <p className="muted small">Puedes volver a agregarla cuando quieras desde Sistema de diseño → Componentes.</p>
+    </Modal>
   );
 }
