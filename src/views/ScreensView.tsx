@@ -471,12 +471,15 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <span>{project.components.length}</span>
               </div>
               {editable &&
-                (project.components.length ? (
+                (screen.image ? (
+                  <p className="lib-help">«{screen.name}» es una imagen de Figma: no lleva componentes. Lo que se marca sobre ella son zonas tocables, en el panel de la derecha.</p>
+                ) : project.components.length ? (
                   <p className="lib-help">Toca un componente para agregarlo a «{screen.name}».</p>
                 ) : (
                   <p className="lib-help">Este proyecto no tiene sistema de diseño. Sus pantallas vienen de imágenes; si vas a armarlas aquí, agrega la biblioteca desde Sistema.</p>
                 ))}
-              {projectCategories(project).map((cat) => {
+              {!screen.image &&
+                projectCategories(project).map((cat) => {
                 const items = project.components.filter((c) => categoryOf(c, project) === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
                 if (!items.length) return null;
                 return (
@@ -525,7 +528,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   </div>
                 );
               })}
-              {editable && (
+              {editable && !screen.image && (
                 <details className="loose">
                   <summary>Bloques sueltos, sin componente</summary>
                   <div className="palette">
@@ -1123,7 +1126,7 @@ function ScreenProps({
       <Section title="Diseño" aside="Tokens globales">
         <GlobalTokens project={project} editable={editable} />
       </Section>
-      {editable && (
+      {editable && !screen.image && project.components.length > 0 && (
         <Section title={`Agregar a «${screen.name}»`}>
           <div className="palette">
             {project.components.map((c) => (
