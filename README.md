@@ -90,3 +90,13 @@ En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas de
 - En las pruebas se registran toques, mapa de calor, tiempos, abandono y audio igual que en las pantallas hechas con componentes.
 - **¿Tu Figma no tiene flechas de prototipo?** En Propiedades → Zonas tocables, «Dibujar zona» permite marcarlas a mano sobre la imagen.
 - **Volver a importar:** si cambias el diseño, importa otra vez el mismo archivo. Las pantallas que ya trajiste se actualizan en su lugar, conservando su nombre y los destinos que apuntaban a ellas.
+- **Cambiar de prototipo:** la etiqueta «Flujo de Figma · N» del encabezado del lienzo (o el propio diálogo de importar) quita las pantallas traídas y deja el proyecto listo para otro archivo.
+
+### Modo prototipo
+
+La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido al de Figma:
+
+- Arrastrar sobre cualquier pantalla-imagen crea una zona tocable.
+- Cada zona muestra un punto a su derecha: arrástralo hasta otra pantalla para conectarla.
+- Las flechas entre zonas y pantallas se dibujan sobre el lienzo.
+- Una zona seleccionada se mueve arrastrándola y se ajusta desde sus esquinas: sirve cuando Figma trae la flecha en el frame completo y solo un botón debería avanzar.

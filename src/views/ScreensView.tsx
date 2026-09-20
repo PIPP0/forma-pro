@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { Block, BlockType, Breakpoint, Component, Hotspot, Mode, OpInput, Project, Role, Screen } from '../lib/model';
 import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
 import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
@@ -127,6 +127,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [importOpen, setImportOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [quitarFigma, setQuitarFigma] = useState(false);
+  const [proto, setProto] = useState(false);
+  const framesRef = useRef<HTMLDivElement>(null);
+  const [conexion, setConexion] = useState<{ screenId: string; hotspotId: string; x0: number; y0: number; x: number; y: number } | null>(null);
   const [dibujando, setDibujando] = useState(false);
   const [drag, setDrag] = useState<string>();
   const [dropOn, setDropOn] = useState<string>();
@@ -271,22 +274,50 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   };
 
   /** Zona dibujada a mano sobre una pantalla-imagen (por ejemplo, si el Figma no traía flechas). */
-  const agregarZona = (r: { x: number; y: number; w: number; h: number }) => {
-    const zonas = screen.hotspots ?? [];
+  const agregarZona = (r: { x: number; y: number; w: number; h: number }) => agregarZonaEn(screen, r);
+
+  /** Mover o ajustar una zona arrastrándola sobre la imagen. */
+  const moverZonaEn = (s: Screen, id: string, r: { x: number; y: number; w: number; h: number }) => {
+    const zonas = (s.hotspots ?? []).map((z) => (z.id === id ? { ...z, ...r } : z));
+    apply([edit.screen(project, s.id, 'hotspots', zonas)], `Ajustar zona en «${s.name}»`);
+  };
+
+  const agregarZonaEn = (s: Screen, r: { x: number; y: number; w: number; h: number }) => {
+    const zonas = s.hotspots ?? [];
     const zona: Hotspot = { id: uid('h_'), ...r, label: `Zona ${zonas.length + 1}` };
-    if (apply([edit.screen(project, screen.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${screen.name}»`)) {
+    if (apply([edit.screen(project, s.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${s.name}»`)) {
       setDibujando(false);
-      setBlockId(zona.id);
+      select(s.id, zona.id);
       setPanel('props');
-      notify('Zona creada. Elige a qué pantalla lleva.', 'success');
+      notify(proto ? 'Zona creada. Arrastra su punto hasta la pantalla de destino.' : 'Zona creada. Elige a qué pantalla lleva.', 'success');
     }
   };
 
-  /** Mover o ajustar una zona arrastrándola sobre la imagen. */
-  const moverZona = (id: string, r: { x: number; y: number; w: number; h: number }) => {
-    const zonas = (screen.hotspots ?? []).map((z) => (z.id === id ? { ...z, ...r } : z));
-    apply([edit.screen(project, screen.id, 'hotspots', zonas)], `Ajustar zona en «${screen.name}»`);
+  /** Arrastrar la flecha de una zona hasta otra pantalla, como en el modo prototipo de Figma. */
+  const empezarConexion = (s: Screen, hotspotId: string, e: { clientX: number; clientY: number }) => {
+    setConexion({ screenId: s.id, hotspotId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
   };
+
+  useEffect(() => {
+    if (!conexion) return;
+    const mover = (e: PointerEvent) => setConexion((c) => (c ? { ...c, x: e.clientX, y: e.clientY } : c));
+    const soltar = (e: PointerEvent) => {
+      setConexion(null);
+      const destino = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-screen-id]');
+      const destinoId = destino instanceof HTMLElement ? destino.dataset.screenId : undefined;
+      const origen = project.screens.find((x) => x.id === conexion.screenId);
+      if (!destinoId || !origen) return;
+      const zonas = (origen.hotspots ?? []).map((z) => (z.id === conexion.hotspotId ? { ...z, target: destinoId, back: undefined } : z));
+      const nombre = project.screens.find((x) => x.id === destinoId)?.name ?? 'otra pantalla';
+      if (applyOps(project.id, [edit.screen(project, origen.id, 'hotspots', zonas)], `Conectar «${origen.name}» con «${nombre}»`)) notify(`Esta zona lleva a «${nombre}».`, 'success');
+    };
+    window.addEventListener('pointermove', mover);
+    window.addEventListener('pointerup', soltar, { once: true });
+    return () => {
+      window.removeEventListener('pointermove', mover);
+      window.removeEventListener('pointerup', soltar);
+    };
+  }, [conexion?.hotspotId, conexion?.screenId]);
 
   const goIssue = (i: Issue) => {
     setGuardOpen(false);
@@ -564,6 +595,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             <button type="button" className="icon-btn" aria-label={mode === 'light' ? 'Ver en modo oscuro' : 'Ver en modo claro'} title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'} onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}>
               {mode === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
             </button>
+            <Tabs small label="Modo" value={proto ? 'proto' : 'diseno'} onChange={(v) => setProto(v === 'proto')} items={[{ id: 'diseno', label: 'Diseño' }, { id: 'proto', label: 'Prototipo' }]} />
             <Tabs
               small
               label="Fidelidad"
@@ -652,13 +684,14 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             </div>
           </header>
 
-          <div className="frames" style={{ gap: 0 }}>
+          <div className="frames" ref={framesRef} style={{ gap: 0 }}>
+            {proto && <Conexiones hostRef={framesRef} project={project} clave={`${bp}|${zoom}|${project.updatedAt}|${bases.length}`} />}
             {bases.map((s, i) => {
               const shown = s.breakpoint === bp ? s : project.screens.find((v) => v.variantOf === s.id && v.breakpoint === bp);
               const isSel = !!shown && screen.id === shown.id;
               return (
                 <Fragment key={s.id}>
-                  <div className="frame" style={{ width: frameW }}>
+                  <div className="frame" data-screen-id={s.id} style={{ width: frameW }}>
                     <div className="frame-label">
                       <button type="button" className="frame-name" onClick={() => select(shown?.id ?? s.id)}>
                         <IconFrame size={13} /> {String(i + 1).padStart(2, '0')} — {s.name}
@@ -680,9 +713,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           selectedBlockId={isSel ? blockId : undefined}
                           onSelect={(bid) => select(shown.id, bid)}
                           measures={isSel}
-                          drawing={isSel && dibujando && !!shown.image && editable}
-                          onDrawn={agregarZona}
-                          onMoved={isSel && editable ? moverZona : undefined}
+                          drawing={!!shown.image && editable && (proto || (isSel && dibujando))}
+                          onDrawn={(r) => agregarZonaEn(shown, r)}
+                          onMoved={editable && (proto || isSel) ? (id, r) => moverZonaEn(shown, id, r) : undefined}
+                          proto={proto && !!shown.image && editable}
+                          onConnect={(hid, e) => empezarConexion(shown, hid, e)}
                         />
                       </div>
                     ) : (
@@ -714,6 +749,12 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
           </div>
         </div>
 
+        {conexion && (
+          <svg className="conexion-viva" aria-hidden="true">
+            <line x1={conexion.x0} y1={conexion.y0} x2={conexion.x} y2={conexion.y} />
+            <circle cx={conexion.x} cy={conexion.y} r={4} />
+          </svg>
+        )}
         {!block && (
           <p className="canvas-hint">
             <IconDiamond size={14} /> Selecciona un componente para editar sus propiedades e interacciones.
@@ -1567,5 +1608,66 @@ function ImportHtmlModal({ open, onClose, onImport }: { open: boolean; onClose: 
       </Field>
       {blocks.length > 0 && <p className="ok-text">Se detectaron: {blocks.map((b) => blockMeta(b.type).label.toLowerCase()).join(', ')}.</p>}
     </Modal>
+  );
+}
+
+/** Flechas del modo prototipo: van de cada zona tocable a la pantalla que abre. */
+function Conexiones({ hostRef, project, clave }: { hostRef: RefObject<HTMLDivElement | null>; project: Project; clave: string }) {
+  const [rutas, setRutas] = useState<{ id: string; d: string }[]>([]);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+    const destinoDe = (hotspotId: string) => {
+      for (const s of project.screens) {
+        const h = s.hotspots?.find((z) => z.id === hotspotId);
+        if (h) return h.target;
+      }
+      return undefined;
+    };
+    const calcular = () => {
+      const caja = host.getBoundingClientRect();
+      const out: { id: string; d: string }[] = [];
+      host.querySelectorAll<HTMLElement>('[data-hotspot-id]').forEach((el) => {
+        const id = el.dataset.hotspotId;
+        const destino = id ? destinoDe(id) : undefined;
+        if (!id || !destino) return;
+        const meta = host.querySelector<HTMLElement>(`[data-screen-id="${CSS.escape(destino)}"]`);
+        if (!meta) return;
+        const r = el.getBoundingClientRect();
+        const d = meta.getBoundingClientRect();
+        const haciaDerecha = d.left >= r.right;
+        const x1 = (haciaDerecha ? r.right : r.left) - caja.left;
+        const y1 = r.top + r.height / 2 - caja.top;
+        const x2 = (haciaDerecha ? d.left : d.right) - caja.left;
+        const y2 = d.top + 70 - caja.top;
+        const curva = Math.max(40, Math.abs(x2 - x1) / 2);
+        const c1 = haciaDerecha ? x1 + curva : x1 - curva;
+        const c2 = haciaDerecha ? x2 - curva : x2 + curva;
+        out.push({ id, d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}` });
+      });
+      setRutas(out);
+    };
+    calcular();
+    const ro = new ResizeObserver(calcular);
+    ro.observe(host);
+    window.addEventListener('resize', calcular);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', calcular);
+    };
+  }, [hostRef, project, clave]);
+
+  return (
+    <svg className="conexiones" aria-hidden="true">
+      <defs>
+        <marker id="punta-flecha" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+          <path d="M0 0 L8 4 L0 8 z" />
+        </marker>
+      </defs>
+      {rutas.map((r) => (
+        <path key={r.id} d={r.d} markerEnd="url(#punta-flecha)" />
+      ))}
+    </svg>
   );
 }

@@ -237,6 +237,8 @@ export function ImageScreen({
   drawing,
   onDrawn,
   onMoved,
+  proto,
+  onConnect,
 }: {
   screen: Screen;
   editable?: boolean;
@@ -247,6 +249,9 @@ export function ImageScreen({
   onDrawn?: (rect: Caja) => void;
   /** La zona seleccionada se arrastra para moverla y tiene esquinas para ajustarla. */
   onMoved?: (id: string, rect: Caja) => void;
+  /** Modo prototipo: todas las zonas se ven y se les puede arrastrar una flecha. */
+  proto?: boolean;
+  onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
 }) {
   const [caja, setCaja] = useState<Caja | null>(null);
   const inicio = useRef<{ x: number; y: number } | null>(null);
@@ -331,46 +336,6 @@ export function ImageScreen({
   return (
     <div className="img-screen" ref={host}>
       <img src={screen.image.url} alt={screen.name} draggable={false} />
-      {(screen.hotspots ?? []).map((h) => {
-        const sel = selectedId === h.id;
-        const c = ajuste?.id === h.id ? ajuste.actual : h;
-        const ajustable = editable && sel && !!onMoved && !drawing;
-        return (
-          <button
-            key={h.id}
-            type="button"
-            data-hotspot-id={h.id}
-            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${ajustable ? ' movible' : ''}`}
-            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%` }}
-            aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
-            onClick={
-              editable
-                ? (e) => {
-                    e.stopPropagation();
-                    onSelect?.(h.id);
-                  }
-                : undefined
-            }
-            onPointerDown={ajustable ? (e) => empezarAjuste(e, h, 'mover') : undefined}
-            onPointerMove={ajustable ? seguirAjuste : undefined}
-            onPointerUp={ajustable ? terminarAjuste : undefined}
-            onPointerCancel={ajustable ? terminarAjuste : undefined}
-          >
-            {ajustable &&
-              ESQUINAS.map((q) => (
-                <span
-                  key={q}
-                  className={`hs-handle hs-${q}`}
-                  role="presentation"
-                  onPointerDown={(e) => empezarAjuste(e, h, q)}
-                  onPointerMove={seguirAjuste}
-                  onPointerUp={terminarAjuste}
-                  onPointerCancel={terminarAjuste}
-                />
-              ))}
-          </button>
-        );
-      })}
       {drawing && (
         <div
           className="hotspot-draw"
@@ -402,6 +367,58 @@ export function ImageScreen({
           {caja && <span className="hotspot-fantasma" style={{ left: `${caja.x * 100}%`, top: `${caja.y * 100}%`, width: `${caja.w * 100}%`, height: `${caja.h * 100}%` }} />}
         </div>
       )}
+      {(screen.hotspots ?? []).map((h) => {
+        const sel = selectedId === h.id;
+        const c = ajuste?.id === h.id ? ajuste.actual : h;
+        const ajustable = editable && (sel || !!proto) && !!onMoved;
+        return (
+          <button
+            key={h.id}
+            type="button"
+            data-hotspot-id={h.id}
+            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${ajustable ? ' movible' : ''}`}
+            style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%` }}
+            aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
+            onClick={
+              editable
+                ? (e) => {
+                    e.stopPropagation();
+                    onSelect?.(h.id);
+                  }
+                : undefined
+            }
+            onPointerDown={ajustable ? (e) => empezarAjuste(e, h, 'mover') : undefined}
+            onPointerMove={ajustable ? seguirAjuste : undefined}
+            onPointerUp={ajustable ? terminarAjuste : undefined}
+            onPointerCancel={ajustable ? terminarAjuste : undefined}
+          >
+            {proto && editable && onConnect && (
+              <span
+                className="hs-link"
+                role="presentation"
+                title="Arrastra hasta la pantalla de destino"
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onConnect(h.id, e);
+                }}
+              />
+            )}
+            {ajustable &&
+              ESQUINAS.map((q) => (
+                <span
+                  key={q}
+                  className={`hs-handle hs-${q}`}
+                  role="presentation"
+                  onPointerDown={(e) => empezarAjuste(e, h, q)}
+                  onPointerMove={seguirAjuste}
+                  onPointerUp={terminarAjuste}
+                  onPointerCancel={terminarAjuste}
+                />
+              ))}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -419,6 +436,8 @@ export function ScreenCanvas({
   drawing,
   onDrawn,
   onMoved,
+  proto,
+  onConnect,
 }: {
   project: Project;
   screen: Screen;
@@ -432,13 +451,25 @@ export function ScreenCanvas({
   drawing?: boolean;
   onDrawn?: (rect: { x: number; y: number; w: number; h: number }) => void;
   onMoved?: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
+  proto?: boolean;
+  onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
   const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
   const sheet = screen.presentation === 'sheet';
   const nodes = screen.image ? (
-    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} drawing={drawing} onDrawn={onDrawn} onMoved={onMoved} />
+    <ImageScreen
+      screen={screen}
+      editable
+      selectedId={selectedBlockId}
+      onSelect={(id) => onSelect?.(id)}
+      drawing={drawing}
+      onDrawn={onDrawn}
+      onMoved={onMoved}
+      proto={proto}
+      onConnect={onConnect}
+    />
   ) : (
     <>
       {screen.blocks.map((b) => (
