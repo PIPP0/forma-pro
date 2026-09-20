@@ -126,6 +126,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [guardOpen, setGuardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
+  const [dibujando, setDibujando] = useState(false);
   const [drag, setDrag] = useState<string>();
   const [dropOn, setDropOn] = useState<string>();
   const scroller = useRef<HTMLDivElement>(null);
@@ -252,6 +253,18 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     if (apply([edit.addBlock(project, screen.id, b, i)], `Agregar ${blockMeta(b.type).label.toLowerCase()} en «${screen.name}»`)) {
       setBlockId(b.id);
       setPanel('props');
+    }
+  };
+
+  /** Zona dibujada a mano sobre una pantalla-imagen (por ejemplo, si el Figma no traía flechas). */
+  const agregarZona = (r: { x: number; y: number; w: number; h: number }) => {
+    const zonas = screen.hotspots ?? [];
+    const zona: Hotspot = { id: uid('h_'), ...r, label: `Zona ${zonas.length + 1}` };
+    if (apply([edit.screen(project, screen.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${screen.name}»`)) {
+      setDibujando(false);
+      setBlockId(zona.id);
+      setPanel('props');
+      notify('Zona creada. Elige a qué pantalla lleva.', 'success');
     }
   };
 
@@ -615,6 +628,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           selectedBlockId={isSel ? blockId : undefined}
                           onSelect={(bid) => select(shown.id, bid)}
                           measures={isSel}
+                          drawing={isSel && dibujando && !!shown.image && editable}
+                          onDrawn={agregarZona}
                         />
                       </div>
                     ) : (
@@ -707,7 +722,17 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             (block ? (
               <BlockProps key={block.id} project={project} screen={screen} block={block} editable={editable} onSelect={setBlockId} />
             ) : (
-              <ScreenProps key={screen.id} project={project} screen={screen} editable={editable} onDelete={deleteScreen} onDuplicate={duplicateScreen} onAdd={insertBlock} />
+              <ScreenProps
+                key={screen.id}
+                project={project}
+                screen={screen}
+                editable={editable}
+                onDelete={deleteScreen}
+                onDuplicate={duplicateScreen}
+                onAdd={insertBlock}
+                drawing={dibujando}
+                onDrawing={setDibujando}
+              />
             ))}
           {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
           {panel === 'ai' && (
@@ -768,13 +793,33 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 }
 
 /** Destinos de una pantalla importada como imagen. */
-function HotspotsSection({ project, screen, editable }: { project: Project; screen: Screen; editable: boolean }) {
+function HotspotsSection({
+  project,
+  screen,
+  editable,
+  drawing,
+  onDrawing,
+}: {
+  project: Project;
+  screen: Screen;
+  editable: boolean;
+  drawing: boolean;
+  onDrawing: (v: boolean) => void;
+}) {
   const hotspots = screen.hotspots ?? [];
   const save = (next: Hotspot[], label: string) => applyOps(project.id, [edit.screen(project, screen.id, 'hotspots', next)], label);
   const targets = project.screens.filter((s) => !s.variantOf && s.id !== screen.id);
   return (
     <Section title="Zonas tocables" aside={hotspots.length ? `${hotspots.length}` : undefined}>
-      {!hotspots.length && <p className="muted small">Esta pantalla no tiene zonas tocables. En Figma se crean con las flechas de prototipo.</p>}
+      {!hotspots.length && <p className="muted small">Esta pantalla no tiene zonas tocables. Llegan desde las flechas de prototipo de Figma, o las dibujas aquí sobre la imagen.</p>}
+      {editable && (
+        <div className="row">
+          <Button size="sm" tone={drawing ? 'primary' : undefined} aria-pressed={drawing} onClick={() => onDrawing(!drawing)}>
+            {drawing ? 'Listo' : 'Dibujar zona'}
+          </Button>
+          {drawing && <span className="muted small">Arrastra sobre la imagen para marcar dónde se toca.</span>}
+        </div>
+      )}
       {hotspots.map((h, i) => (
         <Field key={h.id} label={h.label?.trim() || `Zona ${i + 1}`}>
           <div className="row">
@@ -890,6 +935,8 @@ function ScreenProps({
   onDelete,
   onDuplicate,
   onAdd,
+  drawing,
+  onDrawing,
 }: {
   project: Project;
   screen: Screen;
@@ -897,6 +944,8 @@ function ScreenProps({
   onDelete: () => void;
   onDuplicate: () => void;
   onAdd: (b: Block) => void;
+  drawing: boolean;
+  onDrawing: (v: boolean) => void;
 }) {
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
@@ -915,7 +964,7 @@ function ScreenProps({
           </span>
         </span>
       </div>
-      {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} />}
+      {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} drawing={drawing} onDrawing={onDrawing} />}
       <Section title="Contenido">
         <Field label="Nombre de pantalla">
           <CommitInput

@@ -19,7 +19,8 @@ function HeatLayer({ events }: { events: StudyEvent[] }) {
       const H = screenEl.offsetHeight;
       setPoints(
         events.map((e) => {
-          const el = e.block ? screenEl.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(e.block)}"]`) : null;
+          // El toque puede ser sobre un bloque o sobre una zona de una pantalla-imagen.
+          const el = e.block ? screenEl.querySelector<HTMLElement>(`[data-block-id="${CSS.escape(e.block)}"], [data-hotspot-id="${CSS.escape(e.block)}"]`) : null;
           if (el && e.bx != null && e.by != null) return { x: el.offsetLeft + e.bx * el.offsetWidth, y: el.offsetTop + e.by * el.offsetHeight, kind: e.kind };
           return { x: e.x * W, y: e.y * H, kind: e.kind };
         }),

@@ -70,6 +70,9 @@ export function blockLabel(p: Project, blockId?: string) {
   for (const s of p.screens) {
     const b = s.blocks.find((x) => x.id === blockId);
     if (b) return plainText(b.label);
+    // Pantallas importadas como imagen: lo tocado es una zona, no un bloque.
+    const h = s.hotspots?.find((x) => x.id === blockId);
+    if (h) return plainText(h.label || 'zona tocable');
   }
   return 'bloque eliminado';
 }

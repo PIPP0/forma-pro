@@ -221,8 +221,37 @@ export function PhoneChrome({ project, mode, wireframe, enabled, dim, children }
 }
 
 /** Pantalla importada como imagen (por ejemplo, de Figma), con sus zonas tocables. */
-export function ImageScreen({ screen, editable, selectedId, onSelect }: { screen: Screen; editable?: boolean; selectedId?: string; onSelect?: (id: string | undefined) => void }) {
+export function ImageScreen({
+  screen,
+  editable,
+  selectedId,
+  onSelect,
+  drawing,
+  onDrawn,
+}: {
+  screen: Screen;
+  editable?: boolean;
+  selectedId?: string;
+  onSelect?: (id: string | undefined) => void;
+  /** Modo dibujo: arrastrar sobre la imagen crea una zona nueva. */
+  drawing?: boolean;
+  onDrawn?: (rect: { x: number; y: number; w: number; h: number }) => void;
+}) {
+  const [caja, setCaja] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const inicio = useRef<{ x: number; y: number } | null>(null);
   if (!screen.image) return null;
+
+  const punto = (e: { clientX: number; clientY: number }, host: HTMLElement) => {
+    const r = host.getBoundingClientRect();
+    return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
+  };
+  const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
+    x: Math.min(a.x, b.x),
+    y: Math.min(a.y, b.y),
+    w: Math.abs(a.x - b.x),
+    h: Math.abs(a.y - b.y),
+  });
+
   return (
     <div className="img-screen">
       <img src={screen.image.url} alt={screen.name} draggable={false} />
@@ -244,6 +273,37 @@ export function ImageScreen({ screen, editable, selectedId, onSelect }: { screen
           }
         />
       ))}
+      {drawing && (
+        <div
+          className="hotspot-draw"
+          onPointerDown={(e) => {
+            const host = e.currentTarget;
+            try {
+              host.setPointerCapture(e.pointerId);
+            } catch {
+              /* algunos navegadores no permiten capturar el puntero: el dibujo funciona igual */
+            }
+            inicio.current = punto(e, host);
+            setCaja({ ...inicio.current, w: 0, h: 0 });
+          }}
+          onPointerMove={(e) => {
+            if (!inicio.current) return;
+            setCaja(rectDe(inicio.current, punto(e, e.currentTarget)));
+          }}
+          onPointerUp={(e) => {
+            const desde = inicio.current;
+            inicio.current = null;
+            setCaja(null);
+            if (!desde) return;
+            const r = rectDe(desde, punto(e, e.currentTarget));
+            // Un toque suelto no crea una zona: hace falta arrastrar.
+            if (r.w < 0.02 || r.h < 0.01) return;
+            onDrawn?.({ x: Math.round(r.x * 1000) / 1000, y: Math.round(r.y * 1000) / 1000, w: Math.round(r.w * 1000) / 1000, h: Math.round(r.h * 1000) / 1000 });
+          }}
+        >
+          {caja && <span className="hotspot-fantasma" style={{ left: `${caja.x * 100}%`, top: `${caja.y * 100}%`, width: `${caja.w * 100}%`, height: `${caja.h * 100}%` }} />}
+        </div>
+      )}
     </div>
   );
 }
@@ -258,6 +318,8 @@ export function ScreenCanvas({
   measures,
   overlay,
   scale,
+  drawing,
+  onDrawn,
 }: {
   project: Project;
   screen: Screen;
@@ -268,13 +330,15 @@ export function ScreenCanvas({
   measures?: boolean;
   overlay?: ReactNode;
   scale?: number;
+  drawing?: boolean;
+  onDrawn?: (rect: { x: number; y: number; w: number; h: number }) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
   const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
   const sheet = screen.presentation === 'sheet';
   const nodes = screen.image ? (
-    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} />
+    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} drawing={drawing} onDrawn={onDrawn} />
   ) : (
     <>
       {screen.blocks.map((b) => (
