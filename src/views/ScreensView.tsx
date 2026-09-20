@@ -126,6 +126,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [guardOpen, setGuardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
+  const [quitarFigma, setQuitarFigma] = useState(false);
   const [dibujando, setDibujando] = useState(false);
   const [drag, setDrag] = useState<string>();
   const [dropOn, setDropOn] = useState<string>();
@@ -156,6 +157,32 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const select = (sid: string, bid?: string) => {
     setScreenId(sid);
     setBlockId(bid);
+  };
+
+  const deFigma = project.screens.filter((s) => s.figmaId);
+
+  /** Deja el proyecto sin el prototipo importado, para traer otro archivo desde cero. */
+  const quitarPantallasDeFigma = () => {
+    const fuera = new Set(deFigma.map((s) => s.id));
+    const vivo = (id?: string) => !!id && !fuera.has(id);
+    const limpias = project.screens
+      .filter((s) => !fuera.has(s.id))
+      .map((s) => ({
+        ...s,
+        ...(vivo(s.sheetOver) ? {} : { sheetOver: undefined }),
+        ...(s.autoNext && !vivo(s.autoNext.target) ? { autoNext: undefined } : {}),
+        ...(s.hotspots ? { hotspots: s.hotspots.map((h) => (vivo(h.target) ? h : { ...h, target: undefined })) } : {}),
+        blocks: s.blocks.map((b) => (vivo(b.target) ? b : { ...b, target: undefined, ...(b.action === 'navigate' ? { action: undefined } : {}) })),
+      }));
+    // Un proyecto sin pantallas no se puede editar: queda una en blanco.
+    const restantes: Screen[] = limpias.length ? limpias : [{ id: uid('s_'), name: 'Inicio', breakpoint: 'mobile', terminal: true, blocks: [] }];
+    const ops: OpInput[] = [edit.project('screens', restantes)];
+    if (!restantes.some((s) => s.id === project.startScreenId)) ops.push(edit.project('startScreenId', restantes[0].id));
+    if (apply(ops, 'Quitar las pantallas de Figma')) {
+      notify(`Quitaste ${deFigma.length} ${deFigma.length === 1 ? 'pantalla importada' : 'pantallas importadas'} de Figma.`, 'success');
+      select(restantes[0].id);
+    }
+    setQuitarFigma(false);
   };
 
   const addScreen = () => {
@@ -426,6 +453,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   <button type="button" className="tree-action" onClick={() => setFigmaOpen(true)}>
                     Importar desde Figma
                   </button>
+                  {deFigma.length > 0 && (
+                    <button type="button" className="tree-action" onClick={() => setQuitarFigma(true)}>
+                      Quitar las {deFigma.length} pantallas de Figma
+                    </button>
+                  )}
                   <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
                     Importar pantalla desde HTML
                   </button>
@@ -788,6 +820,25 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
           setPanel('props');
         }}
       />
+
+      <Modal
+        open={quitarFigma}
+        title="Quitar las pantallas de Figma"
+        onClose={() => setQuitarFigma(false)}
+        footer={
+          <>
+            <Button onClick={() => setQuitarFigma(false)}>Cancelar</Button>
+            <Button tone="danger" onClick={quitarPantallasDeFigma}>
+              Quitar {deFigma.length} {deFigma.length === 1 ? 'pantalla' : 'pantallas'}
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Se eliminan las {deFigma.length} pantallas que trajiste de Figma, con sus imágenes y zonas tocables. Después puedes importar otro prototipo en este mismo proyecto.
+        </p>
+        <p className="muted small">Las pantallas hechas a mano se conservan. Los resultados de pruebas ya hechas no se borran, pero quedarán sin las pantallas que describen.</p>
+      </Modal>
 
       <ImportHtmlModal
         open={importOpen}
