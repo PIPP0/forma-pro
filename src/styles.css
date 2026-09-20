@@ -4629,6 +4629,8 @@ dialog.modal {
 }
 /* Punto para arrastrar la flecha hasta la pantalla de destino. */
 .hs-link {
+  opacity: 0;
+  transition: opacity 0.12s ease;
   position: absolute;
   right: -7px;
   top: 50%;
@@ -4717,6 +4719,10 @@ dialog.modal {
   border-radius: 3px;
   background: var(--panel, #fff);
   border: 2px solid var(--accent, #5d4ff0);
+}
+.hotspot:hover .hs-link,
+.hotspot.selected .hs-link {
+  opacity: 1;
 }
 .hs-nw {
   left: -6px;

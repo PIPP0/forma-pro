@@ -394,7 +394,9 @@ export function ImageScreen({
       {(screen.hotspots ?? []).map((h) => {
         const sel = selectedId === h.id;
         const c = ajuste?.id === h.id ? ajuste.actual : h;
+        // Se puede arrastrar cualquier zona en modo prototipo, pero los tiradores solo se ven en la elegida.
         const ajustable = editable && (sel || !!proto) && !!onMoved;
+        const conTiradores = editable && sel && !!onMoved;
         return (
           <button
             key={h.id}
@@ -429,7 +431,7 @@ export function ImageScreen({
                 }}
               />
             )}
-            {ajustable &&
+            {conTiradores &&
               ESQUINAS.map((q) => (
                 <span
                   key={q}
