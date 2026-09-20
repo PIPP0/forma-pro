@@ -303,13 +303,19 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     const mover = (e: PointerEvent) => setConexion((c) => (c ? { ...c, x: e.clientX, y: e.clientY } : c));
     const soltar = (e: PointerEvent) => {
       setConexion(null);
+      // Un clic sin arrastre no cambia nada: solo selecciona.
+      if (Math.abs(e.clientX - conexion.x0) < 8 && Math.abs(e.clientY - conexion.y0) < 8) return;
       const destino = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-screen-id]');
       const destinoId = destino instanceof HTMLElement ? destino.dataset.screenId : undefined;
       const origen = project.screens.find((x) => x.id === conexion.screenId);
-      if (!destinoId || !origen) return;
+      if (!origen) return;
+      const zona = origen.hotspots?.find((z) => z.id === conexion.hotspotId);
+      if (!zona || (!destinoId && !zona.target && !zona.back)) return;
       const zonas = (origen.hotspots ?? []).map((z) => (z.id === conexion.hotspotId ? { ...z, target: destinoId, back: undefined } : z));
-      const nombre = project.screens.find((x) => x.id === destinoId)?.name ?? 'otra pantalla';
-      if (applyOps(project.id, [edit.screen(project, origen.id, 'hotspots', zonas)], `Conectar «${origen.name}» con «${nombre}»`)) notify(`Esta zona lleva a «${nombre}».`, 'success');
+      const nombre = destinoId ? (project.screens.find((x) => x.id === destinoId)?.name ?? 'otra pantalla') : '';
+      const etiqueta = destinoId ? `Conectar «${origen.name}» con «${nombre}»` : `Quitar el destino de «${zona.label || 'la zona'}»`;
+      if (applyOps(project.id, [edit.screen(project, origen.id, 'hotspots', zonas)], etiqueta))
+        notify(destinoId ? `Esta zona lleva a «${nombre}».` : 'Quitaste la flecha: esta zona ya no lleva a ninguna pantalla.', 'success');
     };
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', soltar, { once: true });
@@ -694,6 +700,10 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   select(sid, hid);
                   setPanel('props');
                 }}
+                onArrastrar={(sid, hid, e) => {
+                  const origen = project.screens.find((x) => x.id === sid);
+                  if (origen) empezarConexion(origen, hid, e);
+                }}
               />
             )}
             {bases.map((s, i) => {
@@ -956,7 +966,10 @@ function HotspotsSection({
         </div>
       )}
       {editable && hotspots.length > 0 && !drawing && (
-        <p className="muted small">Toca una zona en el lienzo para seleccionarla: se arrastra para moverla y tiene esquinas para ajustar su tamaño.</p>
+        <p className="muted small">
+          Toca una zona en el lienzo para seleccionarla: se arrastra para moverla y tiene esquinas para ajustar su tamaño. En modo prototipo, arrastra su flecha a otra pantalla para cambiar el
+          destino, o suéltala en el fondo para quitarla.
+        </p>
       )}
       {hotspots.map((h, i) => (
         <Field key={h.id} label={h.label?.trim() || `Zona ${i + 1}`}>
@@ -1633,11 +1646,13 @@ function Conexiones({
   project,
   clave,
   onElegir,
+  onArrastrar,
 }: {
   hostRef: RefObject<HTMLDivElement | null>;
   project: Project;
   clave: string;
   onElegir: (screenId: string, hotspotId: string) => void;
+  onArrastrar: (screenId: string, hotspotId: string, e: { clientX: number; clientY: number }) => void;
 }) {
   const [rutas, setRutas] = useState<{ id: string; screenId: string; d: string }[]>([]);
 
@@ -1687,7 +1702,17 @@ function Conexiones({
         </marker>
       </defs>
       {rutas.map((r) => (
-        <g key={r.id} className="conexion" onClick={() => r.screenId && onElegir(r.screenId, r.id)}>
+        <g
+          key={r.id}
+          className="conexion"
+          onClick={() => r.screenId && onElegir(r.screenId, r.id)}
+          onPointerDown={(e) => {
+            if (!r.screenId) return;
+            e.preventDefault();
+            onElegir(r.screenId, r.id);
+            onArrastrar(r.screenId, r.id, e);
+          }}
+        >
           <path className="toque" d={r.d} />
           <path d={r.d} markerEnd="url(#punta-flecha)" />
         </g>

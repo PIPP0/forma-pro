@@ -98,7 +98,7 @@ La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido 
 
 - Arrastrar sobre cualquier pantalla-imagen crea una zona tocable.
 - **Elegir un elemento del diseño:** «Dibujar zona» resalta la capa de Figma que está bajo el cursor (botón, tarjeta, campo) y con un toque la convierte en zona, con su nombre. Funciona aunque una zona cubra toda la pantalla.
-- Tocar una flecha selecciona su zona, para cambiarle el destino o el tamaño.
+- Tocar una flecha selecciona su zona. Arrastrarla a otra pantalla cambia el destino; soltarla en el fondo la quita.
 - Cada zona muestra un punto a su derecha: arrástralo hasta otra pantalla para conectarla.
 - Las flechas entre zonas y pantallas se dibujan sobre el lienzo.
 - Una zona seleccionada se mueve arrastrándola y se ajusta desde sus esquinas: sirve cuando Figma trae la flecha en el frame completo y solo un botón debería avanzar.
