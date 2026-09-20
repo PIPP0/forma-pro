@@ -73,6 +73,16 @@ export interface FigmaHotspot {
   overlay?: boolean;
 }
 
+/** Una capa del frame: sirve para elegir «este botón» sin dibujar la zona a mano. */
+export interface FigmaParte {
+  id: string;
+  name: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface FigmaFrame {
   id: string;
   name: string;
@@ -82,6 +92,8 @@ export interface FigmaFrame {
   width: number;
   height: number;
   hotspots: FigmaHotspot[];
+  /** Capas visibles del frame, para marcar zonas sobre un elemento concreto. */
+  partes: FigmaParte[];
   /** Transición automática del frame: «después de N segundos». */
   auto?: { segundos: number; destino?: string; volver?: boolean };
 }
@@ -166,6 +178,26 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
   return out.sort((a, b) => b.w * b.h - a.w * a.h);
 }
 
+/** Capas de un frame con tamaño propio, de la más grande a la más chica. */
+export function partesDe(frame: FigmaNode, tope = 300): FigmaParte[] {
+  const box = frame.absoluteBoundingBox;
+  if (!box?.width || !box.height) return [];
+  const out: FigmaParte[] = [];
+  const walk = (node: FigmaNode) => {
+    if (node.visible === false) return;
+    const b = node.absoluteBoundingBox;
+    // Se omiten las capas diminutas y las que se salen del frame: no se pueden tocar.
+    if (node !== frame && b?.width && b.height && b.width >= box.width * 0.02 && b.height >= box.height * 0.008) {
+      const x = clamp01((b.x - box.x) / box.width);
+      const y = clamp01((b.y - box.y) / box.height);
+      if (x < 1 && y < 1) out.push({ id: node.id, name: node.name, x, y, w: clamp01(b.width / box.width), h: clamp01(b.height / box.height) });
+    }
+    for (const c of node.children ?? []) walk(c);
+  };
+  walk(frame);
+  return out.sort((a, b) => b.w * b.h - a.w * a.h).slice(0, tope);
+}
+
 const FRAME_TYPES = ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE', 'SECTION'];
 
 /** Frames de una página, con sus zonas tocables. */
@@ -184,6 +216,7 @@ export function framesFromPage(page: FigmaNode): FigmaFrame[] {
       width: Math.round(box.width),
       height: Math.round(box.height),
       hotspots: hotspotsIn(node),
+      partes: partesDe(node),
       ...(tiempo ? { auto: { segundos: tiempo.segundos, destino: tiempo.accion.destino, volver: tiempo.accion.volver } } : {}),
     });
   }

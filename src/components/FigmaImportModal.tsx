@@ -172,6 +172,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           hotspots,
           figmaId: f.id,
           figmaFile: fileKey,
+          figmaParts: f.partes,
           blocks: [],
           ...(autoNext ? { autoNext } : {}),
           ...(comoHoja ? { presentation: 'sheet' as const, sheetOver: ids.get(origen!) } : {}),
@@ -191,7 +192,17 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           return s;
         }
         actualizadas++;
-        return { ...previa, image: s.image, hotspots: s.hotspots, figmaId: s.figmaId, figmaFile: s.figmaFile, autoNext: s.autoNext, presentation: s.presentation, sheetOver: s.sheetOver };
+        return {
+          ...previa,
+          image: s.image,
+          hotspots: s.hotspots,
+          figmaId: s.figmaId,
+          figmaFile: s.figmaFile,
+          figmaParts: s.figmaParts,
+          autoNext: s.autoNext,
+          presentation: s.presentation,
+          sheetOver: s.sheetOver,
+        };
       });
       // Lo que no viene de Figma se conserva detrás. Solo se va una pantalla vacía a la que nadie llega.
       const alguienLlega = (id: string) =>

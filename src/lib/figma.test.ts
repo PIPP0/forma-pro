@@ -93,7 +93,7 @@ describe('importar desde Figma', () => {
   });
 
   it('sigue las flechas desde el inicio y deja fuera los frames sueltos', () => {
-    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [] }];
+    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [], partes: [] }];
     // Inicio → Hoja de ayuda (la zona más arriba) y → Meta creada; se recorre en ese orden.
     expect(alcanzablesDesde(frames, '1:2')).toEqual(['1:2', '1:30', '1:10']);
     // Desde una pantalla sin salidas, solo ella.
@@ -102,8 +102,16 @@ describe('importar desde Figma', () => {
   });
 
   it('ordena las pantallas como se recorren y deja las sueltas al final', () => {
-    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [] }];
+    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', x: 2000, y: 0, width: 390, height: 844, hotspots: [], partes: [] }];
     expect(ordenarPorFlujo(frames, '1:2').map((f) => f.id)).toEqual(['1:2', '1:30', '1:10', '9:9']);
+  });
+
+  it('lista las capas del frame para poder elegir un elemento', () => {
+    const partes = framesFromPage(page)[0].partes;
+    // La más grande primero; las diminutas y las ocultas quedan fuera.
+    expect(partes[0].id).toBe('1:4');
+    expect(partes.some((p) => p.id === '1:12')).toBe(false);
+    expect(partes.find((p) => p.id === '1:5')).toMatchObject({ x: 0.1, y: 0.118, w: 0.5 });
   });
 
   it('toma el toque puesto sobre el frame completo', () => {

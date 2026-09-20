@@ -239,6 +239,8 @@ export function ImageScreen({
   onMoved,
   proto,
   onConnect,
+  drawOnTop,
+  onPick,
 }: {
   screen: Screen;
   editable?: boolean;
@@ -252,8 +254,13 @@ export function ImageScreen({
   /** Modo prototipo: todas las zonas se ven y se les puede arrastrar una flecha. */
   proto?: boolean;
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
+  /** El lienzo de marcado va encima de las zonas: deja marcar aunque una las tape. */
+  drawOnTop?: boolean;
+  /** Tocar una capa del diseño la convierte en zona. */
+  onPick?: (parte: { name: string; x: number; y: number; w: number; h: number }) => void;
 }) {
   const [caja, setCaja] = useState<Caja | null>(null);
+  const [resaltada, setResaltada] = useState<{ name: string; x: number; y: number; w: number; h: number } | null>(null);
   const inicio = useRef<{ x: number; y: number } | null>(null);
   const host = useRef<HTMLDivElement>(null);
   // El arrastre vive en refs: los eventos llegan antes del siguiente render.
@@ -338,7 +345,7 @@ export function ImageScreen({
       <img src={screen.image.url} alt={screen.name} draggable={false} />
       {drawing && (
         <div
-          className="hotspot-draw"
+          className={`hotspot-draw${drawOnTop ? ' encima' : ''}`}
           onPointerDown={(e) => {
             const host = e.currentTarget;
             try {
@@ -350,21 +357,38 @@ export function ImageScreen({
             setCaja({ ...inicio.current, w: 0, h: 0 });
           }}
           onPointerMove={(e) => {
-            if (!inicio.current) return;
+            if (!inicio.current) {
+              // Sin arrastrar: se resalta la capa del diseño que está bajo el cursor.
+              const p = punto(e, e.currentTarget);
+              const dentro = (screen.figmaParts ?? []).filter((q) => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h);
+              const chica = dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
+              setResaltada(chica);
+              return;
+            }
+            setResaltada(null);
             setCaja(rectDe(inicio.current, punto(e, e.currentTarget)));
           }}
+          onPointerLeave={() => setResaltada(null)}
           onPointerUp={(e) => {
             const desde = inicio.current;
             inicio.current = null;
             setCaja(null);
             if (!desde) return;
             const r = rectDe(desde, punto(e, e.currentTarget));
-            // Un toque suelto no crea una zona: hace falta arrastrar.
-            if (r.w < 0.02 || r.h < 0.01) return;
+            // Un toque suelto sobre una capa la marca entera; si no, hace falta arrastrar.
+            if (r.w < 0.02 || r.h < 0.01) {
+              if (resaltada && onPick) onPick(resaltada);
+              return;
+            }
             onDrawn?.({ x: Math.round(r.x * 1000) / 1000, y: Math.round(r.y * 1000) / 1000, w: Math.round(r.w * 1000) / 1000, h: Math.round(r.h * 1000) / 1000 });
           }}
         >
           {caja && <span className="hotspot-fantasma" style={{ left: `${caja.x * 100}%`, top: `${caja.y * 100}%`, width: `${caja.w * 100}%`, height: `${caja.h * 100}%` }} />}
+          {!caja && resaltada && (
+            <span className="parte-resaltada" style={{ left: `${resaltada.x * 100}%`, top: `${resaltada.y * 100}%`, width: `${resaltada.w * 100}%`, height: `${resaltada.h * 100}%` }}>
+              <em>{resaltada.name}</em>
+            </span>
+          )}
         </div>
       )}
       {(screen.hotspots ?? []).map((h) => {
@@ -438,6 +462,8 @@ export function ScreenCanvas({
   onMoved,
   proto,
   onConnect,
+  drawOnTop,
+  onPick,
 }: {
   project: Project;
   screen: Screen;
@@ -453,6 +479,8 @@ export function ScreenCanvas({
   onMoved?: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   proto?: boolean;
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
+  drawOnTop?: boolean;
+  onPick?: (parte: { name: string; x: number; y: number; w: number; h: number }) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
@@ -469,6 +497,8 @@ export function ScreenCanvas({
       onMoved={onMoved}
       proto={proto}
       onConnect={onConnect}
+      drawOnTop={drawOnTop}
+      onPick={onPick}
     />
   ) : (
     <>

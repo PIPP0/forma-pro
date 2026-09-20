@@ -226,6 +226,8 @@ export interface Screen {
   figmaId?: string;
   /** Archivo de Figma del que vino, para saber cuándo se cambió de prototipo. */
   figmaFile?: string;
+  /** Capas de la pantalla en Figma: permiten marcar una zona sobre un elemento concreto. */
+  figmaParts?: { id: string; name: string; x: number; y: number; w: number; h: number }[];
   /** Transición automática: pasa sola a otra pantalla tras unos milisegundos. */
   autoNext?: { ms: number; target?: string; back?: boolean };
   blocks: Block[];

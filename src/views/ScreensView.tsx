@@ -282,9 +282,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     apply([edit.screen(project, s.id, 'hotspots', zonas)], `Ajustar zona en «${s.name}»`);
   };
 
-  const agregarZonaEn = (s: Screen, r: { x: number; y: number; w: number; h: number }) => {
+  const agregarZonaEn = (s: Screen, r: { x: number; y: number; w: number; h: number }, nombre?: string) => {
     const zonas = s.hotspots ?? [];
-    const zona: Hotspot = { id: uid('h_'), ...r, label: `Zona ${zonas.length + 1}` };
+    const zona: Hotspot = { id: uid('h_'), ...r, label: nombre?.trim() || `Zona ${zonas.length + 1}` };
     if (apply([edit.screen(project, s.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${s.name}»`)) {
       setDibujando(false);
       select(s.id, zona.id);
@@ -685,7 +685,17 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
           </header>
 
           <div className="frames" ref={framesRef} style={{ gap: 0 }}>
-            {proto && <Conexiones hostRef={framesRef} project={project} clave={`${bp}|${zoom}|${project.updatedAt}|${bases.length}`} />}
+            {proto && (
+              <Conexiones
+                hostRef={framesRef}
+                project={project}
+                clave={`${bp}|${zoom}|${project.updatedAt}|${bases.length}`}
+                onElegir={(sid, hid) => {
+                  select(sid, hid);
+                  setPanel('props');
+                }}
+              />
+            )}
             {bases.map((s, i) => {
               const shown = s.breakpoint === bp ? s : project.screens.find((v) => v.variantOf === s.id && v.breakpoint === bp);
               const isSel = !!shown && screen.id === shown.id;
@@ -718,6 +728,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           onMoved={editable && (proto || isSel) ? (id, r) => moverZonaEn(shown, id, r) : undefined}
                           proto={proto && !!shown.image && editable}
                           onConnect={(hid, e) => empezarConexion(shown, hid, e)}
+                          drawOnTop={isSel && dibujando}
+                          onPick={(parte) => agregarZonaEn(shown, { x: parte.x, y: parte.y, w: parte.w, h: parte.h }, parte.name)}
                         />
                       </div>
                     ) : (
@@ -936,7 +948,11 @@ function HotspotsSection({
           <Button size="sm" tone={drawing ? 'primary' : undefined} aria-pressed={drawing} onClick={() => onDrawing(!drawing)}>
             {drawing ? 'Listo' : 'Dibujar zona'}
           </Button>
-          {drawing && <span className="muted small">Arrastra sobre la imagen para marcar dónde se toca.</span>}
+          {drawing && (
+            <span className="muted small">
+              {screen.figmaParts?.length ? 'Toca un elemento del diseño para marcarlo, o arrastra para dibujar la zona.' : 'Arrastra sobre la imagen para marcar dónde se toca.'}
+            </span>
+          )}
         </div>
       )}
       {editable && hotspots.length > 0 && !drawing && (
@@ -1612,22 +1628,27 @@ function ImportHtmlModal({ open, onClose, onImport }: { open: boolean; onClose: 
 }
 
 /** Flechas del modo prototipo: van de cada zona tocable a la pantalla que abre. */
-function Conexiones({ hostRef, project, clave }: { hostRef: RefObject<HTMLDivElement | null>; project: Project; clave: string }) {
-  const [rutas, setRutas] = useState<{ id: string; d: string }[]>([]);
+function Conexiones({
+  hostRef,
+  project,
+  clave,
+  onElegir,
+}: {
+  hostRef: RefObject<HTMLDivElement | null>;
+  project: Project;
+  clave: string;
+  onElegir: (screenId: string, hotspotId: string) => void;
+}) {
+  const [rutas, setRutas] = useState<{ id: string; screenId: string; d: string }[]>([]);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
-    const destinoDe = (hotspotId: string) => {
-      for (const s of project.screens) {
-        const h = s.hotspots?.find((z) => z.id === hotspotId);
-        if (h) return h.target;
-      }
-      return undefined;
-    };
+    const dueñoDe = (hotspotId: string) => project.screens.find((s) => s.hotspots?.some((z) => z.id === hotspotId));
+    const destinoDe = (hotspotId: string) => dueñoDe(hotspotId)?.hotspots?.find((z) => z.id === hotspotId)?.target;
     const calcular = () => {
       const caja = host.getBoundingClientRect();
-      const out: { id: string; d: string }[] = [];
+      const out: { id: string; screenId: string; d: string }[] = [];
       host.querySelectorAll<HTMLElement>('[data-hotspot-id]').forEach((el) => {
         const id = el.dataset.hotspotId;
         const destino = id ? destinoDe(id) : undefined;
@@ -1644,7 +1665,7 @@ function Conexiones({ hostRef, project, clave }: { hostRef: RefObject<HTMLDivEle
         const curva = Math.max(40, Math.abs(x2 - x1) / 2);
         const c1 = haciaDerecha ? x1 + curva : x1 - curva;
         const c2 = haciaDerecha ? x2 - curva : x2 + curva;
-        out.push({ id, d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}` });
+        out.push({ id, screenId: dueñoDe(id)?.id ?? '', d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}` });
       });
       setRutas(out);
     };
@@ -1666,7 +1687,10 @@ function Conexiones({ hostRef, project, clave }: { hostRef: RefObject<HTMLDivEle
         </marker>
       </defs>
       {rutas.map((r) => (
-        <path key={r.id} d={r.d} markerEnd="url(#punta-flecha)" />
+        <g key={r.id} className="conexion" onClick={() => r.screenId && onElegir(r.screenId, r.id)}>
+          <path className="toque" d={r.d} />
+          <path d={r.d} markerEnd="url(#punta-flecha)" />
+        </g>
       ))}
     </svg>
   );

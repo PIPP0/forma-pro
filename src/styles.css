@@ -4650,6 +4650,20 @@ dialog.modal {
   stroke-width: 2;
   opacity: 0.75;
 }
+/* Trazo ancho e invisible: hace que la flecha sea fácil de tocar. */
+.conexiones .conexion {
+  pointer-events: auto;
+  cursor: pointer;
+}
+.conexiones .toque {
+  stroke: transparent;
+  stroke-width: 14;
+  opacity: 1;
+}
+.conexiones .conexion:hover path {
+  opacity: 1;
+  stroke-width: 3;
+}
 .conexiones marker path {
   fill: var(--accent, #5d4ff0);
   stroke: none;
@@ -4725,6 +4739,31 @@ dialog.modal {
   cursor: crosshair;
   touch-action: none;
   background: rgba(93, 79, 240, 0.06);
+}
+/* Encima de las zonas: permite marcar aunque una zona cubra toda la pantalla. */
+.hotspot-draw.encima {
+  z-index: 4;
+}
+/* Capa del diseño de Figma bajo el cursor. */
+.parte-resaltada {
+  position: absolute;
+  border: 1.5px solid var(--accent, #5d4ff0);
+  background: rgba(93, 79, 240, 0.1);
+  border-radius: 4px;
+  pointer-events: none;
+}
+.parte-resaltada em {
+  position: absolute;
+  left: 0;
+  top: -18px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent, #5d4ff0);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+  line-height: 16px;
+  white-space: nowrap;
 }
 .hotspot-fantasma {
   position: absolute;
