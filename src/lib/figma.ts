@@ -135,6 +135,27 @@ export function startFrameOf(page: FigmaNode, frames: FigmaFrame[]): string | un
   return flow && frames.some((f) => f.id === flow) ? flow : frames[0]?.id;
 }
 
+/**
+ * Qué frames son pantallas nuevas y cuáles ya existen en el proyecto.
+ * Reusar el id de la pantalla mantiene vivos los destinos que ya apuntaban a ella.
+ */
+export interface PlanDeImportacion {
+  idPorFrame: Record<string, string>;
+  nuevos: string[];
+  actualizados: string[];
+}
+
+export function planImportacion(frameIds: string[], screens: { id: string; figmaId?: string }[], nuevoId: () => string): PlanDeImportacion {
+  const porFigma = new Map(screens.filter((s) => s.figmaId).map((s) => [s.figmaId!, s.id]));
+  const plan: PlanDeImportacion = { idPorFrame: {}, nuevos: [], actualizados: [] };
+  for (const f of frameIds) {
+    const existente = porFigma.get(f);
+    plan.idPorFrame[f] = existente ?? nuevoId();
+    (existente ? plan.actualizados : plan.nuevos).push(f);
+  }
+  return plan;
+}
+
 // ---------- API de Figma ----------
 
 export class FigmaError extends Error {}

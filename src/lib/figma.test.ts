@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { destinationOf, framesFromPage, hotspotsIn, parseFigmaUrl, startFrameOf, type FigmaNode } from './figma';
+import { destinationOf, framesFromPage, hotspotsIn, parseFigmaUrl, planImportacion, startFrameOf, type FigmaNode } from './figma';
 
 const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
 
@@ -68,5 +68,25 @@ describe('importar desde Figma', () => {
     expect(destinationOf({ id: 'a', name: 'a', type: 'FRAME', interactions: [{ actions: [{ type: 'BACK' }] }] })).toEqual({ back: true });
     expect(destinationOf({ id: 'a', name: 'a', type: 'FRAME' })).toBeUndefined();
     expect(hotspotsIn({ id: 'a', name: 'a', type: 'FRAME' })).toEqual([]);
+  });
+});
+
+describe('volver a importar', () => {
+  it('actualiza las pantallas que ya vienen de Figma y crea solo las nuevas', () => {
+    let n = 0;
+    const nuevoId = () => `s_nuevo_${++n}`;
+    const screens = [
+      { id: 's_vieja', figmaId: '1:2' },
+      { id: 's_a_mano' },
+    ];
+    const plan = planImportacion(['1:2', '1:10'], screens, nuevoId);
+    expect(plan.idPorFrame).toEqual({ '1:2': 's_vieja', '1:10': 's_nuevo_1' });
+    expect(plan.actualizados).toEqual(['1:2']);
+    expect(plan.nuevos).toEqual(['1:10']);
+  });
+
+  it('sin pantallas previas, todo es nuevo', () => {
+    const plan = planImportacion(['1:2'], [], () => 's_x');
+    expect(plan).toEqual({ idPorFrame: { '1:2': 's_x' }, nuevos: ['1:2'], actualizados: [] });
   });
 });

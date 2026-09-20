@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import type { Breakpoint, Hotspot, Project, Screen } from '../lib/model';
+import type { Breakpoint, Hotspot, OpInput, Project, Screen } from '../lib/model';
 import { applyOps } from '../lib/store';
 import { edit } from '../lib/ops';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { uploadPrototypeImage } from '../lib/cloud';
-import { FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, type FigmaFrame, type FigmaPage } from '../lib/figma';
+import { FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, type FigmaFrame, type FigmaPage } from '../lib/figma';
 import { Button, Field, Modal } from './ui';
 
 const breakpointFor = (w: number): Breakpoint => (w < 600 ? 'mobile' : w < 1100 ? 'tablet' : 'desktop');
@@ -75,7 +75,9 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
     try {
       setBusy('Pidiendo las imágenes a Figma…');
       const images = await frameImages(token, fileKey, chosen.map((f) => f.id));
-      const ids = new Map(chosen.map((f) => [f.id, uid('s_')]));
+      // Un frame ya importado conserva su pantalla: así siguen valiendo los destinos que apuntaban a ella.
+      const plan = planImportacion(chosen.map((f) => f.id), project.screens, () => uid('s_'));
+      const ids = new Map(Object.entries(plan.idPorFrame));
       const screens: Screen[] = [];
       let linked = 0;
       let done = 0;
@@ -107,11 +109,23 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       if (!screens.length) throw new FigmaError('Figma no entregó imágenes de esas pantallas.');
 
       const first = ids.get(startId) ?? screens[0].id;
-      const ops = screens.map((s, i) => edit.addScreen(project, s, project.screens.length + i));
+      const ops: OpInput[] = [];
+      let nuevas = 0;
+      let actualizadas = 0;
+      for (const s of screens) {
+        if (project.screens.some((x) => x.id === s.id)) {
+          // Ya existía: se cambia lo que viene de Figma y se respeta su nombre y su lugar en el flujo.
+          ops.push(edit.screen(project, s.id, 'image', s.image), edit.screen(project, s.id, 'hotspots', s.hotspots), edit.screen(project, s.id, 'figmaId', s.figmaId));
+          actualizadas++;
+        } else {
+          ops.push(edit.addScreen(project, s, project.screens.length + nuevas++));
+        }
+      }
       if (asStart) ops.push(edit.project('startScreenId', first));
       setBusy('');
-      if (!applyOps(project.id, ops, `Importar ${screens.length} ${screens.length === 1 ? 'pantalla' : 'pantallas'} desde Figma`)) return;
-      notify(`Importaste ${screens.length} ${screens.length === 1 ? 'pantalla' : 'pantallas'} desde Figma.`, 'success');
+      const resumen = [nuevas ? `${nuevas} ${nuevas === 1 ? 'pantalla nueva' : 'pantallas nuevas'}` : '', actualizadas ? `${actualizadas} ${actualizadas === 1 ? 'actualizada' : 'actualizadas'}` : ''].filter(Boolean).join(' y ');
+      if (!applyOps(project.id, ops, `Importar desde Figma: ${resumen}`)) return;
+      notify(`Desde Figma: ${resumen}.`, 'success');
       if (linked) notify(`${linked} ${linked === 1 ? 'imagen quedó enlazada' : 'imágenes quedaron enlazadas'} a Figma y vencen en 30 días. Conecta la nube para guardarlas en Forma.`, 'info');
       onDone(first);
       close();
@@ -187,6 +201,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
                       <strong>{f.name}</strong>
                       <span className="muted small">
                         {f.width} × {f.height} · {f.hotspots.length} {f.hotspots.length === 1 ? 'zona tocable' : 'zonas tocables'}
+                        {project.screens.some((s) => s.figmaId === f.id) ? ' · ya importada, se actualiza' : ''}
                       </span>
                     </span>
                   </label>
