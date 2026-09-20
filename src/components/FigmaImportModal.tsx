@@ -35,6 +35,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const [startId, setStartId] = useState('');
   const [inicioDelEnlace, setInicioDelEnlace] = useState<string>();
   const [fueraDelFlujo, setFueraDelFlujo] = useState<string[]>([]);
+  const [reemplazar, setReemplazar] = useState(false);
   // Si el proyecto aún no tiene nada dibujado, el flujo importado pasa a ser el inicio.
   const [asStart, setAsStart] = useState(!project.screens.some((s) => s.blocks.length || s.image));
   const [busy, setBusy] = useState('');
@@ -47,6 +48,9 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   }, [open]);
 
   const chosen = frames.filter((f) => picked[f.id]);
+  // Pantallas de una importación anterior que esta no vuelve a traer: son las que sobran.
+  const elegidos = new Set(chosen.map((f) => f.id));
+  const yaImportadas = project.screens.filter((s) => s.figmaId && !elegidos.has(s.figmaId));
 
   const close = () => {
     setFrames([]);
@@ -99,6 +103,8 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       const { pages: ps } = await listPages(clave, link.fileKey);
       if (!ps.length) throw new FigmaError('Ese archivo de Figma no tiene páginas con contenido.');
       setFileKey(link.fileKey);
+      // Traer otro archivo suele significar cambiar de prototipo, no sumar pantallas.
+      setReemplazar(project.screens.some((s) => s.figmaId && s.figmaFile !== link.fileKey));
       setPages(ps);
       setInicioDelEnlace(link.startId);
       // El enlace suele decir la página (page-id) o un frame de ella (node-id).
@@ -164,6 +170,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           image: { url: image, width: f.width, height: f.height },
           hotspots,
           figmaId: f.id,
+          figmaFile: fileKey,
           blocks: [],
           ...(autoNext ? { autoNext } : {}),
           ...(comoHoja ? { presentation: 'sheet' as const, sheetOver: ids.get(origen!) } : {}),
@@ -183,14 +190,16 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           return s;
         }
         actualizadas++;
-        return { ...previa, image: s.image, hotspots: s.hotspots, figmaId: s.figmaId, autoNext: s.autoNext, presentation: s.presentation, sheetOver: s.sheetOver };
+        return { ...previa, image: s.image, hotspots: s.hotspots, figmaId: s.figmaId, figmaFile: s.figmaFile, autoNext: s.autoNext, presentation: s.presentation, sheetOver: s.sheetOver };
       });
       // Lo que no viene de Figma se conserva detrás. Solo se va una pantalla vacía a la que nadie llega.
       const alguienLlega = (id: string) =>
         project.screens.some(
           (s) => s.sheetOver === id || s.autoNext?.target === id || s.blocks.some((b) => b.target === id) || (s.hotspots ?? []).some((h) => h.target === id),
         );
-      const propias = project.screens.filter((x) => !importadas.has(x.id) && (x.blocks.length > 0 || !!x.image || alguienLlega(x.id)));
+      const propias = project.screens.filter(
+        (x) => !importadas.has(x.id) && !(reemplazar && x.figmaId) && (x.blocks.length > 0 || !!x.image || alguienLlega(x.id)),
+      );
       const ops: OpInput[] = [edit.project('screens', [...enOrden, ...propias])];
       const inicioSigueVivo = [...enOrden, ...propias].some((x) => x.id === project.startScreenId);
       if (asStart || !inicioSigueVivo) ops.push(edit.project('startScreenId', first));
@@ -303,6 +312,15 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
               <input type="checkbox" checked={asStart} onChange={(e) => setAsStart(e.target.checked)} />
               <span>Usar esa pantalla como inicio del proyecto</span>
             </label>
+            {yaImportadas.length > 0 && (
+              <label className="check">
+                <input type="checkbox" checked={reemplazar} onChange={(e) => setReemplazar(e.target.checked)} />
+                <span>
+                  Quitar las {yaImportadas.length} {yaImportadas.length === 1 ? 'pantalla que ya venía' : 'pantallas que ya venían'} de Figma
+                  <span className="muted"> Cambias de prototipo: se eliminan las anteriores y quedan solo estas. Las pantallas hechas a mano se conservan.</span>
+                </span>
+              </label>
+            )}
           </>
         )}
       </div>

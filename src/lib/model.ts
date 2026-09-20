@@ -224,6 +224,8 @@ export interface Screen {
   hotspots?: Hotspot[];
   /** Nodo de Figma del que viene, para volver a importarla. */
   figmaId?: string;
+  /** Archivo de Figma del que vino, para saber cuándo se cambió de prototipo. */
+  figmaFile?: string;
   /** Transición automática: pasa sola a otra pantalla tras unos milisegundos. */
   autoNext?: { ms: number; target?: string; back?: boolean };
   blocks: Block[];
