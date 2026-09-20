@@ -130,6 +130,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [proto, setProto] = useState(false);
   const framesRef = useRef<HTMLDivElement>(null);
   const [conexion, setConexion] = useState<{ screenId: string; hotspotId: string; x0: number; y0: number; x: number; y: number } | null>(null);
+  const [sobre, setSobre] = useState<string>();
   const [dibujando, setDibujando] = useState(false);
   const [drag, setDrag] = useState<string>();
   const [dropOn, setDropOn] = useState<string>();
@@ -194,6 +195,24 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
       requestAnimationFrame(() => scroller.current?.scrollTo({ left: scroller.current.scrollWidth, behavior: 'smooth' }));
     }
   };
+
+  // Suprimir sobre una zona tocable la elimina (las pantallas-imagen no tienen bloques).
+  useEffect(() => {
+    if (!editable || play || !screen?.image || !blockId) return;
+    const zona = screen.hotspots?.find((z) => z.id === blockId);
+    if (!zona) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target;
+      if (t instanceof Element && t.closest('input, textarea, select, [contenteditable], dialog')) return;
+      if (e.key === 'Escape') setBlockId(undefined);
+      if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+      e.preventDefault();
+      const zonas = (screen.hotspots ?? []).filter((z) => z.id !== blockId);
+      if (apply([edit.screen(project, screen.id, 'hotspots', zonas)], `Eliminar «${zona.label || 'la zona'}»`)) setBlockId(undefined);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [editable, play, screen?.id, blockId, project]);
 
   useEffect(() => {
     if (!editable || !block || !screen || play) return;
@@ -295,14 +314,25 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 
   /** Arrastrar la flecha de una zona hasta otra pantalla, como en el modo prototipo de Figma. */
   const empezarConexion = (s: Screen, hotspotId: string, e: { clientX: number; clientY: number }) => {
-    setConexion({ screenId: s.id, hotspotId, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+    // El arrastre sale del borde de la zona: así se ve que la flecha es la que se mueve.
+    const el = document.querySelector(`[data-hotspot-id="${CSS.escape(hotspotId)}"]`);
+    const r = el?.getBoundingClientRect();
+    setConexion({ screenId: s.id, hotspotId, x0: r ? r.right : e.clientX, y0: r ? r.top + r.height / 2 : e.clientY, x: e.clientX, y: e.clientY });
   };
 
   useEffect(() => {
     if (!conexion) return;
-    const mover = (e: PointerEvent) => setConexion((c) => (c ? { ...c, x: e.clientX, y: e.clientY } : c));
+    const pantallaBajo = (x: number, y: number) => {
+      const el = (document.elementFromPoint(x, y) as Element | null)?.closest('[data-screen-id]');
+      return el instanceof HTMLElement ? el.dataset.screenId : undefined;
+    };
+    const mover = (e: PointerEvent) => {
+      setConexion((c) => (c ? { ...c, x: e.clientX, y: e.clientY } : c));
+      setSobre(pantallaBajo(e.clientX, e.clientY));
+    };
     const soltar = (e: PointerEvent) => {
       setConexion(null);
+      setSobre(undefined);
       // Un clic sin arrastre no cambia nada: solo selecciona.
       if (Math.abs(e.clientX - conexion.x0) < 8 && Math.abs(e.clientY - conexion.y0) < 8) return;
       const destino = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-screen-id]');
@@ -696,6 +726,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 hostRef={framesRef}
                 project={project}
                 clave={`${bp}|${zoom}|${project.updatedAt}|${bases.length}`}
+                ocultar={conexion?.hotspotId}
                 onElegir={(sid, hid) => {
                   select(sid, hid);
                   setPanel('props');
@@ -711,7 +742,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
               const isSel = !!shown && screen.id === shown.id;
               return (
                 <Fragment key={s.id}>
-                  <div className="frame" data-screen-id={s.id} style={{ width: frameW }}>
+                  <div className={`frame${conexion && sobre === s.id ? ' es-destino' : ''}`} data-screen-id={s.id} style={{ width: frameW }}>
                     <div className="frame-label">
                       <button type="button" className="frame-name" onClick={() => select(shown?.id ?? s.id)}>
                         <IconFrame size={13} /> {String(i + 1).padStart(2, '0')} — {s.name}
@@ -773,8 +804,15 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 
         {conexion && (
           <svg className="conexion-viva" aria-hidden="true">
-            <line x1={conexion.x0} y1={conexion.y0} x2={conexion.x} y2={conexion.y} />
-            <circle cx={conexion.x} cy={conexion.y} r={4} />
+            <defs>
+              <marker id="punta-viva" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0 0 L8 4 L0 8 z" />
+              </marker>
+            </defs>
+            <path
+              d={`M ${conexion.x0} ${conexion.y0} C ${conexion.x0 + Math.max(40, Math.abs(conexion.x - conexion.x0) / 2)} ${conexion.y0}, ${conexion.x - Math.max(40, Math.abs(conexion.x - conexion.x0) / 2)} ${conexion.y}, ${conexion.x} ${conexion.y}`}
+              markerEnd="url(#punta-viva)"
+            />
           </svg>
         )}
         {!block && (
@@ -1645,12 +1683,15 @@ function Conexiones({
   hostRef,
   project,
   clave,
+  ocultar,
   onElegir,
   onArrastrar,
 }: {
   hostRef: RefObject<HTMLDivElement | null>;
   project: Project;
   clave: string;
+  /** Zona cuya flecha se está arrastrando: no se dibuja dos veces. */
+  ocultar?: string;
   onElegir: (screenId: string, hotspotId: string) => void;
   onArrastrar: (screenId: string, hotspotId: string, e: { clientX: number; clientY: number }) => void;
 }) {
@@ -1701,7 +1742,9 @@ function Conexiones({
           <path d="M0 0 L8 4 L0 8 z" />
         </marker>
       </defs>
-      {rutas.map((r) => (
+      {rutas
+        .filter((r) => r.id !== ocultar)
+        .map((r) => (
         <g
           key={r.id}
           className="conexion"
@@ -1713,10 +1756,10 @@ function Conexiones({
             onArrastrar(r.screenId, r.id, e);
           }}
         >
-          <path className="toque" d={r.d} />
-          <path d={r.d} markerEnd="url(#punta-flecha)" />
-        </g>
-      ))}
+            <path className="toque" d={r.d} />
+            <path d={r.d} markerEnd="url(#punta-flecha)" />
+          </g>
+        ))}
     </svg>
   );
 }
