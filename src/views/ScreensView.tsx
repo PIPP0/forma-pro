@@ -423,6 +423,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   <button type="button" className="tree-row tree-add" onClick={addScreen}>
                     <IconPlus size={16} /> Nueva pantalla
                   </button>
+                  <button type="button" className="tree-action" onClick={() => setFigmaOpen(true)}>
+                    Importar desde Figma
+                  </button>
                   <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
                     Importar pantalla desde HTML
                   </button>
@@ -543,6 +546,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 { id: 'hifi', label: 'Alta fidelidad' },
               ]}
             />
+            {editable && (
+              <button type="button" className="btn btn-outline btn-sm" onClick={() => setFigmaOpen(true)}>
+                <IconFileImage size={14} /> Figma
+              </button>
+            )}
             <button type="button" className="btn btn-outline btn-sm" onClick={() => setPlay(true)}>
               <IconPlay size={14} /> Probar
             </button>
