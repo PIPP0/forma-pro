@@ -4670,6 +4670,22 @@ dialog.modal {
   opacity: 1;
   stroke-width: 3;
 }
+.conexiones .fin {
+  fill: var(--accent, #5d4ff0);
+  opacity: 0.75;
+}
+/* Con una zona seleccionada, su flecha manda y las demás se apagan. */
+.conexiones.con-elegida .conexion:not(.elegida) path,
+.conexiones.con-elegida .conexion:not(.elegida) .fin {
+  opacity: 0.18;
+}
+.conexiones .conexion.elegida path {
+  opacity: 1;
+  stroke-width: 3;
+}
+.conexiones .conexion.elegida .fin {
+  opacity: 1;
+}
 .conexiones marker path {
   fill: var(--accent, #5d4ff0);
   stroke: none;

@@ -407,7 +407,8 @@ export function ImageScreen({
               editable
                 ? (e) => {
                     e.stopPropagation();
-                    onSelect?.(h.id);
+                    // Tocar de nuevo la misma zona la deselecciona.
+                    onSelect?.(sel ? undefined : h.id);
                   }
                 : undefined
             }

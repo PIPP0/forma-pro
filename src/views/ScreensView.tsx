@@ -727,6 +727,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 project={project}
                 clave={`${bp}|${zoom}|${project.updatedAt}|${bases.length}`}
                 ocultar={conexion?.hotspotId}
+                elegida={blockId}
                 onElegir={(sid, hid) => {
                   select(sid, hid);
                   setPanel('props');
@@ -1684,6 +1685,7 @@ function Conexiones({
   project,
   clave,
   ocultar,
+  elegida,
   onElegir,
   onArrastrar,
 }: {
@@ -1692,10 +1694,12 @@ function Conexiones({
   clave: string;
   /** Zona cuya flecha se está arrastrando: no se dibuja dos veces. */
   ocultar?: string;
+  /** Zona seleccionada: su flecha se destaca y las demás se atenúan. */
+  elegida?: string;
   onElegir: (screenId: string, hotspotId: string) => void;
   onArrastrar: (screenId: string, hotspotId: string, e: { clientX: number; clientY: number }) => void;
 }) {
-  const [rutas, setRutas] = useState<{ id: string; screenId: string; d: string }[]>([]);
+  const [rutas, setRutas] = useState<{ id: string; screenId: string; d: string; fin: { x: number; y: number } }[]>([]);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -1704,25 +1708,36 @@ function Conexiones({
     const destinoDe = (hotspotId: string) => dueñoDe(hotspotId)?.hotspots?.find((z) => z.id === hotspotId)?.target;
     const calcular = () => {
       const caja = host.getBoundingClientRect();
-      const out: { id: string; screenId: string; d: string }[] = [];
+      // Primero se juntan por pantalla de destino: así cada flecha llega a su propia altura.
+      const porDestino = new Map<string, { id: string; screenId: string; r: DOMRect; destino: string }[]>();
       host.querySelectorAll<HTMLElement>('[data-hotspot-id]').forEach((el) => {
         const id = el.dataset.hotspotId;
         const destino = id ? destinoDe(id) : undefined;
         if (!id || !destino) return;
-        const meta = host.querySelector<HTMLElement>(`[data-screen-id="${CSS.escape(destino)}"]`);
-        if (!meta) return;
-        const r = el.getBoundingClientRect();
-        const d = meta.getBoundingClientRect();
-        const haciaDerecha = d.left >= r.right;
-        const x1 = (haciaDerecha ? r.right : r.left) - caja.left;
-        const y1 = r.top + r.height / 2 - caja.top;
-        const x2 = (haciaDerecha ? d.left : d.right) - caja.left;
-        const y2 = d.top + 70 - caja.top;
-        const curva = Math.max(40, Math.abs(x2 - x1) / 2);
-        const c1 = haciaDerecha ? x1 + curva : x1 - curva;
-        const c2 = haciaDerecha ? x2 - curva : x2 + curva;
-        out.push({ id, screenId: dueñoDe(id)?.id ?? '', d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}` });
+        const lista = porDestino.get(destino) ?? [];
+        lista.push({ id, screenId: dueñoDe(id)?.id ?? '', r: el.getBoundingClientRect(), destino });
+        porDestino.set(destino, lista);
       });
+      const out: { id: string; screenId: string; d: string; fin: { x: number; y: number } }[] = [];
+      for (const [destino, lista] of porDestino) {
+        const meta = host.querySelector<HTMLElement>(`[data-screen-id="${CSS.escape(destino)}"]`);
+        if (!meta) continue;
+        const d = meta.getBoundingClientRect();
+        // De arriba abajo según de dónde salen, para que no se crucen entre sí.
+        lista.sort((a, b) => a.r.top - b.r.top);
+        lista.forEach((item, i) => {
+          const r = item.r;
+          const haciaDerecha = d.left >= r.right;
+          const x1 = (haciaDerecha ? r.right : r.left) - caja.left;
+          const y1 = r.top + r.height / 2 - caja.top;
+          const x2 = (haciaDerecha ? d.left : d.right) - caja.left;
+          const y2 = d.top + 44 + i * 26 - caja.top;
+          const curva = Math.max(40, Math.abs(x2 - x1) / 2) + i * 14;
+          const c1 = haciaDerecha ? x1 + curva : x1 - curva;
+          const c2 = haciaDerecha ? x2 - curva : x2 + curva;
+          out.push({ id: item.id, screenId: item.screenId, d: `M ${x1} ${y1} C ${c1} ${y1}, ${c2} ${y2}, ${x2} ${y2}`, fin: { x: x2, y: y2 } });
+        });
+      }
       setRutas(out);
     };
     calcular();
@@ -1736,7 +1751,7 @@ function Conexiones({
   }, [hostRef, project, clave]);
 
   return (
-    <svg className="conexiones" aria-hidden="true">
+    <svg className={`conexiones${elegida && rutas.some((r) => r.id === elegida) ? ' con-elegida' : ''}`} aria-hidden="true">
       <defs>
         <marker id="punta-flecha" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
           <path d="M0 0 L8 4 L0 8 z" />
@@ -1747,7 +1762,7 @@ function Conexiones({
         .map((r) => (
         <g
           key={r.id}
-          className="conexion"
+          className={`conexion${r.id === elegida ? ' elegida' : ''}`}
           onClick={() => r.screenId && onElegir(r.screenId, r.id)}
           onPointerDown={(e) => {
             if (!r.screenId) return;
@@ -1758,6 +1773,7 @@ function Conexiones({
         >
             <path className="toque" d={r.d} />
             <path d={r.d} markerEnd="url(#punta-flecha)" />
+            <circle className="fin" cx={r.fin.x} cy={r.fin.y} r={3.5} />
           </g>
         ))}
     </svg>
