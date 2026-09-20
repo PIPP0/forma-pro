@@ -50,6 +50,10 @@ describe('importar desde Figma', () => {
     expect(parseFigmaUrl('https://www.figma.com/proto/abcDEF123456/Banco?node-id=1-2&scaling=scale-down')).toMatchObject({ fileKey: 'abcDEF123456' });
     expect(parseFigmaUrl('https://www.figma.com/file/abcDEF123456/Banco')).toEqual({ fileKey: 'abcDEF123456', nodeId: undefined });
     expect(parseFigmaUrl('https://example.com/nada')).toBeNull();
+    // Enlace real de un prototipo: trae página y punto de inicio.
+    expect(
+      parseFigmaUrl('https://www.figma.com/proto/aho61DN4Cz9EklxvOMttxX/Bank-App--Community-?node-id=1-2&p=f&t=4vkziRYZdv3LguoG-0&scaling=scale-down&content-scaling=fixed&page-id=0%3A1&starting-point-node-id=1%3A2'),
+    ).toEqual({ fileKey: 'aho61DN4Cz9EklxvOMttxX', nodeId: '1:2', pageId: '0:1', startId: '1:2' });
   });
 
   it('convierte los frames en pantallas', () => {

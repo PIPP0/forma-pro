@@ -24,6 +24,10 @@ export interface FigmaLink {
   fileKey: string;
   /** Página o frame que venía en el enlace (node-id). */
   nodeId?: string;
+  /** Página del enlace (page-id), si venía. */
+  pageId?: string;
+  /** Punto de inicio del prototipo (starting-point-node-id), si venía. */
+  startId?: string;
 }
 
 /** Acepta enlaces de archivo, diseño y prototipo: figma.com/design|file|proto/CLAVE/... */
@@ -32,9 +36,13 @@ export function parseFigmaUrl(url: string): FigmaLink | null {
   const m = /figma\.com\/(?:file|design|proto|board)\/([A-Za-z0-9]{10,})/.exec(clean);
   if (!m) return null;
   const q = clean.includes('?') ? clean.slice(clean.indexOf('?') + 1) : '';
-  const node = new URLSearchParams(q).get('node-id') ?? undefined;
+  const params = new URLSearchParams(q);
   // En la URL los ids van con guion («1-23»); la API los usa con dos puntos («1:23»).
-  return { fileKey: m[1], nodeId: node ? node.replace(/-/g, ':') : undefined };
+  const id = (k: string) => {
+    const v = params.get(k);
+    return v ? v.replace(/-/g, ':') : undefined;
+  };
+  return { fileKey: m[1], nodeId: id('node-id'), pageId: id('page-id'), startId: id('starting-point-node-id') };
 }
 
 export interface FigmaNode {

@@ -20,6 +20,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const [frames, setFrames] = useState<FigmaFrame[]>([]);
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [startId, setStartId] = useState('');
+  const [inicioDelEnlace, setInicioDelEnlace] = useState<string>();
   const [asStart, setAsStart] = useState(!project.screens.length);
   const [busy, setBusy] = useState('');
 
@@ -35,14 +36,16 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
 
   const fail = (e: unknown) => notify(e instanceof FigmaError ? e.message : 'No pudimos leer ese archivo de Figma.', 'error');
 
-  const openPage = async (key: string, page: string) => {
+  const openPage = async (key: string, page: string, inicio?: string) => {
     setBusy('Leyendo las pantallas…');
     try {
       const { frames: fs, startId: start } = await loadPage(token, key, page);
       setPageId(page);
       setFrames(fs);
       setPicked(Object.fromEntries(fs.map((f) => [f.id, true])));
-      setStartId(start ?? fs[0].id);
+      // El enlace de un prototipo ya dice por dónde empieza: se respeta.
+      const delEnlace = inicio ?? inicioDelEnlace;
+      setStartId(delEnlace && fs.some((f) => f.id === delEnlace) ? delEnlace : (start ?? fs[0].id));
     } catch (e) {
       setFrames([]);
       fail(e);
@@ -61,9 +64,14 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       if (!ps.length) throw new FigmaError('Ese archivo de Figma no tiene páginas con contenido.');
       setFileKey(link.fileKey);
       setPages(ps);
-      // Si el enlace traía una página o un frame, se abre la página que lo contiene.
-      const page = ps.find((p) => p.id === link.nodeId) ?? ps.find((p) => link.nodeId && p.frameIds.includes(link.nodeId)) ?? ps[0];
-      await openPage(link.fileKey, page.id);
+      setInicioDelEnlace(link.startId);
+      // El enlace suele decir la página (page-id) o un frame de ella (node-id).
+      const page =
+        ps.find((p) => p.id === link.pageId) ??
+        ps.find((p) => p.id === link.nodeId) ??
+        ps.find((p) => !!link.nodeId && p.frameIds.includes(link.nodeId)) ??
+        ps[0];
+      await openPage(link.fileKey, page.id, link.startId);
     } catch (e) {
       fail(e);
       setBusy('');
