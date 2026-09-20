@@ -1463,7 +1463,6 @@ dialog.modal::backdrop {
 .guard-wrap {
   position: relative;
   flex: none;
-  margin-top: 28px;
 }
 /* Etiquetas del encabezado del lienzo: guardarraíl y origen del flujo. */
 .head-pills {
@@ -1472,6 +1471,9 @@ dialog.modal::backdrop {
   justify-content: flex-end;
   flex-wrap: wrap;
   gap: 8px;
+  flex: none;
+  /* A la altura del titular del lienzo, no del rótulo de arriba. */
+  margin-top: 28px;
 }
 .pill-x {
   display: inline-flex;
