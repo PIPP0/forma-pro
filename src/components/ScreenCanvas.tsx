@@ -239,7 +239,6 @@ export function ImageScreen({
   onMoved,
   proto,
   onConnect,
-  drawOnTop,
   onPick,
 }: {
   screen: Screen;
@@ -249,18 +248,17 @@ export function ImageScreen({
   /** Modo dibujo: arrastrar sobre la imagen crea una zona nueva. */
   drawing?: boolean;
   onDrawn?: (rect: Caja) => void;
-  /** La zona seleccionada se arrastra para moverla y tiene esquinas para ajustarla. */
+  /** Mover o ajustar una zona existente. */
   onMoved?: (id: string, rect: Caja) => void;
-  /** Modo prototipo: todas las zonas se ven y se les puede arrastrar una flecha. */
+  /** Modo prototipo: las zonas se ven y se les puede arrastrar una flecha. */
   proto?: boolean;
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
-  /** El lienzo de marcado va encima de las zonas: deja marcar aunque una las tape. */
-  drawOnTop?: boolean;
-  /** Tocar una capa del diseño la convierte en zona. */
-  onPick?: (parte: { name: string; x: number; y: number; w: number; h: number }) => void;
+  /** Tocar una capa del diseño de Figma la convierte en zona. */
+  onPick?: (parte: { name: string } & Caja) => void;
 }) {
   const [caja, setCaja] = useState<Caja | null>(null);
-  const [resaltada, setResaltada] = useState<{ name: string; x: number; y: number; w: number; h: number } | null>(null);
+  const [resaltada, setResaltada] = useState<({ name: string } & Caja) | null>(null);
+  const [zonaBajo, setZonaBajo] = useState<string | null>(null);
   const inicio = useRef<{ x: number; y: number } | null>(null);
   const host = useRef<HTMLDivElement>(null);
   // El arrastre vive en refs: los eventos llegan antes del siguiente render.
@@ -268,22 +266,37 @@ export function ImageScreen({
   const [ajuste, setAjuste] = useState<{ id: string; actual: Caja } | null>(null);
   if (!screen.image) return null;
 
-  const punto = (e: { clientX: number; clientY: number }, host: HTMLElement) => {
-    const r = host.getBoundingClientRect();
-    return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) };
-  };
-  const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
-    x: Math.min(a.x, b.x),
-    y: Math.min(a.y, b.y),
-    w: Math.abs(a.x - b.x),
-    h: Math.abs(a.y - b.y),
-  });
+  const zonas = screen.hotspots ?? [];
+  // La capa de marcado está encima en prototipo y al dibujar: así los elementos se detectan siempre.
+  const marcando = !!editable && (!!proto || !!drawing);
 
-  // Posición del puntero dentro de la imagen, en fracciones de su tamaño.
-  const enImagen = (e: { clientX: number; clientY: number }) => {
-    const b = host.current?.getBoundingClientRect();
+  const punto = (e: { clientX: number; clientY: number }, elemento?: HTMLElement) => {
+    const b = (elemento ?? host.current)?.getBoundingClientRect();
     if (!b?.width || !b.height) return { x: 0, y: 0 };
-    return { x: (e.clientX - b.left) / b.width, y: (e.clientY - b.top) / b.height };
+    return { x: tope((e.clientX - b.left) / b.width, 0, 1), y: tope((e.clientY - b.top) / b.height, 0, 1) };
+  };
+  const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
+
+  /** Zona bajo el punto: la más chica de las que lo contienen. */
+  const zonaEn = (p: { x: number; y: number }) => {
+    const dentro = zonas.filter((h) => p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h);
+    return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
+  };
+  /** Capa del diseño bajo el punto: la más chica de las que lo contienen. */
+  const parteEn = (p: { x: number; y: number }) => {
+    const dentro = (screen.figmaParts ?? []).filter((q) => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h);
+    return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
+  };
+  /**
+   * Qué manda bajo el cursor: la zona o la capa del diseño.
+   * Gana la más chica, así una zona que cubre toda la pantalla no tapa a sus elementos.
+   */
+  const bajoCursor = (p: { x: number; y: number }) => {
+    const zona = zonaEn(p);
+    const parte = parteEn(p);
+    const areaZona = zona ? zona.w * zona.h : Infinity;
+    const areaParte = parte ? parte.w * parte.h : Infinity;
+    return parte && areaParte < areaZona ? { parte } : { zona: zona ?? undefined };
   };
 
   const empezarAjuste = (e: ReactPointerEvent, h: Hotspot, modo: 'mover' | Esquina) => {
@@ -291,19 +304,19 @@ export function ImageScreen({
     e.preventDefault();
     e.stopPropagation();
     const original = { x: h.x, y: h.y, w: h.w, h: h.h };
-    arrastre.current = { id: h.id, modo, desde: enImagen(e), original, actual: original };
+    arrastre.current = { id: h.id, modo, desde: punto(e), original, actual: original };
     setAjuste({ id: h.id, actual: original });
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
-      /* si el navegador no captura el puntero, el arrastre igual sigue mientras se está encima */
+      /* si el navegador no captura el puntero, el arrastre sigue mientras se esté encima */
     }
   };
 
   const seguirAjuste = (e: ReactPointerEvent) => {
     const a = arrastre.current;
     if (!a) return;
-    const p = enImagen(e);
+    const p = punto(e);
     const dx = p.x - a.desde.x;
     const dy = p.y - a.desde.y;
     const o = a.original;
@@ -343,83 +356,32 @@ export function ImageScreen({
   return (
     <div className="img-screen" ref={host}>
       <img src={screen.image.url} alt={screen.name} draggable={false} />
-      {drawing && (
-        <div
-          className={`hotspot-draw${drawOnTop ? ' encima' : ''}`}
-          onPointerDown={(e) => {
-            const host = e.currentTarget;
-            try {
-              host.setPointerCapture(e.pointerId);
-            } catch {
-              /* algunos navegadores no permiten capturar el puntero: el dibujo funciona igual */
-            }
-            inicio.current = punto(e, host);
-            setCaja({ ...inicio.current, w: 0, h: 0 });
-          }}
-          onPointerMove={(e) => {
-            if (!inicio.current) {
-              // Sin arrastrar: se resalta la capa del diseño que está bajo el cursor.
-              const p = punto(e, e.currentTarget);
-              const dentro = (screen.figmaParts ?? []).filter((q) => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h);
-              const chica = dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
-              setResaltada(chica);
-              return;
-            }
-            setResaltada(null);
-            setCaja(rectDe(inicio.current, punto(e, e.currentTarget)));
-          }}
-          onPointerLeave={() => setResaltada(null)}
-          onPointerUp={(e) => {
-            const desde = inicio.current;
-            inicio.current = null;
-            setCaja(null);
-            if (!desde) return;
-            const r = rectDe(desde, punto(e, e.currentTarget));
-            // Un toque suelto sobre una capa la marca entera; si no, hace falta arrastrar.
-            if (r.w < 0.02 || r.h < 0.01) {
-              if (resaltada && onPick) onPick(resaltada);
-              return;
-            }
-            onDrawn?.({ x: Math.round(r.x * 1000) / 1000, y: Math.round(r.y * 1000) / 1000, w: Math.round(r.w * 1000) / 1000, h: Math.round(r.h * 1000) / 1000 });
-          }}
-        >
-          {caja && <span className="hotspot-fantasma" style={{ left: `${caja.x * 100}%`, top: `${caja.y * 100}%`, width: `${caja.w * 100}%`, height: `${caja.h * 100}%` }} />}
-          {!caja && resaltada && (
-            <span className="parte-resaltada" style={{ left: `${resaltada.x * 100}%`, top: `${resaltada.y * 100}%`, width: `${resaltada.w * 100}%`, height: `${resaltada.h * 100}%` }}>
-              <em>{resaltada.name}</em>
-            </span>
-          )}
-        </div>
-      )}
-      {(screen.hotspots ?? []).map((h) => {
+      {zonas.map((h) => {
         const sel = selectedId === h.id;
         const c = ajuste?.id === h.id ? ajuste.actual : h;
-        // Se puede arrastrar cualquier zona en modo prototipo, pero los tiradores solo se ven en la elegida.
-        const ajustable = editable && (sel || !!proto) && !!onMoved;
-        const conTiradores = editable && sel && !!onMoved;
+        const activa = sel || zonaBajo === h.id;
         return (
           <button
             key={h.id}
             type="button"
             data-hotspot-id={h.id}
-            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${ajustable ? ' movible' : ''}`}
+            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${activa ? ' activa' : ''}${marcando ? ' pasivo' : ''}`}
             style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%` }}
             aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
             onClick={
-              editable
+              editable && !marcando
                 ? (e) => {
                     e.stopPropagation();
-                    // Tocar de nuevo la misma zona la deselecciona.
                     onSelect?.(sel ? undefined : h.id);
                   }
                 : undefined
             }
-            onPointerDown={ajustable ? (e) => empezarAjuste(e, h, 'mover') : undefined}
-            onPointerMove={ajustable ? seguirAjuste : undefined}
-            onPointerUp={ajustable ? terminarAjuste : undefined}
-            onPointerCancel={ajustable ? terminarAjuste : undefined}
+            onPointerDown={editable && !marcando && onMoved ? (e) => empezarAjuste(e, h, 'mover') : undefined}
+            onPointerMove={editable && !marcando && onMoved ? seguirAjuste : undefined}
+            onPointerUp={editable && !marcando && onMoved ? terminarAjuste : undefined}
+            onPointerCancel={editable && !marcando && onMoved ? terminarAjuste : undefined}
           >
-            {proto && editable && onConnect && (
+            {proto && editable && onConnect && activa && (
               <span
                 className="hs-link"
                 role="presentation"
@@ -427,11 +389,12 @@ export function ImageScreen({
                 onPointerDown={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  onSelect?.(h.id);
                   onConnect(h.id, e);
                 }}
               />
             )}
-            {conTiradores &&
+            {editable && sel && onMoved &&
               ESQUINAS.map((q) => (
                 <span
                   key={q}
@@ -446,6 +409,66 @@ export function ImageScreen({
           </button>
         );
       })}
+      {marcando && (
+        <div
+          className="hotspot-draw"
+          onPointerDown={(e) => {
+            const p = punto(e, e.currentTarget);
+            const { zona } = bajoCursor(p);
+            // Sobre una zona se arrastra esa zona; sobre un elemento del diseño se marca.
+            if (zona && onMoved) {
+              onSelect?.(zona.id);
+              empezarAjuste(e, zona, 'mover');
+              return;
+            }
+            try {
+              e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+              /* el dibujo funciona igual sin captura */
+            }
+            inicio.current = p;
+            setCaja({ ...p, w: 0, h: 0 });
+          }}
+          onPointerMove={(e) => {
+            if (arrastre.current) return seguirAjuste(e);
+            const p = punto(e, e.currentTarget);
+            if (!inicio.current) {
+              const { zona, parte } = bajoCursor(p);
+              setZonaBajo(zona?.id ?? null);
+              setResaltada(parte ?? null);
+              return;
+            }
+            setResaltada(null);
+            setCaja(rectDe(inicio.current, p));
+          }}
+          onPointerLeave={() => {
+            setResaltada(null);
+            setZonaBajo(null);
+          }}
+          onPointerUp={(e) => {
+            if (arrastre.current) return terminarAjuste();
+            const desde = inicio.current;
+            inicio.current = null;
+            setCaja(null);
+            if (!desde) return;
+            const r = rectDe(desde, punto(e, e.currentTarget));
+            // Un toque suelto marca la capa que esté debajo; si no hay, deselecciona.
+            if (r.w < 0.02 || r.h < 0.01) {
+              if (resaltada && onPick) onPick(resaltada);
+              else onSelect?.(undefined);
+              return;
+            }
+            onDrawn?.(redondear(r));
+          }}
+        >
+          {caja && <span className="hotspot-fantasma" style={{ left: `${caja.x * 100}%`, top: `${caja.y * 100}%`, width: `${caja.w * 100}%`, height: `${caja.h * 100}%` }} />}
+          {!caja && resaltada && (
+            <span className="parte-resaltada" style={{ left: `${resaltada.x * 100}%`, top: `${resaltada.y * 100}%`, width: `${resaltada.w * 100}%`, height: `${resaltada.h * 100}%` }}>
+              <em>{resaltada.name}</em>
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -465,7 +488,6 @@ export function ScreenCanvas({
   onMoved,
   proto,
   onConnect,
-  drawOnTop,
   onPick,
 }: {
   project: Project;
@@ -482,7 +504,6 @@ export function ScreenCanvas({
   onMoved?: (id: string, rect: { x: number; y: number; w: number; h: number }) => void;
   proto?: boolean;
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
-  drawOnTop?: boolean;
   onPick?: (parte: { name: string; x: number; y: number; w: number; h: number }) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
@@ -500,7 +521,6 @@ export function ScreenCanvas({
       onMoved={onMoved}
       proto={proto}
       onConnect={onConnect}
-      drawOnTop={drawOnTop}
       onPick={onPick}
     />
   ) : (

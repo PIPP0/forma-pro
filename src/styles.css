@@ -4627,6 +4627,22 @@ dialog.modal {
 .hotspot.movible {
   cursor: move;
 }
+/* Con la capa de marcado encima, la zona no intercepta: sus controles sí. */
+.hotspot.pasivo {
+  pointer-events: none;
+}
+.hotspot.pasivo .hs-link,
+.hotspot.pasivo .hs-handle {
+  pointer-events: auto;
+}
+.hotspot.activa,
+.hotspot.selected {
+  /* Por encima de la capa de marcado, para poder tomar sus esquinas y su punto. */
+  z-index: 6;
+}
+.hotspot.activa {
+  background: rgba(93, 79, 240, 0.2);
+}
 /* Punto para arrastrar la flecha hasta la pantalla de destino. */
 .hs-link {
   opacity: 0;
@@ -4721,6 +4737,7 @@ dialog.modal {
   border: 2px solid var(--accent, #5d4ff0);
 }
 .hotspot:hover .hs-link,
+.hotspot.activa .hs-link,
 .hotspot.selected .hs-link {
   opacity: 1;
 }
@@ -4771,8 +4788,8 @@ dialog.modal {
   touch-action: none;
   background: rgba(93, 79, 240, 0.06);
 }
-/* Encima de las zonas: permite marcar aunque una zona cubra toda la pantalla. */
-.hotspot-draw.encima {
+/* La capa de marcado va sobre las zonas para poder reconocer los elementos del diseño. */
+.hotspot-draw {
   z-index: 4;
 }
 /* Capa del diseño de Figma bajo el cursor. */

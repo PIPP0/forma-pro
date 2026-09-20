@@ -770,7 +770,6 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           onMoved={editable && (proto || isSel) ? (id, r) => moverZonaEn(shown, id, r) : undefined}
                           proto={proto && !!shown.image && editable}
                           onConnect={(hid, e) => empezarConexion(shown, hid, e)}
-                          drawOnTop={isSel && dibujando}
                           onPick={(parte) => agregarZonaEn(shown, { x: parte.x, y: parte.y, w: parte.w, h: parte.h }, parte.name)}
                         />
                       </div>
