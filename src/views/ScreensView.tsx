@@ -435,7 +435,12 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <span>BIBLIOTECA DEL PROYECTO</span>
                 <span>{project.components.length}</span>
               </div>
-              {editable && <p className="lib-help">Toca un componente para agregarlo a «{screen.name}».</p>}
+              {editable &&
+                (project.components.length ? (
+                  <p className="lib-help">Toca un componente para agregarlo a «{screen.name}».</p>
+                ) : (
+                  <p className="lib-help">Este proyecto no tiene sistema de diseño. Sus pantallas vienen de imágenes; si vas a armarlas aquí, agrega la biblioteca desde Sistema.</p>
+                ))}
               {projectCategories(project).map((cat) => {
                 const items = project.components.filter((c) => categoryOf(c, project) === cat.id && (match(c.name) || match(blockMeta(c.type).label)));
                 if (!items.length) return null;

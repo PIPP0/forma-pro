@@ -128,7 +128,7 @@ export function ImportSystemModal({ p, open, onClose }: { p: Project; open: bool
 
   const apply = () => {
     const saved = saveVersion(p.id, 'Antes de importar un sistema de diseño', true);
-    if (applyOps(p.id, [edit.project('tokens', preview.tokens), edit.project('components', preview.components)], 'Importar sistema de diseño')) {
+    if (applyOps(p.id, [edit.project('tokens', preview.tokens), edit.project('components', preview.components), edit.project('noSystem', undefined)], 'Importar sistema de diseño')) {
       notify(saved ? 'Aplicaste el sistema importado. La versión anterior quedó en Historial.' : 'Aplicaste el sistema importado. Puedes deshacerlo con Cmd o Ctrl + Z.', 'success');
       close();
     }

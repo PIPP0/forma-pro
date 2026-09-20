@@ -255,6 +255,8 @@ export interface Project {
   /** Categorías de componentes creadas por el equipo, además de las del catálogo. */
   categories?: ComponentCategory[];
   library?: { releaseId: string; version: string; sourceProjectId: string };
+  /** Proyecto sin sistema de diseño: no se le agrega la biblioteca del catálogo. */
+  noSystem?: boolean;
   createdAt: number;
   updatedAt: number;
 }

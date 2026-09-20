@@ -301,12 +301,12 @@ export function redo(projectId: string) {
 
 // ---------- Proyectos ----------
 
-export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank' | 'bancoNew'; withExampleStudy?: boolean }): string | undefined {
+export function createProject(opts: { name: string; business: string; template: 'transfer' | 'blank' | 'bancoNew'; withExampleStudy?: boolean; withSystem?: boolean }): string | undefined {
   const user = currentUser();
   if (!user) return undefined;
   const name = opts.name.trim() || (opts.template === 'bancoNew' ? 'Banco New' : 'Proyecto sin nombre');
   const project =
-    opts.template === 'transfer' ? transferProject(user.id, name) : opts.template === 'bancoNew' ? bancoNewProject(user.id, name) : blankProject(user.id, name, opts.business.trim());
+    opts.template === 'transfer' ? transferProject(user.id, name) : opts.template === 'bancoNew' ? bancoNewProject(user.id, name) : blankProject(user.id, name, opts.business.trim(), opts.withSystem);
   if (opts.business.trim()) project.business = opts.business.trim();
   let next: DB = {
     ...db,

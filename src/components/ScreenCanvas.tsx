@@ -356,7 +356,9 @@ export function ScreenCanvas({
           {measures && selectedBlockId === b.id && <Measure />}
         </div>
       ))}
-      {!screen.blocks.length && <div className="screen-empty">Pantalla vacía. Agrega componentes desde el explorador.</div>}
+      {!screen.blocks.length && (
+        <div className="screen-empty">{project.components.length ? 'Pantalla vacía. Agrega componentes desde el explorador.' : 'Pantalla vacía. Importa el flujo desde Figma.'}</div>
+      )}
     </>
   );
   return (

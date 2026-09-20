@@ -57,7 +57,7 @@ export function baseComponents(): Component[] {
 
 const b = (id: string, type: BlockType, label: string, extra: Partial<Block> = {}): Block => ({ id, type, label, ...extra });
 
-export function blankProject(ownerId: string, name: string, business: string): Project {
+export function blankProject(ownerId: string, name: string, business: string, withSystem = false): Project {
   const now = Date.now();
   const start = uid('s_');
   return {
@@ -71,16 +71,17 @@ export function blankProject(ownerId: string, name: string, business: string): P
     version: 1,
     startScreenId: start,
     tokens: baseTokens(),
-    components: baseComponents(),
+    components: withSystem ? baseComponents() : [],
+    ...(withSystem ? {} : { noSystem: true }),
     screens: [
       {
         id: start,
         name: 'Inicio',
         breakpoint: 'mobile',
         terminal: true,
-        blocks: [
-          b(uid('b_'), 'heading', 'Primera pantalla', { componentId: 'cmp-heading', variant: 'title', detail: 'Agrega componentes desde el explorador.' }),
-        ],
+        blocks: withSystem
+          ? [b(uid('b_'), 'heading', 'Primera pantalla', { componentId: 'cmp-heading', variant: 'title', detail: 'Agrega componentes desde el explorador.' })]
+          : [],
       },
     ],
     createdAt: now,

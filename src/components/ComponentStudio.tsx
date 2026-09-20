@@ -17,6 +17,7 @@ import {
 import { builtInStyle, colorValue, componentCss, componentHtml, componentReact, componentStyle, contrast, parseRef, resolve, typeToken } from '../lib/tokens';
 import { checkProject } from '../lib/flowCheck';
 import { applyOps } from '../lib/store';
+import { baseComponents } from '../lib/seed';
 import { clone, edit } from '../lib/ops';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
@@ -60,6 +61,29 @@ export function ComponentStudio({ p, editable, mode }: { p: Project; editable: b
     for (const s of p.screens) for (const b of s.blocks) if (b.componentId) m.set(b.componentId, (m.get(b.componentId) ?? 0) + 1);
     return m;
   }, [p.screens]);
+
+  // Un proyecto sin sistema de diseño parte con la biblioteca vacía: se puede agregar cuando haga falta.
+  if (!p.components.length) {
+    return (
+      <Empty
+        title="Este proyecto no tiene sistema de diseño"
+        action={
+          editable && (
+            <Button
+              tone="primary"
+              onClick={() => {
+                applyOps(p.id, [edit.project('components', baseComponents()), edit.project('noSystem', undefined)], 'Agregar la biblioteca del catálogo');
+              }}
+            >
+              Agregar la biblioteca de {CATALOG.length} componentes
+            </Button>
+          )
+        }
+      >
+        Sus pantallas vienen de imágenes, así que no hay componentes que revisar. Si vas a armar pantallas dentro de Forma, agrega la biblioteca y quedará disponible en el explorador.
+      </Empty>
+    );
+  }
 
   const needle = q.trim().toLowerCase();
   const groups = projectCategories(p).map((cat) => ({

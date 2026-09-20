@@ -956,6 +956,8 @@ export function fixContrast(c: Component, t: Tokens): Component {
 /** Agrega al proyecto los patrones del catálogo y los colores que le faltan. No cambia lo existente. */
 export function completeSystem(p: Project): Project {
   const tokens = ensureColors(p.tokens);
+  // Un proyecto sin sistema de diseño conserva sus colores, pero no recibe componentes.
+  if (p.noSystem) return tokens === p.tokens ? p : { ...p, tokens };
   const have = new Set(p.components.map((c) => variantKey(c.type, c.variant)));
   const ids = new Set(p.components.map((c) => c.id));
   const names = new Set(p.components.map((c) => c.name.toLowerCase()));

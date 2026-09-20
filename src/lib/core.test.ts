@@ -250,10 +250,22 @@ describe('biblioteca completa en cada proyecto', () => {
     const { CATALOG, coverage } = await import('./catalog');
     const { bancoNewProject } = await import('./seedBancoNew');
     const { blankProject } = await import('./seed');
-    for (const p of [blankProject('u1', 'En blanco', ''), transferProject('u1'), bancoNewProject('u1')]) {
+    for (const p of [blankProject('u1', 'En blanco', '', true), transferProject('u1'), bancoNewProject('u1')]) {
       expect(coverage(p).covered).toBe(CATALOG.length);
       expect(checkProject(p).filter((i) => i.severity === 'error')).toEqual([]);
     }
+  });
+
+  it('el proyecto en blanco parte sin sistema de diseño y nadie se lo agrega solo', async () => {
+    const { completeSystem } = await import('./catalog');
+    const { blankProject } = await import('./seed');
+    const p = blankProject('u1', 'En blanco', '');
+    expect(p.components).toEqual([]);
+    expect(p.noSystem).toBe(true);
+    expect(p.screens[0].blocks).toEqual([]);
+    // La carga completa la biblioteca de los demás proyectos, pero respeta este.
+    expect(completeSystem(p).components).toEqual([]);
+    expect(checkProject(p).filter((i) => i.severity === 'error')).toEqual([]);
   });
 
   it('completa un proyecto antiguo sin tocar lo existente, sin errores de contraste y una sola vez', async () => {

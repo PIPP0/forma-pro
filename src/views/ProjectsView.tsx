@@ -14,10 +14,11 @@ export function ProjectsView() {
   const [name, setName] = useState('');
   const [business, setBusiness] = useState('');
   const [template, setTemplate] = useState<'blank' | 'transfer' | 'bancoNew'>('blank');
+  const [withSystem, setWithSystem] = useState(false);
   const [toDelete, setToDelete] = useState<Project>();
 
   const create = () => {
-    const id = createProject({ name, business, template });
+    const id = createProject({ name, business, template, withSystem });
     if (id) {
       setOpen(false);
       setName('');
@@ -122,7 +123,7 @@ export function ProjectsView() {
             <input type="radio" name="tpl" checked={template === 'blank'} onChange={() => setTemplate('blank')} />
             <span>
               <strong>En blanco</strong>
-              <span className="muted"> Biblioteca completa de {CATALOG.length} componentes y una pantalla vacía.</span>
+              <span className="muted"> Una pantalla vacía, sin sistema de diseño. Es el punto de partida para importar desde Figma.</span>
             </span>
           </label>
           <label className="check">
@@ -140,6 +141,15 @@ export function ProjectsView() {
             </span>
           </label>
         </fieldset>
+        {template === 'blank' && (
+          <label className="check">
+            <input type="checkbox" checked={withSystem} onChange={(e) => setWithSystem(e.target.checked)} />
+            <span>
+              Incluir el sistema de diseño
+              <span className="muted"> Biblioteca de {CATALOG.length} componentes para armar pantallas dentro de Forma. Puedes agregarla después desde Sistema.</span>
+            </span>
+          </label>
+        )}
       </Modal>
 
       <Modal
