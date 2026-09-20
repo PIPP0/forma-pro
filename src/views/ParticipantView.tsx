@@ -173,6 +173,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const taskStart = useRef(0);
   const recorder = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
+  const dataTimer = useRef<number | undefined>(undefined);
   const audioBlob = useRef<Blob | null>(null);
   const [audioSize, setAudioSize] = useState(0);
   const chunkIndex = useRef(0);
@@ -210,6 +211,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
 
   useEffect(
     () => () => {
+      window.clearInterval(dataTimer.current);
       recorder.current?.stream.getTracks().forEach((t) => t.stop());
     },
     [],
@@ -294,7 +296,18 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
         if (cloudMode) cloudPending.current.push(e.data);
         if (session.current) void saveDraftChunk(session.current.id, chunkIndex.current++, e.data).catch(() => undefined);
       };
-      next.start(1000);
+      // Safari en iPhone no siempre entrega los trozos por su cuenta: se le piden cada 3 s.
+      next.start();
+      window.clearInterval(dataTimer.current);
+      dataTimer.current = window.setInterval(() => {
+        const r = recorder.current;
+        if (r?.state !== 'recording') return;
+        try {
+          r.requestData();
+        } catch {
+          /* algunos navegadores solo entregan el audio al terminar */
+        }
+      }, 3000);
       recorder.current = next;
       setRecording(true);
       if (session.current) session.current = { ...session.current, consent: { ...session.current.consent, audio: true } };
@@ -366,8 +379,10 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
         rec.stop();
       });
     }
+    window.clearInterval(dataTimer.current);
     rec?.stream.getTracks().forEach((t) => t.stop());
     setRecording(false);
+    if (rec && !chunks.current.length) notify('Este navegador no pudo grabar el audio. Tus respuestas sí se envían.', 'error');
     if (rec && chunks.current.length) {
       const blob = new Blob(chunks.current, { type: rec.mimeType });
       if (local) {

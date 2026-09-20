@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Block, BlockType, Breakpoint, Component, Mode, OpInput, Project, Role, Screen } from '../lib/model';
+import type { Block, BlockType, Breakpoint, Component, Hotspot, Mode, OpInput, Project, Role, Screen } from '../lib/model';
 import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
-import { addComment, applyOps, canRedo, canUndo, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
+import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
 import { clone, edit } from '../lib/ops';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
@@ -13,33 +13,14 @@ import { href } from '../lib/router';
 import { FONT_INTER } from '../lib/seed';
 import { OPTION_HINT, categoryOf, componentSample, componentSummary, projectCategories, sampleContent } from '../lib/catalog';
 import { ScreenCanvas } from '../components/ScreenCanvas';
+import { FigmaImportModal } from '../components/FigmaImportModal';
 import { Runner } from '../components/Runner';
 import { BlockView } from '../components/BlockView';
 import { FitPreview } from '../components/FitPreview';
 import { CopilotPanel } from '../components/CopilotPanel';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
 import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
-import {
-  IconArrowUpRight,
-  IconChevronRight,
-  IconCursor,
-  IconDiamond,
-  IconExpand,
-  IconFrame,
-  IconLink,
-  IconMessage,
-  IconMinus,
-  IconMoon,
-  IconPlay,
-  IconPlus,
-  IconRedo,
-  IconSearch,
-  IconShield,
-  IconSliders,
-  IconSparkle,
-  IconSun,
-  IconUndo,
-} from '../components/icons';
+import { IconArrowUpRight, IconChevronRight, IconCursor, IconDiamond, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
 
 
 /** Bloque que instancia un componente, con su contenido de ejemplo propio. */
@@ -144,6 +125,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [zoom, setZoom] = useState(0.75);
   const [guardOpen, setGuardOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [figmaOpen, setFigmaOpen] = useState(false);
   const [drag, setDrag] = useState<string>();
   const [dropOn, setDropOn] = useState<string>();
   const scroller = useRef<HTMLDivElement>(null);
@@ -676,6 +658,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
           <button type="button" className="tool" title="Nueva pantalla" aria-label="Nueva pantalla" disabled={!editable} onClick={addScreen}>
             <IconFrame size={18} />
           </button>
+          <button type="button" className="tool" title="Importar desde Figma" aria-label="Importar desde Figma" disabled={!editable} onClick={() => setFigmaOpen(true)}>
+            <IconFileImage size={18} />
+          </button>
           <button type="button" className="tool" title="Componentes del sistema" aria-label="Componentes del sistema" onClick={() => setExplorer('components')}>
             <IconDiamond size={18} />
           </button>
@@ -754,6 +739,18 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 
       {play && <PlayOverlay project={project} screen={screen} mode={mode} onClose={() => setPlay(false)} />}
 
+      <FigmaImportModal
+        open={figmaOpen}
+        project={project}
+        onClose={() => setFigmaOpen(false)}
+        onDone={(id) => {
+          const imported = getDb().projects.find((x) => x.id === project.id)?.screens.find((x) => x.id === id);
+          if (imported) setBp(imported.breakpoint);
+          select(id);
+          setPanel('props');
+        }}
+      />
+
       <ImportHtmlModal
         open={importOpen}
         onClose={() => setImportOpen(false)}
@@ -767,6 +764,59 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
         }}
       />
     </div>
+  );
+}
+
+/** Destinos de una pantalla importada como imagen. */
+function HotspotsSection({ project, screen, editable }: { project: Project; screen: Screen; editable: boolean }) {
+  const hotspots = screen.hotspots ?? [];
+  const save = (next: Hotspot[], label: string) => applyOps(project.id, [edit.screen(project, screen.id, 'hotspots', next)], label);
+  const targets = project.screens.filter((s) => !s.variantOf && s.id !== screen.id);
+  return (
+    <Section title="Zonas tocables" aside={hotspots.length ? `${hotspots.length}` : undefined}>
+      {!hotspots.length && <p className="muted small">Esta pantalla no tiene zonas tocables. En Figma se crean con las flechas de prototipo.</p>}
+      {hotspots.map((h, i) => (
+        <Field key={h.id} label={h.label?.trim() || `Zona ${i + 1}`}>
+          <div className="row">
+            <select
+              className="grow"
+              value={h.back ? 'back' : (h.target ?? '')}
+              disabled={!editable}
+              onChange={(e) => {
+                const v = e.target.value;
+                const patch: Hotspot = v === 'back' ? { ...h, back: true, target: undefined } : { ...h, back: undefined, target: v || undefined };
+                save(
+                  hotspots.map((x) => (x.id === h.id ? patch : x)),
+                  `Cambiar el destino de «${h.label || 'la zona'}»`,
+                );
+              }}
+            >
+              <option value="">Sin destino</option>
+              <option value="back">Volver</option>
+              {targets.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+            {editable && (
+              <Button
+                size="sm"
+                tone="ghost"
+                onClick={() =>
+                  save(
+                    hotspots.filter((x) => x.id !== h.id),
+                    'Quitar zona tocable',
+                  )
+                }
+              >
+                Quitar
+              </Button>
+            )}
+          </div>
+        </Field>
+      ))}
+    </Section>
   );
 }
 
@@ -865,6 +915,7 @@ function ScreenProps({
           </span>
         </span>
       </div>
+      {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} />}
       <Section title="Contenido">
         <Field label="Nombre de pantalla">
           <CommitInput

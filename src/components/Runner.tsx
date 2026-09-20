@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
 import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor, withValues } from '../lib/model';
 import { BlockView } from './BlockView';
-import { PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
+import { ImageScreen, PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
 
 export type RunnerEvent = Pick<StudyEvent, 'screen' | 'block' | 'option' | 'kind' | 'x' | 'y' | 'bx' | 'by' | 'dwell'>;
 
@@ -108,6 +108,29 @@ export function Runner({
     }
   };
 
+  /** Pantalla importada como imagen: se navega por sus zonas tocables. */
+  const onImageClick = (e: MouseEvent) => {
+    const el = (e.target as Element).closest('[data-hotspot-id]');
+    const hotspot = el ? current.hotspots?.find((h) => h.id === el.getAttribute('data-hotspot-id')) : undefined;
+    const c = coords(e, el);
+    const now = performance.now();
+    const gap = now - last.current;
+    last.current = now;
+    const wasFirst = first.current;
+    first.current = false;
+    if (!hotspot) {
+      emit({ kind: 'misclick', screen: current.id, ...c });
+      return;
+    }
+    if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: hotspot.id, dwell: Math.round(gap), ...c });
+    emit({ kind: 'tap', screen: current.id, block: hotspot.id, ...c });
+    if (hotspot.back) {
+      navigate({ id: '', type: 'button', label: '', action: 'back' });
+      return;
+    }
+    if (hotspot.target) goTo(hotspot.target);
+  };
+
   const onClick = (e: MouseEvent) => {
     const target = e.target as Element;
     if (target.closest('[data-scrim]')) {
@@ -174,7 +197,11 @@ export function Runner({
     </div>
   ));
   const sheet = current.presentation === 'sheet';
-  const body = sheet ? (
+  const body = current.image ? (
+    <div ref={content} className="screen screen-image" onClick={onImageClick}>
+      <ImageScreen screen={current} />
+    </div>
+  ) : sheet ? (
     <SheetLayout
       key={current.id}
       project={project}

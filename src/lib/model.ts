@@ -193,6 +193,20 @@ export interface ComponentCategory {
   label: string;
 }
 
+/** Zona tocable sobre una pantalla que es una imagen. Medidas en fracción del ancho y del alto (0 a 1). */
+export interface Hotspot {
+  id: string;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Pantalla a la que lleva. Sin destino, solo registra el toque. */
+  target?: string;
+  /** Vuelve a la pantalla anterior. */
+  back?: boolean;
+  label?: string;
+}
+
 export interface Screen {
   id: string;
   name: string;
@@ -203,6 +217,11 @@ export interface Screen {
   presentation?: 'sheet';
   /** Pantalla que se ve de fondo en el lienzo cuando es hoja inferior. */
   sheetOver?: string;
+  /** Pantalla importada como imagen (por ejemplo, desde Figma): se ve tal cual y se toca en sus zonas. */
+  image?: { url: string; width: number; height: number };
+  hotspots?: Hotspot[];
+  /** Nodo de Figma del que viene, para volver a importarla. */
+  figmaId?: string;
   blocks: Block[];
 }
 

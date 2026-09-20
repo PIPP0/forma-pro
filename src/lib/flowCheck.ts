@@ -30,6 +30,10 @@ export function navGraph(p: Project): Map<string, Set<string>> {
         if (target && ids.has(target)) g.get(from)!.add(baseId(ids.get(target)!));
       }
     }
+    // Pantallas importadas como imagen: sus zonas tocables también son navegación.
+    for (const h of s.hotspots ?? []) {
+      if (h.target && ids.has(h.target)) g.get(from)!.add(baseId(ids.get(h.target)!));
+    }
   }
   return g;
 }
@@ -111,6 +115,13 @@ export function checkProject(p: Project): Issue[] {
       }
     }
 
+    for (const h of s.hotspots ?? []) {
+      if (h.target && !byId.has(h.target))
+        add({ severity: 'error', area: 'flujo', screenId: s.id, message: `Una zona tocable de «${s.name}» apunta a una pantalla eliminada.` });
+    }
+    if (s.image && !(s.hotspots ?? []).length)
+      add({ severity: 'warning', area: 'flujo', screenId: s.id, message: `«${s.name}» es una imagen sin zonas tocables: no se puede avanzar desde ahí.` });
+
     if (s.blocks.some((b) => b.required) && !s.blocks.some((b) => b.type === 'button' && b.action === 'navigate'))
       add({ severity: 'warning', area: 'flujo', screenId: s.id, message: `«${s.name}» tiene campos obligatorios, pero ningún botón para continuar.` });
   }
@@ -128,7 +139,7 @@ export function checkProject(p: Project): Issue[] {
   if (start) {
     const g = navGraph(p);
     const dist = bfs(g, baseId(start));
-    const withBack = new Set(p.screens.filter((s) => s.blocks.some((b) => b.action === 'back')).map(baseId));
+    const withBack = new Set(p.screens.filter((s) => s.blocks.some((b) => b.action === 'back') || (s.hotspots ?? []).some((h) => h.back)).map(baseId));
     const terminal = new Set(p.screens.filter((s) => s.terminal).map(baseId));
     for (const s of p.screens) {
       if (s.variantOf) continue;

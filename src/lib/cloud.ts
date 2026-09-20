@@ -207,6 +207,14 @@ export async function deleteCloudStudy(studyId: string) {
   await c.fs.deleteDoc(c.fs.doc(c.db, 'studies', studyId));
 }
 
+/** Imagen de una pantalla importada (Figma). Queda pública por enlace, como la copia del prototipo. */
+export async function uploadPrototypeImage(projectId: string, name: string, blob: Blob): Promise<string> {
+  const c = await designer();
+  const ref = c.st.ref(c.storage, `prototypes/${c.uid}/${projectId}/${name}`);
+  await c.st.uploadBytes(ref, blob, { contentType: blob.type || 'image/png' });
+  return c.st.getDownloadURL(ref);
+}
+
 // ---------- Sesión en curso (persona participante, anónima) ----------
 
 async function participant(): Promise<Cloud & { uid: string }> {

@@ -4565,3 +4565,50 @@ dialog.modal {
     width: 100%;
   }
 }
+
+/* Pantallas importadas como imagen (Figma) y sus zonas tocables */
+.screen-image {
+  padding: 0;
+  display: block;
+  background: #fff;
+  min-height: 100%;
+}
+.img-screen {
+  position: relative;
+  line-height: 0;
+}
+.img-screen img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.hotspot {
+  position: absolute;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  border-radius: 6px;
+}
+.hotspot.editable {
+  background: rgba(93, 79, 240, 0.12);
+  outline: 1px dashed rgba(93, 79, 240, 0.65);
+}
+.hotspot.editable.selected {
+  background: rgba(93, 79, 240, 0.22);
+  outline: 2px solid var(--accent, #5d4ff0);
+}
+
+/* Lista de pantallas al importar desde Figma */
+.figma-frames {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 320px;
+  overflow: auto;
+}
+.figma-frames .check span span {
+  display: block;
+}

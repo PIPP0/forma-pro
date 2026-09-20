@@ -77,3 +77,13 @@ Todo corre en el navegador y se guarda en `localStorage` (el audio, en IndexedDB
 - **Colaboración en vivo:** no disponible. **Figma:** sin importación vía API.
 
 El siguiente paso para uso en equipo es un backend (por ejemplo Cloudflare Workers + D1, como propone el PRD) que reciba las mismas operaciones que hoy aplica el store, con autenticación por correo y código, sesiones que llegan solas y audio en almacenamiento de objetos.
+
+## Importar desde Figma
+
+En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas del lienzo). Pega el enlace del archivo o del prototipo y trae cada frame como una pantalla-imagen:
+
+- Las flechas de prototipo de Figma llegan como **zonas tocables**; «Volver» también.
+- El destino de cada zona se edita en Propiedades → **Zonas tocables**.
+- Las imágenes se copian a la nube de Forma (las de Figma vencen a los 30 días).
+- Necesitas un **token personal de lectura** de Figma: Ajustes → Figma. Se guarda solo en ese navegador.
+- En las pruebas se registran toques, mapa de calor, tiempos, abandono y audio igual que en las pantallas hechas con componentes.

@@ -220,6 +220,34 @@ export function PhoneChrome({ project, mode, wireframe, enabled, dim, children }
   );
 }
 
+/** Pantalla importada como imagen (por ejemplo, de Figma), con sus zonas tocables. */
+export function ImageScreen({ screen, editable, selectedId, onSelect }: { screen: Screen; editable?: boolean; selectedId?: string; onSelect?: (id: string | undefined) => void }) {
+  if (!screen.image) return null;
+  return (
+    <div className="img-screen">
+      <img src={screen.image.url} alt={screen.name} draggable={false} />
+      {(screen.hotspots ?? []).map((h) => (
+        <button
+          key={h.id}
+          type="button"
+          data-hotspot-id={h.id}
+          className={`hotspot${editable ? ' editable' : ''}${selectedId === h.id ? ' selected' : ''}`}
+          style={{ left: `${h.x * 100}%`, top: `${h.y * 100}%`, width: `${h.w * 100}%`, height: `${h.h * 100}%` }}
+          aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
+          onClick={
+            editable
+              ? (e) => {
+                  e.stopPropagation();
+                  onSelect?.(h.id);
+                }
+              : undefined
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 export function ScreenCanvas({
   project,
   screen,
@@ -245,7 +273,9 @@ export function ScreenCanvas({
   const maxW = contentWidth(screen);
   const pendingRequired = screen.blocks.some((x) => x.required && !x.value);
   const sheet = screen.presentation === 'sheet';
-  const nodes = (
+  const nodes = screen.image ? (
+    <ImageScreen screen={screen} editable selectedId={selectedBlockId} onSelect={(id) => onSelect?.(id)} />
+  ) : (
     <>
       {screen.blocks.map((b) => (
         <div

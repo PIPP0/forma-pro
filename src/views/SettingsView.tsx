@@ -6,6 +6,7 @@ import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { Badge, Button, Field, Modal, pickFile } from '../components/ui';
 import { disconnectCloud, sendAccessLink } from '../lib/cloud';
+import { getFigmaToken, setFigmaToken } from '../lib/figma';
 import { setCloudAccountCache, useCloudAccount } from '../components/useCloudAccount';
 
 export function SettingsView() {
@@ -66,6 +67,8 @@ export function SettingsView() {
           )}
         </form>
       </section>
+
+      <FigmaSection />
 
       <section className="section">
         <h2 className="section-title">Respaldo del espacio de trabajo</h2>
@@ -140,6 +143,60 @@ export function SettingsView() {
         <p>Se eliminarán perfiles, proyectos, versiones, estudios y resultados de este navegador. No se puede deshacer.</p>
       </Modal>
     </div>
+  );
+}
+
+function FigmaSection() {
+  const [token, setToken] = useState('');
+  const [saved, setSaved] = useState(!!getFigmaToken());
+
+  return (
+    <section className="section">
+      <h2 className="section-title">Figma</h2>
+      <p className="muted">
+        Con un token personal de lectura puedes traer un flujo de Figma como pantallas. El token se guarda solo en este navegador, se usa únicamente contra api.figma.com y no se incluye en los
+        respaldos.
+      </p>
+      <div className="row">{saved ? <Badge tone="ok">Token configurado</Badge> : <Badge>Sin token</Badge>}</div>
+      <form
+        className="row add-row"
+        onSubmit={(e) => {
+          e.preventDefault();
+          const t = token.trim();
+          if (t.length < 20) return notify('Ese token se ve incompleto. Cópialo entero desde Figma.', 'error');
+          setFigmaToken(t);
+          setToken('');
+          setSaved(true);
+          notify('Guardaste tu token de Figma en este navegador.', 'success');
+        }}
+      >
+        <input
+          className="input grow"
+          type="password"
+          autoComplete="off"
+          aria-label="Token personal de Figma"
+          placeholder={saved ? 'Reemplazar token' : 'Pega aquí tu token de Figma'}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <Button tone="primary" type="submit">
+          Guardar token
+        </Button>
+        {saved && (
+          <Button
+            tone="ghost"
+            onClick={() => {
+              setFigmaToken('');
+              setSaved(false);
+              notify('Quitaste el token de Figma.', 'success');
+            }}
+          >
+            Quitar token
+          </Button>
+        )}
+      </form>
+      <p className="small muted">Se crea en Figma → Settings → Security → Personal access tokens, con permiso de solo lectura de archivos.</p>
+    </section>
   );
 }
 
