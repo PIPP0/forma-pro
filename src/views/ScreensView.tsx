@@ -20,7 +20,7 @@ import { FitPreview } from '../components/FitPreview';
 import { CopilotPanel } from '../components/CopilotPanel';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
 import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
-import { IconArrowUpRight, IconChevronRight, IconCursor, IconDiamond, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
+import { IconArrowUpRight, IconChevronRight, IconClose, IconCursor, IconDiamond, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
 
 
 /** Bloque que instancia un componente, con su contenido de ejemplo propio. */
@@ -595,7 +595,17 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
               <h1 className="canvas-title">{project.tagline || project.name}</h1>
               {project.summary && <p className="canvas-sub">{project.summary}</p>}
             </div>
-            <div className="guard-wrap">
+            <div className="head-pills">
+              {editable && deFigma.length > 0 && (
+                <button type="button" className="sys-pill" title="Quitar las pantallas importadas de Figma" onClick={() => setQuitarFigma(true)}>
+                  <IconFileImage size={14} />
+                  Flujo de Figma · {deFigma.length}
+                  <span className="pill-x" aria-hidden="true">
+                    <IconClose size={12} />
+                  </span>
+                </button>
+              )}
+              <div className="guard-wrap">
               <button type="button" className={`sys-pill ${errors ? 'err' : ''}`} aria-expanded={guardOpen} onClick={() => setGuardOpen((v) => !v)}>
                 <IconShield size={14} />
                 {errors ? `${errors} ${errors === 1 ? 'error crítico' : 'errores críticos'}` : 'Sistema conectado'}
@@ -632,6 +642,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   </ul>
                 </div>
               )}
+              </div>
             </div>
           </header>
 

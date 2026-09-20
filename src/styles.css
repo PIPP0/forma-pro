@@ -1465,6 +1465,23 @@ dialog.modal::backdrop {
   flex: none;
   margin-top: 28px;
 }
+/* Etiquetas del encabezado del lienzo: guardarraíl y origen del flujo. */
+.head-pills {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.pill-x {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 1px;
+  opacity: 0.55;
+}
+.sys-pill:hover .pill-x {
+  opacity: 1;
+}
 .sys-pill {
   all: unset;
   cursor: pointer;
@@ -1477,6 +1494,7 @@ dialog.modal::backdrop {
   background: var(--panel);
   color: var(--ink-2);
   font-size: 12.5px;
+  white-space: nowrap;
 }
 .sys-pill:hover {
   border-color: var(--accent-line);
