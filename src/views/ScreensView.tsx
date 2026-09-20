@@ -455,7 +455,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                   </button>
                   {deFigma.length > 0 && (
                     <button type="button" className="tree-action" onClick={() => setQuitarFigma(true)}>
-                      Quitar las {deFigma.length} pantallas de Figma
+                      {deFigma.length === 1 ? 'Quitar la pantalla de Figma' : `Quitar las ${deFigma.length} pantallas de Figma`}
                     </button>
                   )}
                   <button type="button" className="tree-action" onClick={() => setImportOpen(true)}>
