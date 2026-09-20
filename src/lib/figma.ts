@@ -189,6 +189,30 @@ export function startFrameOf(page: FigmaNode, frames: FigmaFrame[]): string | un
 }
 
 /**
+ * Pantallas a las que se llega desde el inicio siguiendo las flechas del prototipo.
+ * En un archivo grande evita traer frames sueltos que no son parte del flujo.
+ */
+export function alcanzablesDesde(frames: FigmaFrame[], startId: string | undefined): string[] {
+  const inicio = startId && frames.some((f) => f.id === startId) ? startId : frames[0]?.id;
+  if (!inicio) return [];
+  const porId = new Map(frames.map((f) => [f.id, f]));
+  const vistos = new Set([inicio]);
+  const cola = [inicio];
+  while (cola.length) {
+    const f = porId.get(cola.shift()!);
+    if (!f) continue;
+    const destinos = [...f.hotspots.map((h) => h.destino), f.auto?.destino];
+    for (const d of destinos) {
+      if (!d || vistos.has(d) || !porId.has(d)) continue;
+      vistos.add(d);
+      cola.push(d);
+    }
+  }
+  // Se devuelven en el orden de la página para que la lista no se desordene.
+  return frames.filter((f) => vistos.has(f.id)).map((f) => f.id);
+}
+
+/**
  * Qué frames son pantallas nuevas y cuáles ya existen en el proyecto.
  * Reusar el id de la pantalla mantiene vivos los destinos que ya apuntaban a ella.
  */

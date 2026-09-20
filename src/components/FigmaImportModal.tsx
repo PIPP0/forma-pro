@@ -6,7 +6,7 @@ import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { uploadPrototypeImage } from '../lib/cloud';
-import { FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, type FigmaFrame, type FigmaPage } from '../lib/figma';
+import { alcanzablesDesde, FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, type FigmaFrame, type FigmaPage } from '../lib/figma';
 import { Button, Field, Modal } from './ui';
 
 const breakpointFor = (w: number): Breakpoint => (w < 600 ? 'mobile' : w < 1100 ? 'tablet' : 'desktop');
@@ -21,6 +21,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const [picked, setPicked] = useState<Record<string, boolean>>({});
   const [startId, setStartId] = useState('');
   const [inicioDelEnlace, setInicioDelEnlace] = useState<string>();
+  const [fueraDelFlujo, setFueraDelFlujo] = useState<string[]>([]);
   const [asStart, setAsStart] = useState(!project.screens.length);
   const [busy, setBusy] = useState('');
 
@@ -42,10 +43,15 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       const { frames: fs, startId: start } = await loadPage(token, key, page);
       setPageId(page);
       setFrames(fs);
-      setPicked(Object.fromEntries(fs.map((f) => [f.id, true])));
       // El enlace de un prototipo ya dice por dónde empieza: se respeta.
       const delEnlace = inicio ?? inicioDelEnlace;
-      setStartId(delEnlace && fs.some((f) => f.id === delEnlace) ? delEnlace : (start ?? fs[0].id));
+      const desde = delEnlace && fs.some((f) => f.id === delEnlace) ? delEnlace : (start ?? fs[0].id);
+      setStartId(desde);
+      // En un archivo con muchos frames sueltos se marca solo el flujo que sale del inicio.
+      const conectadas = alcanzablesDesde(fs, desde);
+      const soloFlujo = conectadas.length > 1 && conectadas.length < fs.length;
+      setFueraDelFlujo(soloFlujo ? fs.filter((f) => !conectadas.includes(f.id)).map((f) => f.id) : []);
+      setPicked(Object.fromEntries(fs.map((f) => [f.id, !soloFlujo || conectadas.includes(f.id)])));
     } catch (e) {
       setFrames([]);
       fail(e);
@@ -218,7 +224,9 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
           <>
             <div className="row">
               <span className="muted small">
-                {frames.length} {frames.length === 1 ? 'pantalla encontrada' : 'pantallas encontradas'}. Las flechas de tu prototipo llegan como zonas tocables.
+                {fueraDelFlujo.length
+                  ? `${frames.length - fueraDelFlujo.length} de ${frames.length} pantallas están conectadas al inicio y vienen marcadas. Las otras ${fueraDelFlujo.length} quedan fuera del flujo.`
+                  : `${frames.length} ${frames.length === 1 ? 'pantalla encontrada' : 'pantallas encontradas'}. Las flechas de tu prototipo llegan como zonas tocables.`}
               </span>
               <Button size="sm" onClick={() => setPicked(Object.fromEntries(frames.map((f) => [f.id, chosen.length !== frames.length])))}>
                 {chosen.length === frames.length ? 'Quitar todas' : 'Elegir todas'}
@@ -233,6 +241,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
                       <strong>{f.name}</strong>
                       <span className="muted small">
                         {f.width} × {f.height} · {f.hotspots.length} {f.hotspots.length === 1 ? 'zona tocable' : 'zonas tocables'}
+                        {fueraDelFlujo.includes(f.id) ? ' · fuera del flujo' : ''}
                         {project.screens.some((s) => s.figmaId === f.id) ? ' · ya importada, se actualiza' : ''}
                       </span>
                     </span>

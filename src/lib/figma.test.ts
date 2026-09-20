@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { framesFromPage, hotspotsIn, interaccionesDe, parseFigmaUrl, planImportacion, startFrameOf, type FigmaNode } from './figma';
+import { alcanzablesDesde, framesFromPage, hotspotsIn, interaccionesDe, parseFigmaUrl, planImportacion, startFrameOf, type FigmaNode } from './figma';
 
 const box = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
 const alTocar = (destino: string, navegacion = 'NAVIGATE') => [{ trigger: { type: 'ON_CLICK' }, actions: [{ type: 'NODE', destinationId: destino, navigation: navegacion }] }];
@@ -90,6 +90,15 @@ describe('importar desde Figma', () => {
     expect(interaccionesDe({ id: 'a', name: 'a', type: 'FRAME' }).toque).toBeUndefined();
     expect(interaccionesDe({ id: 'a', name: 'a', type: 'FRAME', interactions: alTocar('2:2', 'CHANGE_TO') }).toque).toBeUndefined();
     expect(hotspotsIn({ id: 'a', name: 'a', type: 'FRAME' })).toEqual([]);
+  });
+
+  it('sigue las flechas desde el inicio y deja fuera los frames sueltos', () => {
+    const frames = [...framesFromPage(page), { id: '9:9', name: 'Suelta', width: 390, height: 844, hotspots: [] }];
+    // Inicio → Meta creada (toque) → Inicio (automática); Inicio → Hoja de ayuda (superposición).
+    expect(alcanzablesDesde(frames, '1:2')).toEqual(['1:2', '1:10', '1:30']);
+    // Desde una pantalla sin salidas, solo ella.
+    expect(alcanzablesDesde(frames, '9:9')).toEqual(['9:9']);
+    expect(alcanzablesDesde([], '1:2')).toEqual([]);
   });
 
   it('usa la pantalla de inicio del prototipo', () => {
