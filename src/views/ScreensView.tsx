@@ -3,7 +3,7 @@ import type { Block, BlockType, Breakpoint, Component, Hotspot, Mode, OpInput, P
 import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
 import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
-import { clone, edit } from '../lib/ops';
+import { clone, edit, quitarFigmaOps } from '../lib/ops';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
 import { colorValue, effectiveStyle, findComponent } from '../lib/tokens';
 import { importHtml } from '../lib/importer';
@@ -163,24 +163,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
 
   /** Deja el proyecto sin el prototipo importado, para traer otro archivo desde cero. */
   const quitarPantallasDeFigma = () => {
-    const fuera = new Set(deFigma.map((s) => s.id));
-    const vivo = (id?: string) => !!id && !fuera.has(id);
-    const limpias = project.screens
-      .filter((s) => !fuera.has(s.id))
-      .map((s) => ({
-        ...s,
-        ...(vivo(s.sheetOver) ? {} : { sheetOver: undefined }),
-        ...(s.autoNext && !vivo(s.autoNext.target) ? { autoNext: undefined } : {}),
-        ...(s.hotspots ? { hotspots: s.hotspots.map((h) => (vivo(h.target) ? h : { ...h, target: undefined })) } : {}),
-        blocks: s.blocks.map((b) => (vivo(b.target) ? b : { ...b, target: undefined, ...(b.action === 'navigate' ? { action: undefined } : {}) })),
-      }));
-    // Un proyecto sin pantallas no se puede editar: queda una en blanco.
-    const restantes: Screen[] = limpias.length ? limpias : [{ id: uid('s_'), name: 'Inicio', breakpoint: 'mobile', terminal: true, blocks: [] }];
-    const ops: OpInput[] = [edit.project('screens', restantes)];
-    if (!restantes.some((s) => s.id === project.startScreenId)) ops.push(edit.project('startScreenId', restantes[0].id));
-    if (apply(ops, 'Quitar las pantallas de Figma')) {
+    const ops = quitarFigmaOps(project);
+    if (ops.length && apply(ops, 'Quitar las pantallas de Figma')) {
       notify(`Quitaste ${deFigma.length} ${deFigma.length === 1 ? 'pantalla importada' : 'pantallas importadas'} de Figma.`, 'success');
-      select(restantes[0].id);
+      const quedan = getDb().projects.find((x) => x.id === project.id)?.screens;
+      if (quedan?.length) select(quedan[0].id);
     }
     setQuitarFigma(false);
   };

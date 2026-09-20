@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Breakpoint, Hotspot, OpInput, Project, Screen } from '../lib/model';
 import { applyOps } from '../lib/store';
-import { edit } from '../lib/ops';
+import { edit, quitarFigmaOps } from '../lib/ops';
 import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
@@ -49,6 +49,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
 
   const chosen = frames.filter((f) => picked[f.id]);
   // Pantallas de una importación anterior que esta no vuelve a traer: son las que sobran.
+  const deFigma = project.screens.filter((s) => s.figmaId);
   const elegidos = new Set(chosen.map((f) => f.id));
   const yaImportadas = project.screens.filter((s) => s.figmaId && !elegidos.has(s.figmaId));
 
@@ -238,6 +239,26 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
       }
     >
       <div className="stack">
+        {deFigma.length > 0 && (
+          <div className="row between figma-prev">
+            <span className="muted small">
+              Este proyecto ya tiene {deFigma.length} {deFigma.length === 1 ? 'pantalla traída' : 'pantallas traídas'} de Figma.
+            </span>
+            <Button
+              size="sm"
+              tone="danger"
+              onClick={() => {
+                const ops = quitarFigmaOps(project);
+                if (ops.length && applyOps(project.id, ops, 'Quitar las pantallas de Figma')) {
+                  notify(`Quitaste ${deFigma.length} ${deFigma.length === 1 ? 'pantalla importada' : 'pantallas importadas'} de Figma.`, 'success');
+                  close();
+                }
+              }}
+            >
+              {deFigma.length === 1 ? 'Quitar esa pantalla' : 'Quitar esas pantallas'}
+            </Button>
+          </div>
+        )}
         {!token && (
           <Field
             label="Token de Figma"

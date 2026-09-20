@@ -1,4 +1,5 @@
 import type { Block, Component, OpInput, Path, Project, Screen, StateName, StyleKey, Tokens } from './model';
+import { uid } from './ids';
 
 // Guardado por operación: cada cambio es una operación pequeña, invertible y registrable.
 
@@ -205,5 +206,29 @@ export function renameTokenOps(p: Project, group: 'color' | 'space' | 'radius', 
       }
     }),
   );
+  return ops;
+}
+
+/**
+ * Deja el proyecto sin el prototipo importado de Figma.
+ * Conserva las pantallas hechas a mano y limpia los destinos que apuntaban a lo borrado.
+ */
+export function quitarFigmaOps(p: Project): OpInput[] {
+  const fuera = new Set(p.screens.filter((s) => s.figmaId).map((s) => s.id));
+  if (!fuera.size) return [];
+  const vivo = (id?: string) => !!id && !fuera.has(id);
+  const limpias: Screen[] = p.screens
+    .filter((s) => !fuera.has(s.id))
+    .map((s) => ({
+      ...s,
+      ...(vivo(s.sheetOver) ? {} : { sheetOver: undefined }),
+      ...(s.autoNext && !vivo(s.autoNext.target) ? { autoNext: undefined } : {}),
+      ...(s.hotspots ? { hotspots: s.hotspots.map((h) => (vivo(h.target) ? h : { ...h, target: undefined })) } : {}),
+      blocks: s.blocks.map((b) => (vivo(b.target) ? b : { ...b, target: undefined, ...(b.action === 'navigate' ? { action: undefined } : {}) })),
+    }));
+  // Un proyecto sin pantallas no se puede editar: queda una en blanco.
+  const restantes: Screen[] = limpias.length ? limpias : [{ id: uid('s_'), name: 'Inicio', breakpoint: 'mobile', terminal: true, blocks: [] }];
+  const ops: OpInput[] = [edit.project('screens', restantes)];
+  if (!restantes.some((s) => s.id === p.startScreenId)) ops.push(edit.project('startScreenId', restantes[0].id));
   return ops;
 }

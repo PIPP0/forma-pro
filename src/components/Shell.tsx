@@ -217,7 +217,7 @@ export function Shell({ project, role, active, children }: { project?: Project; 
           <i className="foot-dot" aria-hidden="true" /> Forma Studio <span className="foot-sep">/</span> {project ? project.name : 'Workspace'}
         </span>
         <span>
-          <IconShield size={13} /> {project?.footnote ? 'Demo con datos ficticios' : 'Datos guardados en este navegador'} <span className="foot-ver">v0.2</span>
+          <IconShield size={13} /> {project?.footnote ? 'Demo con datos ficticios' : 'Datos guardados en este navegador'} <span className="foot-ver">v0.3</span>
         </span>
       </footer>
 
