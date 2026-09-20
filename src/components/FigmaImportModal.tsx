@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Breakpoint, Hotspot, OpInput, Project, Screen } from '../lib/model';
 import { applyOps } from '../lib/store';
 import { edit } from '../lib/ops';
@@ -6,7 +6,7 @@ import { uid } from '../lib/ids';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
 import { uploadPrototypeImage } from '../lib/cloud';
-import { alcanzablesDesde, FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, type FigmaFrame, type FigmaPage } from '../lib/figma';
+import { alcanzablesDesde, FigmaError, frameImages, getFigmaToken, listPages, loadPage, parseFigmaUrl, planImportacion, setFigmaToken, type FigmaFrame, type FigmaPage } from '../lib/figma';
 import { Button, Field, Modal } from './ui';
 
 const breakpointFor = (w: number): Breakpoint => (w < 600 ? 'mobile' : w < 1100 ? 'tablet' : 'desktop');
@@ -24,8 +24,14 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const [fueraDelFlujo, setFueraDelFlujo] = useState<string[]>([]);
   const [asStart, setAsStart] = useState(!project.screens.length);
   const [busy, setBusy] = useState('');
+  const [token, setToken] = useState(getFigmaToken);
+  const [tokenNuevo, setTokenNuevo] = useState('');
 
-  const token = getFigmaToken();
+  // Al abrir se relee, por si el token se guardó en Ajustes mientras tanto.
+  useEffect(() => {
+    if (open) setToken(getFigmaToken());
+  }, [open]);
+
   const chosen = frames.filter((f) => picked[f.id]);
 
   const close = () => {
@@ -63,10 +69,18 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
   const search = async () => {
     const link = parseFigmaUrl(url);
     if (!link) return notify('Pega el enlace de un archivo o prototipo de Figma.', 'error');
-    if (!token) return notify('Primero agrega tu token de Figma en Ajustes.', 'error');
+    // El token se puede pegar aquí mismo: queda guardado en este navegador.
+    let clave = token;
+    if (!clave) {
+      clave = tokenNuevo.trim();
+      if (clave.length < 20) return notify('Pega tu token de Figma para poder leer el archivo.', 'error');
+      setFigmaToken(clave);
+      setToken(clave);
+      setTokenNuevo('');
+    }
     setBusy('Buscando páginas…');
     try {
-      const { pages: ps } = await listPages(token, link.fileKey);
+      const { pages: ps } = await listPages(clave, link.fileKey);
       if (!ps.length) throw new FigmaError('Ese archivo de Figma no tiene páginas con contenido.');
       setFileKey(link.fileKey);
       setPages(ps);
@@ -187,7 +201,7 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
               {busy || `Importar ${chosen.length} ${chosen.length === 1 ? 'pantalla' : 'pantallas'}`}
             </Button>
           ) : (
-            <Button tone="primary" disabled={!!busy || !url.trim()} onClick={() => void search()}>
+            <Button tone="primary" disabled={!!busy || !url.trim() || (!token && tokenNuevo.trim().length < 20)} onClick={() => void search()}>
               {busy || 'Buscar pantallas'}
             </Button>
           )}
@@ -196,13 +210,20 @@ export function FigmaImportModal({ open, project, onClose, onDone }: { open: boo
     >
       <div className="stack">
         {!token && (
-          <p className="warn-text">
-            Falta tu token de Figma.{' '}
-            <button type="button" className="link-btn" onClick={() => go('/settings')}>
-              Agrégalo en Ajustes
-            </button>{' '}
-            y vuelve a intentarlo.
-          </p>
+          <Field
+            label="Token de Figma"
+            hint={
+              <>
+                Se crea en Figma → Settings → Security → Personal access tokens, con lectura de archivos. Queda guardado solo en este navegador. También puedes dejarlo en{' '}
+                <button type="button" className="link-btn" onClick={() => go('/settings')}>
+                  Ajustes
+                </button>
+                .
+              </>
+            }
+          >
+            <input className="input" type="password" autoComplete="off" value={tokenNuevo} placeholder="figd_…" onChange={(e) => setTokenNuevo(e.target.value)} />
+          </Field>
         )}
         <Field label="Enlace de Figma" hint="Sirve el del archivo o el del prototipo. Tu token debe poder ver ese archivo.">
           <input className="input" value={url} placeholder="https://www.figma.com/design/…" onChange={(e) => setUrl(e.target.value)} />
