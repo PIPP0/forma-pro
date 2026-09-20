@@ -296,8 +296,8 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
         if (cloudMode) cloudPending.current.push(e.data);
         if (session.current) void saveDraftChunk(session.current.id, chunkIndex.current++, e.data).catch(() => undefined);
       };
-      // Safari en iPhone no siempre entrega los trozos por su cuenta: se le piden cada 3 s.
-      next.start();
+      // Trozos cada segundo y, además, se piden cada 3 s: Safari en iPhone no siempre los entrega solo.
+      next.start(1000);
       window.clearInterval(dataTimer.current);
       dataTimer.current = window.setInterval(() => {
         const r = recorder.current;
