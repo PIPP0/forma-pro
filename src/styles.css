@@ -80,13 +80,16 @@ p {
   text-wrap: pretty;
 }
 
+/* Texto solo para lectores de pantalla. Sin position:absolute: así no se escapa
+   del contenedor con scroll y no alarga la página. */
 .sr-only {
-  position: absolute;
+  display: inline-block;
   width: 1px;
   height: 1px;
   overflow: hidden;
-  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
   white-space: nowrap;
+  vertical-align: top;
 }
 .muted {
   color: var(--ink-2);
