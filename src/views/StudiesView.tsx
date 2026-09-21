@@ -922,10 +922,31 @@ const reloj = (s: number) => {
 /** Reproductor propio: el nativo cambia de forma en cada navegador y no muestra bien el avance. */
 function Reproductor({ src }: { src: string }) {
   const el = useRef<HTMLAudioElement>(null);
+  const midiendo = useRef(false);
   const [sonando, setSonando] = useState(false);
   const [t, setT] = useState(0);
   const [dur, setDur] = useState(0);
   const [vel, setVel] = useState(1);
+
+  /**
+   * Las grabaciones de MediaRecorder (.webm) no traen la duración en la cabecera:
+   * el navegador la calcula solo si se busca hasta el final.
+   */
+  const medirDuracion = (a: HTMLAudioElement) => {
+    if (Number.isFinite(a.duration) && a.duration > 0) return setDur(a.duration);
+    if (midiendo.current) return;
+    midiendo.current = true;
+    const listo = () => {
+      if (!Number.isFinite(a.duration)) return;
+      setDur(a.duration);
+      a.removeEventListener('durationchange', listo);
+      midiendo.current = false;
+      a.currentTime = 0;
+      setT(0);
+    };
+    a.addEventListener('durationchange', listo);
+    a.currentTime = 1e101;
+  };
 
   const alternar = () => {
     const a = el.current;
@@ -984,9 +1005,10 @@ function Reproductor({ src }: { src: string }) {
         onPlay={() => setSonando(true)}
         onPause={() => setSonando(false)}
         onEnded={() => setSonando(false)}
-        onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
-        onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
-        onDurationChange={(e) => setDur(e.currentTarget.duration)}
+        onTimeUpdate={(e) => {
+          if (!midiendo.current) setT(e.currentTarget.currentTime);
+        }}
+        onLoadedMetadata={(e) => medirDuracion(e.currentTarget)}
       />
     </div>
   );
@@ -998,6 +1020,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
   const [urls, setUrls] = useState<Record<string, string>>({});
   const [blobs, setBlobs] = useState<Record<string, Blob>>({});
   const [cargando, setCargando] = useState<string>();
+  const [abierto, setAbierto] = useState<Record<string, boolean>>({});
   const [fallo, setFallo] = useState<Record<string, string>>({});
   const creadas = useRef<string[]>([]);
 
@@ -1006,7 +1029,9 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
   if (!conAudio.length) return null;
 
   const cargar = async (s: Session) => {
-    if (urls[s.id] || cargando) return;
+    // Ya cargada: el botón solo muestra u oculta el reproductor.
+    if (urls[s.id]) return setAbierto((a) => ({ ...a, [s.id]: !a[s.id] }));
+    if (cargando) return;
     setCargando(s.id);
     let blob = await getAudio(s.id).catch(() => undefined);
     if (!blob && s.source === 'cloud') {
@@ -1025,6 +1050,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
     creadas.current.push(url);
     setBlobs((b) => ({ ...b, [s.id]: blob! }));
     setUrls((u) => ({ ...u, [s.id]: url }));
+    setAbierto((a) => ({ ...a, [s.id]: true }));
   };
 
   const bajar = (s: Session) => {
@@ -1054,11 +1080,9 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                 {blobs[s.id] ? ` · ${megabytes(blobs[s.id].size)}` : ''}
               </span>
               <span className="row">
-                {!urls[s.id] && (
-                  <Button size="sm" disabled={cargando === s.id} onClick={() => void cargar(s)}>
-                    {cargando === s.id ? 'Cargando…' : 'Escuchar'}
-                  </Button>
-                )}
+                <Button size="sm" disabled={cargando === s.id} aria-expanded={!!abierto[s.id]} onClick={() => void cargar(s)}>
+                  {cargando === s.id ? 'Cargando…' : abierto[s.id] ? 'Ocultar' : 'Escuchar'}
+                </Button>
                 {urls[s.id] && (
                   <Button size="sm" onClick={() => bajar(s)}>
                     Descargar
@@ -1066,7 +1090,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                 )}
               </span>
             </div>
-            {urls[s.id] && <Reproductor src={urls[s.id]} />}
+            {urls[s.id] && abierto[s.id] && <Reproductor src={urls[s.id]} />}
             {fallo[s.id] && <p className="muted small">{fallo[s.id]}</p>}
           </li>
         ))}
