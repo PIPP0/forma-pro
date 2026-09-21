@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Hotspot, Mode, Project, StudyEvent } from '../lib/model';
 import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, hotspotAt, screenFor, withValues } from '../lib/model';
+import { notify } from '../lib/toast';
 import { BlockView } from './BlockView';
 import { ImageScreen, PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
 
@@ -21,6 +22,7 @@ export function Runner({
   onScreen,
   fill,
   maxScale,
+  avisaSinDestino,
 }: {
   project: Project;
   startScreenId: string;
@@ -30,6 +32,8 @@ export function Runner({
   onScreen?: (screenId: string) => void;
   fill?: boolean;
   maxScale?: number;
+  /** Al probar desde el proyecto, avisa si una zona no lleva a ninguna pantalla. */
+  avisaSinDestino?: boolean;
 }) {
   const [stack, setStack] = useState<string[]>([startScreenId]);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -151,6 +155,8 @@ export function Runner({
       return;
     }
     if (hotspot.target) goTo(hotspot.target);
+    // Al probar desde el proyecto conviene saber por qué no pasó nada; en un estudio real, no.
+    else if (avisaSinDestino) notify(`La zona «${hotspot.label || 'sin nombre'}» no lleva a ninguna pantalla.`, 'info');
   };
 
   const onClick = (e: MouseEvent) => {

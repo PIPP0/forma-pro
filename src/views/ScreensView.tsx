@@ -1679,7 +1679,7 @@ function PlayOverlay({ project, screen, mode, onClose }: { project: Project; scr
         </div>
       </div>
       <div style={{ width: bp.width * s }}>
-        <Runner project={project} startScreenId={screen.id} breakpoint={screen.breakpoint} mode={m} maxScale={s} />
+        <Runner project={project} startScreenId={screen.id} breakpoint={screen.breakpoint} mode={m} maxScale={s} avisaSinDestino />
       </div>
     </div>
   );
