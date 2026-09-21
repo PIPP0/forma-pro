@@ -2494,6 +2494,12 @@ dialog.modal::backdrop {
 .grab-cab .row {
   margin-left: auto;
 }
+.grab-chev svg {
+  transition: transform 0.15s ease;
+}
+.grab-chev svg.abierto {
+  transform: rotate(180deg);
+}
 .grabaciones audio {
   width: 100%;
 }

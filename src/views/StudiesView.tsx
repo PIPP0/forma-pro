@@ -14,7 +14,7 @@ import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
 import { Badge, Button, EmptyCard, Field, Modal, PageHead, Tabs, copyText, pickFile, timeAgo } from '../components/ui';
-import { IconChart, IconCheck, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
+import { IconChart, IconCheck, IconChevronDown, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
 
 const KIND_LABEL: Record<StudyEvent['kind'], string> = {
   task_start: 'Empezó la tarea',
@@ -1080,14 +1080,22 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                 {blobs[s.id] ? ` · ${megabytes(blobs[s.id].size)}` : ''}
               </span>
               <span className="row">
-                <Button size="sm" disabled={cargando === s.id} aria-expanded={!!abierto[s.id]} onClick={() => void cargar(s)}>
-                  {cargando === s.id ? 'Cargando…' : abierto[s.id] ? 'Ocultar' : 'Escuchar'}
-                </Button>
                 {urls[s.id] && (
                   <Button size="sm" onClick={() => bajar(s)}>
                     Descargar
                   </Button>
                 )}
+                <button
+                  type="button"
+                  className="icon-btn grab-chev"
+                  disabled={cargando === s.id}
+                  aria-expanded={!!abierto[s.id]}
+                  title={abierto[s.id] ? 'Ocultar la grabación' : 'Escuchar la grabación'}
+                  aria-label={`${abierto[s.id] ? 'Ocultar' : 'Escuchar'} la grabación de ${s.participant}`}
+                  onClick={() => void cargar(s)}
+                >
+                  <IconChevronDown size={16} className={abierto[s.id] ? 'abierto' : undefined} />
+                </button>
               </span>
             </div>
             {urls[s.id] && abierto[s.id] && <Reproductor src={urls[s.id]} />}
