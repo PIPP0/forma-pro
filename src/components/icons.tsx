@@ -86,6 +86,7 @@ export const IconCheckCircle = (p: IconProps = {}) =>
 export const IconCheck = (p: IconProps = {}) => svg(<path d="M5 12.5l4.5 4.5L19 7.5" />, p);
 export const IconChevronRight = (p: IconProps = {}) => svg(<path d="M9.5 5.5L16 12l-6.5 6.5" />, p);
 export const IconChevronDown = (p: IconProps = {}) => svg(<path d="M6 9.5l6 6 6-6" />, p);
+export const IconChevronLeft = (p: IconProps = {}) => svg(<path d="M14.5 5.5L8 12l6.5 6.5" />, p);
 export const IconArrowLeft = (p: IconProps = {}) =>
   svg(
     <>

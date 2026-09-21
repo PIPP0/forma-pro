@@ -14,7 +14,7 @@ import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
 import { Badge, Button, EmptyCard, Field, Modal, PageHead, Tabs, copyText, pickFile, timeAgo } from '../components/ui';
-import { IconChart, IconCheck, IconChevronDown, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
+import { IconChart, IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
 
 const KIND_LABEL: Record<StudyEvent['kind'], string> = {
   task_start: 'Empezó la tarea',
@@ -803,6 +803,7 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
   if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
   const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
   const pts = events.filter((e) => e.screen === screen.id && cuenta(e.kind) && (task === 'all' || e.taskId === task));
+  const indice = touched.findIndex((s) => s.id === screen.id);
   return (
     <section className="heat-panel">
       <h2 className="section-title">Mapa de calor</h2>
@@ -838,7 +839,33 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
             { id: 'misclick', label: 'Sin acción' },
           ]}
         />
-        <Heatmap project={snap} screen={screen} events={pts} mode="light" />
+        <div className="heat-wrap">
+          <Heatmap project={snap} screen={screen} events={pts} mode="light" />
+          {touched.length > 1 && (
+            <>
+              <button
+                type="button"
+                className="heat-nav prev"
+                disabled={indice <= 0}
+                title="Pantalla anterior"
+                aria-label="Ver la pantalla anterior"
+                onClick={() => setScreenId(touched[indice - 1]?.id)}
+              >
+                <IconChevronLeft size={18} />
+              </button>
+              <button
+                type="button"
+                className="heat-nav next"
+                disabled={indice >= touched.length - 1}
+                title="Pantalla siguiente"
+                aria-label="Ver la pantalla siguiente"
+                onClick={() => setScreenId(touched[indice + 1]?.id)}
+              >
+                <IconChevronRight size={18} />
+              </button>
+            </>
+          )}
+        </div>
         <div className="heat-escala" aria-hidden="true">
           <span>Menos</span>
           <i />
