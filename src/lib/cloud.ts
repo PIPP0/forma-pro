@@ -193,6 +193,15 @@ export async function downloadCloudAudio(studyId: string, sessionId: string): Pr
   return { blob: new Blob(parts, { type: parts[0].type || 'audio/webm' }), complete: false };
 }
 
+/** Borra una sesión en la nube con su grabación, para que no vuelva al sincronizar. */
+export async function deleteCloudSession(studyId: string, sessionId: string) {
+  const c = await designer();
+  const base = sessionPath(studyId, sessionId);
+  const [parts, top] = await Promise.all([c.st.listAll(c.st.ref(c.storage, `${base}/parts`)).catch(() => undefined), c.st.listAll(c.st.ref(c.storage, base)).catch(() => undefined)]);
+  await Promise.all([...(parts?.items ?? []), ...(top?.items ?? [])].map((i) => c.st.deleteObject(i).catch(() => undefined)));
+  await c.fs.deleteDoc(c.fs.doc(c.db, 'studies', studyId, 'sessions', sessionId));
+}
+
 /** Borra el estudio en la nube con sus sesiones y grabaciones. */
 export async function deleteCloudStudy(studyId: string) {
   const c = await designer();

@@ -504,6 +504,18 @@ export function deleteStudy(studyId: string) {
   notify(`Eliminaste «${s.name}» y sus resultados.`, 'success');
 }
 
+/** Quita una sesión de los resultados: sus respuestas, sus eventos y su grabación. */
+export function deleteSession(sessionId: string) {
+  const s = db.sessions.find((x) => x.id === sessionId);
+  if (!s) return false;
+  const study = db.studies.find((x) => x.id === s.studyId);
+  if (!study || !guard(study.projectId, 'runStudy')) return false;
+  void deleteAudio(sessionId);
+  commit({ ...db, sessions: db.sessions.filter((x) => x.id !== sessionId), events: db.events.filter((e) => e.sessionId !== sessionId) });
+  notify(`Eliminaste la sesión de ${s.participant}.`, 'success');
+  return true;
+}
+
 /** Guarda una sesión (enlace público: no requiere cuenta). */
 export function saveSession(session: Session, events: StudyEvent[]) {
   if (!db.studies.some((s) => s.id === session.studyId)) return false;

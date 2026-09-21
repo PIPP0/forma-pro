@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../lib/model';
 import { baseId } from '../lib/model';
-import { createStudy, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
-import { deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
+import { createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
+import { deleteCloudSession, deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
 import { useCloudAccount } from '../components/useCloudAccount';
 import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
@@ -14,7 +14,7 @@ import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
 import { Badge, Button, EmptyCard, Field, Modal, PageHead, Tabs, copyText, pickFile, timeAgo } from '../components/ui';
-import { IconChart, IconCheck, IconChevronRight, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
+import { IconChart, IconCheck, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
 
 const KIND_LABEL: Record<StudyEvent['kind'], string> = {
   task_start: 'Empezó la tarea',
@@ -340,6 +340,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const manage = can(role, 'runStudy');
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmSession, setConfirmSession] = useState<Session>();
   const [link, setLink] = useState('');
   const { account, loading: cloudLoading } = useCloudAccount();
   const [cloudFailed, setCloudFailed] = useState(false);
@@ -608,6 +609,9 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                         <th>Audio</th>
                         <th>Origen</th>
                         <th>Fecha</th>
+                        <th>
+                          <span className="sr-only">Eliminar sesión</span>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -634,6 +638,13 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                           <td>{s.hasAudio ? 'Sí' : s.consent.audio ? 'Aceptó, sin archivo' : 'No'}</td>
                           <td>{s.source === 'example' ? 'Ejemplo' : s.source === 'import' ? 'Importada' : s.source === 'cloud' ? 'Nube' : 'Este navegador'}</td>
                           <td className="muted">{timeAgo(s.startedAt)}</td>
+                          <td className="t-right">
+                            {manage && (
+                              <button type="button" className="icon-btn" title={`Eliminar la sesión de ${s.participant}`} aria-label={`Eliminar la sesión de ${s.participant}`} onClick={() => setConfirmSession(s)}>
+                                <IconClose size={14} />
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -654,6 +665,41 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
       {openSession && (
         <SessionDrawer study={study} session={sessions.find((s) => s.id === openSession.id)} events={events.filter((e) => e.sessionId === openSession.id)} at={openSession.at} onClose={() => setOpenSession(undefined)} />
       )}
+
+      <Modal
+        open={!!confirmSession}
+        title="Eliminar esta sesión"
+        onClose={() => setConfirmSession(undefined)}
+        footer={
+          <>
+            <Button onClick={() => setConfirmSession(undefined)}>Cancelar</Button>
+            <Button
+              tone="danger"
+              onClick={async () => {
+                const s = confirmSession;
+                setConfirmSession(undefined);
+                if (!s) return;
+                // Si vino de la nube hay que borrarla allá también: si no, vuelve en la próxima sincronización.
+                if (s.source === 'cloud' && account) {
+                  try {
+                    await deleteCloudSession(study.id, s.id);
+                  } catch {
+                    notify('No pudimos borrarla en la nube. Volverá a aparecer al sincronizar.', 'error');
+                  }
+                }
+                deleteSession(s.id);
+              }}
+            >
+              Eliminar sesión
+            </Button>
+          </>
+        }
+      >
+        <p>
+          Se eliminarán las respuestas, los toques y la grabación de <strong>{confirmSession?.participant}</strong>. Los resultados, el mapa de calor y los hallazgos se recalculan sin esa sesión.
+        </p>
+        <p className="muted small">No se puede deshacer. Si quieres conservarla, exporta el JSON del estudio antes.</p>
+      </Modal>
 
       <Modal
         open={confirmDelete}

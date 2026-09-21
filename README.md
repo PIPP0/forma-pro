@@ -78,6 +78,10 @@ Todo corre en el navegador y se guarda en `localStorage` (el audio, en IndexedDB
 
 El siguiente paso para uso en equipo es un backend (por ejemplo Cloudflare Workers + D1, como propone el PRD) que reciba las mismas operaciones que hoy aplica el store, con autenticación por correo y código, sesiones que llegan solas y audio en almacenamiento de objetos.
 
+### Limpiar resultados
+
+En Resultados, cada fila de **Sesiones** trae una ✕ para eliminarla. Pide confirmación y, al aceptar, quita sus respuestas, sus eventos y su grabación; las métricas, el mapa de calor y los hallazgos se recalculan sin ella. Si la sesión llegó por la nube, también se borra allá para que no vuelva al sincronizar.
+
 ### Ensayar sin ensuciar los resultados
 
 «Abrir como participante» abre la prueba con `?ensayo=1`. Antes de empezar pregunta si esa sesión debe contar: **Probar sin guardar** no escribe sesión, ni borrador, ni sube nada a la nube, y lo recuerda con una insignia durante toda la prueba. **Guardar esta sesión** se comporta como cualquier participante.
