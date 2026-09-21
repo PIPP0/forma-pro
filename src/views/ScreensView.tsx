@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { Block, BlockType, Breakpoint, Component, Hotspot, Mode, OpInput, Project, Role, Screen } from '../lib/model';
 import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, optionKeys, plainText } from '../lib/model';
 import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
@@ -1803,10 +1803,15 @@ function Conexiones({
   onArrastrar: (screenId: string, hotspotId: string, e: { clientX: number; clientY: number }) => void;
 }) {
   const [rutas, setRutas] = useState<{ id: string; screenId: string; d: string; fin: { x: number; y: number } }[]>([]);
+  const [intento, setIntento] = useState(0);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     const host = hostRef.current;
-    if (!host) return;
+    // En el primer montaje la referencia del lienzo todavía no está puesta: se reintenta al cuadro siguiente.
+    if (!host) {
+      const id = requestAnimationFrame(() => setIntento((n) => n + 1));
+      return () => cancelAnimationFrame(id);
+    }
     const dueñoDe = (hotspotId: string) => project.screens.find((s) => s.hotspots?.some((z) => z.id === hotspotId));
     const destinoDe = (hotspotId: string) => dueñoDe(hotspotId)?.hotspots?.find((z) => z.id === hotspotId)?.target;
     const calcular = () => {
@@ -1847,11 +1852,15 @@ function Conexiones({
     const ro = new ResizeObserver(calcular);
     ro.observe(host);
     window.addEventListener('resize', calcular);
+    // Las imágenes de Figma cambian el alto al cargar y mueven los puntos de salida.
+    const imgs = [...host.querySelectorAll('img')];
+    imgs.forEach((i) => i.addEventListener('load', calcular));
     return () => {
       ro.disconnect();
       window.removeEventListener('resize', calcular);
+      imgs.forEach((i) => i.removeEventListener('load', calcular));
     };
-  }, [hostRef, project, clave]);
+  }, [hostRef, project, clave, intento]);
 
   return (
     <svg className={`conexiones${elegida && rutas.some((r) => r.id === elegida) ? ' con-elegida' : ''}`} aria-hidden="true">
