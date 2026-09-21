@@ -2387,6 +2387,89 @@ dialog.modal::backdrop {
   display: grid;
   gap: 8px;
 }
+/* Reproductor de las grabaciones. */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+}
+.player-play {
+  all: unset;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+.player-play:hover {
+  background: var(--accent-2);
+}
+.player-play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.player-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+  color: var(--ink);
+  min-width: 78px;
+}
+.player-range {
+  flex: 1;
+  height: 6px;
+  min-width: 80px;
+  border-radius: 999px;
+  appearance: none;
+  cursor: pointer;
+  /* El avance se pinta siempre, no solo al pasar el cursor. */
+  background-color: var(--rule);
+  background-image: linear-gradient(var(--accent), var(--accent));
+  background-repeat: no-repeat;
+}
+.player-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--panel);
+  box-shadow: 0 1px 3px rgba(20, 20, 40, 0.3);
+}
+.player-range::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--panel);
+  border-radius: 50%;
+  background: var(--accent);
+}
+.player-range:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+.player-rate {
+  all: unset;
+  flex: none;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--rule);
+  background: var(--panel);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.player-rate:hover {
+  border-color: var(--accent-line);
+  color: var(--ink);
+}
 /* Grabaciones del estudio, todas juntas. */
 .grabaciones {
   list-style: none;

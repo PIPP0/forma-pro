@@ -913,6 +913,85 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
   );
 }
 
+const reloj = (s: number) => {
+  if (!Number.isFinite(s) || s < 0) return '0:00';
+  const m = Math.floor(s / 60);
+  return `${m}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+};
+
+/** Reproductor propio: el nativo cambia de forma en cada navegador y no muestra bien el avance. */
+function Reproductor({ src }: { src: string }) {
+  const el = useRef<HTMLAudioElement>(null);
+  const [sonando, setSonando] = useState(false);
+  const [t, setT] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [vel, setVel] = useState(1);
+
+  const alternar = () => {
+    const a = el.current;
+    if (!a) return;
+    if (a.paused) void a.play();
+    else a.pause();
+  };
+
+  const cambiarVelocidad = () => {
+    const siguiente = vel === 1 ? 1.5 : vel === 1.5 ? 2 : 1;
+    setVel(siguiente);
+    if (el.current) el.current.playbackRate = siguiente;
+  };
+
+  const avance = dur ? Math.min(100, (t / dur) * 100) : 0;
+
+  return (
+    <div className="player">
+      <button type="button" className="player-play" onClick={alternar} aria-label={sonando ? 'Pausar' : 'Reproducir'}>
+        {sonando ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <rect x="6" y="5" width="4" height="14" rx="1.2" />
+            <rect x="14" y="5" width="4" height="14" rx="1.2" />
+          </svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M8 5.5v13l11-6.5z" />
+          </svg>
+        )}
+      </button>
+      <span className="player-time">
+        {reloj(t)} <span className="muted">/ {reloj(dur)}</span>
+      </span>
+      <input
+        className="player-range"
+        type="range"
+        min={0}
+        max={dur || 0}
+        step={0.05}
+        value={t}
+        aria-label="Avance de la grabación"
+        style={{ backgroundSize: `${avance}% 100%` }}
+        onChange={(e) => {
+          const v = Number(e.target.value);
+          setT(v);
+          if (el.current) el.current.currentTime = v;
+        }}
+      />
+      <button type="button" className="player-rate" onClick={cambiarVelocidad} title="Velocidad de reproducción">
+        {vel === 1 ? '1×' : vel === 1.5 ? '1,5×' : '2×'}
+      </button>
+      <audio
+        ref={el}
+        src={src}
+        preload="metadata"
+        onPlay={() => setSonando(true)}
+        onPause={() => setSonando(false)}
+        onEnded={() => setSonando(false)}
+        onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
+        onLoadedMetadata={(e) => setDur(e.currentTarget.duration)}
+        onDurationChange={(e) => setDur(e.currentTarget.duration)}
+      />
+    </div>
+  );
+}
+
 /** Todas las grabaciones del estudio, para escucharlas o bajarlas sin abrir cada sesión. */
 function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Session[]; onAbrir: (id: string) => void }) {
   const conAudio = sessions.filter((s) => s.hasAudio);
@@ -987,7 +1066,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                 )}
               </span>
             </div>
-            {urls[s.id] && <audio controls src={urls[s.id]} />}
+            {urls[s.id] && <Reproductor src={urls[s.id]} />}
             {fallo[s.id] && <p className="muted small">{fallo[s.id]}</p>}
           </li>
         ))}
@@ -1061,7 +1140,7 @@ function SessionDrawer({ study, session, events, at, onClose }: { study: Study; 
         </div>
         {session.hasAudio &&
           (audio ? (
-            <audio controls src={audio} />
+            <Reproductor src={audio} />
           ) : (
             <p className="muted small">
               {audioState === 'loading'
