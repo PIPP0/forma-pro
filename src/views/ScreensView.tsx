@@ -1243,6 +1243,8 @@ function ScreenProps({
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
   const setProject = (key: 'tagline' | 'summary' | 'flowName' | 'footnote', label: string) => (v: string) => apply([edit.project(key, v.trim() || undefined)], `Cambiar ${label}`);
+  // Si todo el proyecto son imágenes de Figma, los tokens y la nota al pie no pintan nada.
+  const soloImagenes = !project.components.length && project.screens.every((s) => !!s.image);
   return (
     <>
       <div className="sel-card">
@@ -1339,13 +1341,18 @@ function ScreenProps({
         <Field label="Nombre del flujo">
           <CommitInput value={project.flowName ?? ''} disabled={!editable} onCommit={setProject('flowName', 'nombre del flujo')} />
         </Field>
-        <Field label="Nota al pie de cada pantalla">
-          <CommitInput value={project.footnote ?? ''} disabled={!editable} onCommit={setProject('footnote', 'nota al pie')} />
-        </Field>
+        {!soloImagenes && (
+          <Field label="Nota al pie de cada pantalla">
+            <CommitInput value={project.footnote ?? ''} disabled={!editable} onCommit={setProject('footnote', 'nota al pie')} />
+          </Field>
+        )}
+        {soloImagenes && <p className="muted small">Las pantallas son imágenes de Figma: los colores, el radio y la tipografía del sistema no cambian lo que se ve.</p>}
       </Section>
-      <Section title="Diseño" aside="Tokens globales">
-        <GlobalTokens project={project} editable={editable} />
-      </Section>
+      {!soloImagenes && (
+        <Section title="Diseño" aside="Tokens globales">
+          <GlobalTokens project={project} editable={editable} />
+        </Section>
+      )}
       {editable && !screen.image && project.components.length > 0 && (
         <Section title={`Agregar a «${screen.name}»`}>
           <div className="palette">
