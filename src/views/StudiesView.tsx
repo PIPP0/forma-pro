@@ -1028,10 +1028,9 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
 
   if (!conAudio.length) return null;
 
-  const cargar = async (s: Session) => {
-    // Ya cargada: el botón solo muestra u oculta el reproductor.
-    if (urls[s.id]) return setAbierto((a) => ({ ...a, [s.id]: !a[s.id] }));
-    if (cargando) return;
+  /** Trae la grabación (del navegador o de la nube) y la deja lista para oír o descargar. */
+  const traer = async (s: Session): Promise<Blob | undefined> => {
+    if (blobs[s.id]) return blobs[s.id];
     setCargando(s.id);
     let blob = await getAudio(s.id).catch(() => undefined);
     if (!blob && s.source === 'cloud') {
@@ -1044,22 +1043,31 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
     setCargando(undefined);
     if (!blob) {
       setFallo((f) => ({ ...f, [s.id]: s.source === 'cloud' ? 'No pudimos traerla de la nube.' : 'Está en el navegador donde se hizo la sesión.' }));
-      return;
+      return undefined;
     }
     const url = URL.createObjectURL(blob);
     creadas.current.push(url);
     setBlobs((b) => ({ ...b, [s.id]: blob! }));
     setUrls((u) => ({ ...u, [s.id]: url }));
-    setAbierto((a) => ({ ...a, [s.id]: true }));
+    return blob;
   };
 
-  const bajar = (s: Session) => {
-    const blob = blobs[s.id];
+  const alternar = async (s: Session) => {
+    if (urls[s.id]) return setAbierto((a) => ({ ...a, [s.id]: !a[s.id] }));
+    if (cargando) return;
+    if (await traer(s)) setAbierto((a) => ({ ...a, [s.id]: true }));
+  };
+
+  const bajar = async (s: Session) => {
+    const blob = (await traer(s)) ?? blobs[s.id];
     if (!blob) return;
+    // La URL puede haberse creado en este mismo tick: se arma una propia para el enlace.
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = urls[s.id];
+    a.href = url;
     a.download = `${study.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}-${s.participant}.webm`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   };
 
   return (
@@ -1080,11 +1088,9 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                 {blobs[s.id] ? ` · ${megabytes(blobs[s.id].size)}` : ''}
               </span>
               <span className="row">
-                {urls[s.id] && (
-                  <Button size="sm" onClick={() => bajar(s)}>
-                    Descargar
-                  </Button>
-                )}
+                <Button size="sm" disabled={cargando === s.id} onClick={() => void bajar(s)}>
+                  {cargando === s.id ? 'Preparando…' : 'Descargar'}
+                </Button>
                 <button
                   type="button"
                   className="icon-btn grab-chev"
@@ -1092,7 +1098,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
                   aria-expanded={!!abierto[s.id]}
                   title={abierto[s.id] ? 'Ocultar la grabación' : 'Escuchar la grabación'}
                   aria-label={`${abierto[s.id] ? 'Ocultar' : 'Escuchar'} la grabación de ${s.participant}`}
-                  onClick={() => void cargar(s)}
+                  onClick={() => void alternar(s)}
                 >
                   <IconChevronDown size={16} className={abierto[s.id] ? 'abierto' : undefined} />
                 </button>
