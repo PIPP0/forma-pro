@@ -799,17 +799,24 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
   const [screenId, setScreenId] = useState(touched[0]?.id);
   const [task, setTask] = useState<string>('all');
   const [tipo, setTipo] = useState<'todos' | 'tap' | 'misclick'>('todos');
+  const [dir, setDir] = useState<'sig' | 'ant'>('sig');
   const screen = snap.screens.find((s) => s.id === screenId) ?? touched[0];
   if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
   const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
   const pts = events.filter((e) => e.screen === screen.id && cuenta(e.kind) && (task === 'all' || e.taskId === task));
   const indice = touched.findIndex((s) => s.id === screen.id);
+  const irA = (i: number) => {
+    const destino = touched[i];
+    if (!destino) return;
+    setDir(i > indice ? 'sig' : 'ant');
+    setScreenId(destino.id);
+  };
   return (
     <section className="heat-panel">
       <h2 className="section-title">Mapa de calor</h2>
       <div className="stack">
         <Field label="Pantalla">
-          <select value={screen.id} onChange={(e) => setScreenId(e.target.value)}>
+          <select value={screen.id} onChange={(e) => irA(touched.findIndex((s) => s.id === e.target.value))}>
             {touched.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -839,32 +846,23 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
             { id: 'misclick', label: 'Sin acción' },
           ]}
         />
+        {touched.length > 1 && (
+          <div className="heat-pasos">
+            <button type="button" className="icon-btn" disabled={indice <= 0} title="Pantalla anterior" aria-label="Ver la pantalla anterior" onClick={() => irA(indice - 1)}>
+              <IconChevronLeft size={16} />
+            </button>
+            <span className="muted small">
+              {indice + 1} de {touched.length}
+            </span>
+            <button type="button" className="icon-btn" disabled={indice >= touched.length - 1} title="Pantalla siguiente" aria-label="Ver la pantalla siguiente" onClick={() => irA(indice + 1)}>
+              <IconChevronRight size={16} />
+            </button>
+          </div>
+        )}
         <div className="heat-wrap">
-          <Heatmap project={snap} screen={screen} events={pts} mode="light" />
-          {touched.length > 1 && (
-            <>
-              <button
-                type="button"
-                className="heat-nav prev"
-                disabled={indice <= 0}
-                title="Pantalla anterior"
-                aria-label="Ver la pantalla anterior"
-                onClick={() => setScreenId(touched[indice - 1]?.id)}
-              >
-                <IconChevronLeft size={18} />
-              </button>
-              <button
-                type="button"
-                className="heat-nav next"
-                disabled={indice >= touched.length - 1}
-                title="Pantalla siguiente"
-                aria-label="Ver la pantalla siguiente"
-                onClick={() => setScreenId(touched[indice + 1]?.id)}
-              >
-                <IconChevronRight size={18} />
-              </button>
-            </>
-          )}
+          <div key={screen.id} className={`heat-slide ${dir}`}>
+            <Heatmap project={snap} screen={screen} events={pts} mode="light" />
+          </div>
         </div>
         <div className="heat-escala" aria-hidden="true">
           <span>Menos</span>

@@ -2520,40 +2520,48 @@ dialog.modal::backdrop {
   pointer-events: none;
   z-index: 4;
 }
-/* Pasar de pantalla sin usar el selector. */
+/* Pasar de pantalla sin usar el selector: los controles van sobre la imagen, no encima. */
+.heat-pasos {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
 .heat-wrap {
   position: relative;
+  overflow: hidden;
 }
-.heat-nav {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 6;
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  border: 1px solid var(--rule);
-  background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(20, 20, 40, 0.14);
+.heat-slide.sig {
+  animation: entra-desde-derecha 0.26s ease;
 }
-.heat-nav:hover:not(:disabled) {
-  border-color: var(--accent-line);
-  color: var(--accent);
+.heat-slide.ant {
+  animation: entra-desde-izquierda 0.26s ease;
 }
-.heat-nav:disabled {
-  opacity: 0.35;
-  cursor: default;
-  box-shadow: none;
+@keyframes entra-desde-derecha {
+  from {
+    transform: translateX(24%);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
-.heat-nav.prev {
-  left: 6px;
+@keyframes entra-desde-izquierda {
+  from {
+    transform: translateX(-24%);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
-.heat-nav.next {
-  right: 6px;
+@media (prefers-reduced-motion: reduce) {
+  .heat-slide.sig,
+  .heat-slide.ant {
+    animation: none;
+  }
 }
 /* Escala del mapa de calor: del azul (pocos toques) al rojo (muchos). */
 .heat-escala {
