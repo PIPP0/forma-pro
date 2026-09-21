@@ -97,7 +97,7 @@ En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas de
 La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido al de Figma:
 
 - Arrastrar sobre cualquier pantalla-imagen crea una zona tocable.
-- **Elegir un elemento del diseño:** «Dibujar zona» resalta la capa de Figma que está bajo el cursor (botón, tarjeta, campo) y con un toque la convierte en zona, con su nombre. Funciona aunque una zona cubra toda la pantalla.
+- **Elegir un elemento del diseño:** el cursor resalta la capa de Figma que tiene debajo (botón, tarjeta, campo). Un toque la convierte en zona con su nombre, y arrastrar su punto la convierte en zona y saca la flecha en el mismo gesto. Funciona aunque otra zona cubra toda la pantalla.
 - Tocar una flecha selecciona su zona. Arrastrarla mueve la flecha misma: la pantalla bajo el cursor se resalta y al soltar queda conectada; si se suelta en el fondo, la flecha se quita.
 - Con una zona seleccionada, **Suprimir** la elimina y **Esc** (o tocarla otra vez) la deselecciona. Su flecha se destaca y las demás se atenúan.
 - Varias flechas hacia la misma pantalla llegan a distinta altura, en el orden en que salen, para poder distinguirlas.

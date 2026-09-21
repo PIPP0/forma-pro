@@ -240,6 +240,7 @@ export function ImageScreen({
   proto,
   onConnect,
   onPick,
+  onPickConnect,
 }: {
   screen: Screen;
   editable?: boolean;
@@ -255,6 +256,8 @@ export function ImageScreen({
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
   /** Tocar una capa del diseño de Figma la convierte en zona. */
   onPick?: (parte: { name: string } & Caja) => void;
+  /** Arrastrar la flecha desde una capa: la convierte en zona y empieza la conexión. */
+  onPickConnect?: (parte: { name: string } & Caja, e: ReactPointerEvent) => void;
 }) {
   const [caja, setCaja] = useState<Caja | null>(null);
   const [resaltada, setResaltada] = useState<({ name: string } & Caja) | null>(null);
@@ -466,6 +469,19 @@ export function ImageScreen({
           {!caja && resaltada && (
             <span className="parte-resaltada" style={{ left: `${resaltada.x * 100}%`, top: `${resaltada.y * 100}%`, width: `${resaltada.w * 100}%`, height: `${resaltada.h * 100}%` }}>
               <em>{resaltada.name}</em>
+              {proto && onPickConnect && (
+                <span
+                  className="hs-link parte-link"
+                  role="presentation"
+                  title="Arrastra hasta la pantalla de destino"
+                  onPointerDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onPickConnect(resaltada, e);
+                    setResaltada(null);
+                  }}
+                />
+              )}
             </span>
           )}
         </div>
@@ -490,6 +506,7 @@ export function ScreenCanvas({
   proto,
   onConnect,
   onPick,
+  onPickConnect,
 }: {
   project: Project;
   screen: Screen;
@@ -506,6 +523,7 @@ export function ScreenCanvas({
   proto?: boolean;
   onConnect?: (hotspotId: string, e: ReactPointerEvent) => void;
   onPick?: (parte: { name: string; x: number; y: number; w: number; h: number }) => void;
+  onPickConnect?: (parte: { name: string; x: number; y: number; w: number; h: number }, e: ReactPointerEvent) => void;
 }) {
   const bp = breakpointOf(screen.breakpoint);
   const maxW = contentWidth(screen);
@@ -523,6 +541,7 @@ export function ScreenCanvas({
       proto={proto}
       onConnect={onConnect}
       onPick={onPick}
+      onPickConnect={onPickConnect}
     />
   ) : (
     <>

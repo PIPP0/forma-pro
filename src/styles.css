@@ -4801,6 +4801,10 @@ dialog.modal {
   border-radius: 4px;
   pointer-events: none;
 }
+.parte-resaltada .parte-link {
+  pointer-events: auto;
+  opacity: 1;
+}
 .parte-resaltada em {
   position: absolute;
   left: 0;

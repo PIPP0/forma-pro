@@ -301,15 +301,15 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     apply([edit.screen(project, s.id, 'hotspots', zonas)], `Ajustar zona en «${s.name}»`);
   };
 
-  const agregarZonaEn = (s: Screen, r: { x: number; y: number; w: number; h: number }, nombre?: string) => {
+  const agregarZonaEn = (s: Screen, r: { x: number; y: number; w: number; h: number }, nombre?: string, callado = false) => {
     const zonas = s.hotspots ?? [];
     const zona: Hotspot = { id: uid('h_'), ...r, label: nombre?.trim() || `Zona ${zonas.length + 1}` };
-    if (apply([edit.screen(project, s.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${s.name}»`)) {
-      setDibujando(false);
-      select(s.id, zona.id);
-      setPanel('props');
-      notify(proto ? 'Zona creada. Arrastra su punto hasta la pantalla de destino.' : 'Zona creada. Elige a qué pantalla lleva.', 'success');
-    }
+    if (!apply([edit.screen(project, s.id, 'hotspots', [...zonas, zona])], `Agregar zona en «${s.name}»`)) return undefined;
+    setDibujando(false);
+    select(s.id, zona.id);
+    setPanel('props');
+    if (!callado) notify(proto ? 'Zona creada. Arrastra su punto hasta la pantalla de destino.' : 'Zona creada. Elige a qué pantalla lleva.', 'success');
+    return zona.id;
   };
 
   /** Arrastrar la flecha de una zona hasta otra pantalla, como en el modo prototipo de Figma. */
@@ -771,6 +771,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                           proto={proto && !!shown.image && editable}
                           onConnect={(hid, e) => empezarConexion(shown, hid, e)}
                           onPick={(parte) => agregarZonaEn(shown, { x: parte.x, y: parte.y, w: parte.w, h: parte.h }, parte.name)}
+                          onPickConnect={(parte, e) => {
+                            // Desde un elemento del diseño: se crea su zona y sale la flecha en el mismo gesto.
+                            const id = agregarZonaEn(shown, { x: parte.x, y: parte.y, w: parte.w, h: parte.h }, parte.name, true);
+                            if (id) setConexion({ screenId: shown.id, hotspotId: id, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY });
+                          }}
                         />
                       </div>
                     ) : (
