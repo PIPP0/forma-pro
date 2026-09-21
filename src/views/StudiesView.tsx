@@ -459,7 +459,11 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
           </div>
         </div>
         <div className="row">
-          <Button disabled={!link || study.status !== 'open'} onClick={() => window.open(link, '_blank', 'noopener')}>
+          <Button
+            disabled={!link || study.status !== 'open'}
+            title="Se abre en una pestaña nueva y pregunta si esta sesión debe contar en los resultados"
+            onClick={() => window.open(`${link}${link.includes('?') ? '&' : '?'}ensayo=1`, '_blank', 'noopener')}
+          >
             <IconPlay size={14} /> Abrir como participante
           </Button>
           {typeof navigator !== 'undefined' && 'share' in navigator && (

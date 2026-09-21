@@ -4590,6 +4590,28 @@ dialog.modal {
 }
 
 /* Aceptación en la vista inicial: continuar es autorizar */
+.ensayo-chip {
+  display: inline-block;
+  margin-right: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+/* Ensayo de quien diseña: la decisión de guardar va al empezar. */
+.ensayo-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--accent-line);
+  background: var(--accent-soft);
+  border-radius: 12px;
+}
+.ensayo-card p {
+  margin: 0;
+}
 .participant-card .consent-note {
   font-size: 13px;
   line-height: 1.5;

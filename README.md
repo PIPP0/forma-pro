@@ -78,6 +78,10 @@ Todo corre en el navegador y se guarda en `localStorage` (el audio, en IndexedDB
 
 El siguiente paso para uso en equipo es un backend (por ejemplo Cloudflare Workers + D1, como propone el PRD) que reciba las mismas operaciones que hoy aplica el store, con autenticación por correo y código, sesiones que llegan solas y audio en almacenamiento de objetos.
 
+### Ensayar sin ensuciar los resultados
+
+«Abrir como participante» abre la prueba con `?ensayo=1`. Antes de empezar pregunta si esa sesión debe contar: **Probar sin guardar** no escribe sesión, ni borrador, ni sube nada a la nube, y lo recuerda con una insignia durante toda la prueba. **Guardar esta sesión** se comporta como cualquier participante.
+
 ## Importar desde Figma
 
 En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas del lienzo). Pega el enlace del archivo o del prototipo y trae cada frame como una pantalla-imagen:

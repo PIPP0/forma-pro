@@ -16,7 +16,7 @@ type Step = 'intro' | 'task' | 'rate' | 'sending' | 'done';
 
 const viewportBreakpoint = (): Breakpoint => (window.innerWidth < 640 ? 'mobile' : window.innerWidth < 1100 ? 'tablet' : 'desktop');
 
-export function ParticipantView({ studyId, data }: { studyId: string; data: string | null }) {
+export function ParticipantView({ studyId, data, ensayo }: { studyId: string; data: string | null; ensayo?: boolean }) {
   const [study, setStudy] = useState<SharedStudy | null>(null);
   const [local, setLocal] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -88,7 +88,7 @@ export function ParticipantView({ studyId, data }: { studyId: string; data: stri
         </div>
       </div>
     );
-  return <Flow key={run} study={study} local={local} onRestart={() => setRun((r) => r + 1)} />;
+  return <Flow key={run} study={study} local={local} ensayo={!!ensayo} onRestart={() => setRun((r) => r + 1)} />;
 }
 
 function FullscreenCard() {
@@ -155,7 +155,9 @@ function FullscreenCard() {
 }
 
 
-function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean; onRestart: () => void }) {
+function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: boolean; ensayo: boolean; onRestart: () => void }) {
+  // Ensayo de quien diseña: al empezar decide si esta sesión cuenta como resultado.
+  const [guarda, setGuarda] = useState(!ensayo);
   const p = study.snapshot;
   const [step, setStep] = useState<Step>('intro');
   const [taskIndex, setTaskIndex] = useState(0);
@@ -179,7 +181,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const chunkIndex = useRef(0);
   const [recovered, setRecovered] = useState<{ draft: SessionDraft; audio?: Blob }>();
   // Nube: en estudios conectados, desde el enlace, la sesión y el audio suben mientras la persona avanza.
-  const cloudMode = !!study.cloud && !local;
+  const cloudMode = !!study.cloud && !local && guarda;
   const cloudReady = useRef<Promise<void>>(Promise.resolve());
   const cloudPending = useRef<Blob[]>([]);
   const cloudParts = useRef(0);
@@ -228,7 +230,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
 
   /** Guarda el avance (sesión y eventos). El audio ya se guarda trozo a trozo al grabar. */
   const saveDraftNow = () => {
-    if (!session.current) return;
+    if (!session.current || !guarda) return;
     void saveDraft(study.id, { session: session.current, events: [...events.current], mimeType: recorder.current?.mimeType, chunks: chunkIndex.current, cloudParts: cloudParts.current, savedAt: Date.now() }).catch(() => undefined);
   };
 
@@ -269,7 +271,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   const persist = (status: Session['status']) => {
     if (!session.current) return;
     session.current = { ...session.current, status, endedAt: status === 'in_progress' ? undefined : Date.now() };
-    if (local) saveSession(session.current, events.current);
+    if (local && guarda) saveSession(session.current, events.current);
   };
 
   const log = (e: RunnerEvent | Pick<StudyEvent, 'kind' | 'screen'>) => {
@@ -544,9 +546,35 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             Al continuar, aceptas y autorizas que se registren tus toques, tiempos y respuestas{study.askAudio ? ', y el audio de tu voz,' : ''} dentro de este prototipo, solo con fines de estudio.
             {study.askAudio ? ' Tu navegador te pedirá permiso para usar el micrófono y puedes pausar la grabación cuando quieras.' : ''} No te pedimos datos personales y puedes dejar la prueba en cualquier momento.
           </p>
-          <Button tone="primary" onClick={start}>
-            Continuar
-          </Button>
+          {ensayo ? (
+            <div className="ensayo-card">
+              <strong>Estás abriendo la prueba desde tu proyecto</strong>
+              <p className="muted small">Elige si esta sesión debe contar en los resultados. Así tus ensayos no se mezclan con los de quienes participan.</p>
+              <div className="row">
+                <Button
+                  tone="primary"
+                  onClick={() => {
+                    setGuarda(false);
+                    void start();
+                  }}
+                >
+                  Probar sin guardar
+                </Button>
+                <Button
+                  onClick={() => {
+                    setGuarda(true);
+                    void start();
+                  }}
+                >
+                  Guardar esta sesión
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button tone="primary" onClick={start}>
+              Continuar
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -557,6 +585,7 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
         <div className="task-bar">
           <div>
             <span className="muted small">
+              {!guarda && <b className="ensayo-chip">Ensayo · no se guarda</b>}
               Tarea {taskIndex + 1} de {study.tasks.length}
             </span>
             <p className="task-prompt">{task.prompt}</p>
@@ -675,8 +704,15 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
   return (
     <div className="participant">
       <div className="participant-card stack">
-        <h1>¡Gracias por participar!</h1>
-        {local ? (
+        <h1>{guarda ? '¡Gracias por participar!' : 'Ensayo terminado'}</h1>
+        {!guarda ? (
+          <>
+            <p>Nada de esto quedó guardado: no aparece en Resultados ni cuenta como sesión. Era solo para revisar el flujo.</p>
+            <Button tone="primary" onClick={onRestart}>
+              Repetir el ensayo
+            </Button>
+          </>
+        ) : local ? (
           <>
             <p>Tus respuestas quedaron guardadas. Si otra persona va a usar este mismo dispositivo, empieza una sesión nueva.</p>
             <Button tone="primary" onClick={onRestart}>

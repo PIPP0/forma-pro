@@ -25,7 +25,7 @@ export default function App() {
   if (a === 't' && b) {
     return (
       <>
-        <ParticipantView studyId={b} data={route.query.get('d')} />
+        <ParticipantView studyId={b} data={route.query.get('d')} ensayo={route.query.get('ensayo') === '1'} />
         <Toasts />
       </>
     );
