@@ -78,6 +78,10 @@ Todo corre en el navegador y se guarda en `localStorage` (el audio, en IndexedDB
 
 El siguiente paso para uso en equipo es un backend (por ejemplo Cloudflare Workers + D1, como propone el PRD) que reciba las mismas operaciones que hoy aplica el store, con autenticación por correo y código, sesiones que llegan solas y audio en almacenamiento de objetos.
 
+### Escuchar las grabaciones
+
+En Resultados hay una sección **Grabaciones** con todas las sesiones que tienen audio: se reproducen ahí mismo, se descargan una a una (`.webm`) y muestran su peso. Las que están en la nube se traen al pulsar «Escuchar» y quedan en caché para la próxima vez.
+
 ### Limpiar resultados
 
 En Resultados, cada fila de **Sesiones** trae una ✕ para eliminarla. Pide confirmación y, al aceptar, quita sus respuestas, sus eventos y su grabación; las métricas, el mapa de calor y los hallazgos se recalculan sin ella. Si la sesión llegó por la nube, también se borra allá para que no vuelva al sincronizar.

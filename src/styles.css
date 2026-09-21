@@ -2387,6 +2387,33 @@ dialog.modal::backdrop {
   display: grid;
   gap: 8px;
 }
+/* Grabaciones del estudio, todas juntas. */
+.grabaciones {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.grabaciones li {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+}
+.grab-cab {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.grab-cab .row {
+  margin-left: auto;
+}
+.grabaciones audio {
+  width: 100%;
+}
 .heat-layer {
   position: absolute;
   inset: 0;

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../lib/model';
 import { baseId } from '../lib/model';
 import { createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
@@ -9,7 +9,7 @@ import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
-import { blobToAudio, download, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
+import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
@@ -651,6 +651,8 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                   </table>
                 </div>
               </section>
+
+              <Grabaciones study={study} sessions={consentedSessions(study, sessions)} onAbrir={(id) => setOpenSession({ id })} />
             </div>
 
             <aside className="study-side">
@@ -907,6 +909,89 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
           )}
         </>
       )}
+    </section>
+  );
+}
+
+/** Todas las grabaciones del estudio, para escucharlas o bajarlas sin abrir cada sesión. */
+function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Session[]; onAbrir: (id: string) => void }) {
+  const conAudio = sessions.filter((s) => s.hasAudio);
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  const [blobs, setBlobs] = useState<Record<string, Blob>>({});
+  const [cargando, setCargando] = useState<string>();
+  const [fallo, setFallo] = useState<Record<string, string>>({});
+  const creadas = useRef<string[]>([]);
+
+  useEffect(() => () => creadas.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  if (!conAudio.length) return null;
+
+  const cargar = async (s: Session) => {
+    if (urls[s.id] || cargando) return;
+    setCargando(s.id);
+    let blob = await getAudio(s.id).catch(() => undefined);
+    if (!blob && s.source === 'cloud') {
+      const remoto = await downloadCloudAudio(study.id, s.id).catch(() => undefined);
+      if (remoto) {
+        blob = remoto.blob;
+        if (remoto.complete) void saveAudio(s.id, remoto.blob).catch(() => undefined);
+      }
+    }
+    setCargando(undefined);
+    if (!blob) {
+      setFallo((f) => ({ ...f, [s.id]: s.source === 'cloud' ? 'No pudimos traerla de la nube.' : 'Está en el navegador donde se hizo la sesión.' }));
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    creadas.current.push(url);
+    setBlobs((b) => ({ ...b, [s.id]: blob! }));
+    setUrls((u) => ({ ...u, [s.id]: url }));
+  };
+
+  const bajar = (s: Session) => {
+    const blob = blobs[s.id];
+    if (!blob) return;
+    const a = document.createElement('a');
+    a.href = urls[s.id];
+    a.download = `${study.name.replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase()}-${s.participant}.webm`;
+    a.click();
+  };
+
+  return (
+    <section className="card-section">
+      <h2 className="section-title">Grabaciones</h2>
+      <p className="muted small">
+        {conAudio.length} {conAudio.length === 1 ? 'sesión con audio' : 'sesiones con audio'}. Se cargan al reproducirlas; «Exportar JSON» se las lleva todas en un archivo.
+      </p>
+      <ul className="grabaciones">
+        {conAudio.map((s) => (
+          <li key={s.id}>
+            <div className="grab-cab">
+              <button type="button" className="link-btn strong" onClick={() => onAbrir(s.id)}>
+                {s.participant}
+              </button>
+              <span className="muted small">
+                {s.device.breakpoint === 'mobile' ? 'Móvil' : s.device.breakpoint === 'tablet' ? 'Tablet' : 'Escritorio'} · {timeAgo(s.startedAt)}
+                {blobs[s.id] ? ` · ${megabytes(blobs[s.id].size)}` : ''}
+              </span>
+              <span className="row">
+                {!urls[s.id] && (
+                  <Button size="sm" disabled={cargando === s.id} onClick={() => void cargar(s)}>
+                    {cargando === s.id ? 'Cargando…' : 'Escuchar'}
+                  </Button>
+                )}
+                {urls[s.id] && (
+                  <Button size="sm" onClick={() => bajar(s)}>
+                    Descargar
+                  </Button>
+                )}
+              </span>
+            </div>
+            {urls[s.id] && <audio controls src={urls[s.id]} />}
+            {fallo[s.id] && <p className="muted small">{fallo[s.id]}</p>}
+          </li>
+        ))}
+      </ul>
     </section>
   );
 }
