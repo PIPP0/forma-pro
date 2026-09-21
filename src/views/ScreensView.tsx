@@ -326,15 +326,32 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
       const el = (document.elementFromPoint(x, y) as Element | null)?.closest('[data-screen-id]');
       return el instanceof HTMLElement ? el.dataset.screenId : undefined;
     };
+    // Última posición del puntero: la usa el desplazamiento automático del lienzo.
+    const ultimo = { x: conexion.x, y: conexion.y };
     const mover = (e: PointerEvent) => {
+      ultimo.x = e.clientX;
+      ultimo.y = e.clientY;
       setConexion((c) => (c ? { ...c, x: e.clientX, y: e.clientY } : c));
       setSobre(pantallaBajo(e.clientX, e.clientY));
     };
+    // Cerca del borde el lienzo se desplaza solo, para llegar a pantallas que no se ven.
+    const arrastrarBorde = window.setInterval(() => {
+      const el = scroller.current;
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const margen = 90;
+      if (ultimo.x > r.right - margen) el.scrollLeft += 18;
+      else if (ultimo.x < r.left + margen) el.scrollLeft -= 18;
+    }, 16);
     const soltar = (e: PointerEvent) => {
       setConexion(null);
       setSobre(undefined);
+      window.clearInterval(arrastrarBorde);
       // Un clic sin arrastre no cambia nada: solo selecciona.
       if (Math.abs(e.clientX - conexion.x0) < 8 && Math.abs(e.clientY - conexion.y0) < 8) return;
+      // Soltar fuera del lienzo (en el panel, la barra o fuera de la ventana) no cambia nada.
+      const caja = scroller.current?.getBoundingClientRect();
+      if (caja && (e.clientX < caja.left || e.clientX > caja.right || e.clientY < caja.top || e.clientY > caja.bottom)) return;
       const destino = (document.elementFromPoint(e.clientX, e.clientY) as Element | null)?.closest('[data-screen-id]');
       const destinoId = destino instanceof HTMLElement ? destino.dataset.screenId : undefined;
       const origen = project.screens.find((x) => x.id === conexion.screenId);
@@ -350,6 +367,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     window.addEventListener('pointermove', mover);
     window.addEventListener('pointerup', soltar, { once: true });
     return () => {
+      window.clearInterval(arrastrarBorde);
       window.removeEventListener('pointermove', mover);
       window.removeEventListener('pointerup', soltar);
     };

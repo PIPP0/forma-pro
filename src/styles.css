@@ -4667,7 +4667,8 @@ dialog.modal {
   height: 100%;
   overflow: visible;
   pointer-events: none;
-  z-index: 3;
+  /* Sobre la capa de marcado: la flecha se puede tomar también encima de una pantalla. */
+  z-index: 5;
 }
 .conexiones path {
   fill: none;
