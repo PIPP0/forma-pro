@@ -2381,6 +2381,20 @@ dialog.modal::backdrop {
   pointer-events: none;
   z-index: 4;
 }
+/* Escala del mapa de calor: del azul (pocos toques) al rojo (muchos). */
+.heat-escala {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.heat-escala i {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #3876f0, #2cbed6, #3ac876, #f4d43a, #f28e2e, #e6382c);
+}
 .heat-dot {
   position: absolute;
   width: 46px;

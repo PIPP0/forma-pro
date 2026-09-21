@@ -746,9 +746,11 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
   const touched = snap.screens.filter((s) => events.some((e) => e.screen === s.id && ['tap', 'misclick', 'blocked'].includes(e.kind)));
   const [screenId, setScreenId] = useState(touched[0]?.id);
   const [task, setTask] = useState<string>('all');
+  const [tipo, setTipo] = useState<'todos' | 'tap' | 'misclick'>('todos');
   const screen = snap.screens.find((s) => s.id === screenId) ?? touched[0];
   if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
-  const pts = events.filter((e) => e.screen === screen.id && ['tap', 'misclick', 'blocked'].includes(e.kind) && (task === 'all' || e.taskId === task));
+  const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
+  const pts = events.filter((e) => e.screen === screen.id && cuenta(e.kind) && (task === 'all' || e.taskId === task));
   return (
     <section className="heat-panel">
       <h2 className="section-title">Mapa de calor</h2>
@@ -773,18 +775,23 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
             ))}
           </select>
         </Field>
-        <div className="heat-legend">
-          <span>
-            <i className="lg lg-tap" /> Toque
-          </span>
-          <span>
-            <i className="lg lg-misclick" /> Sin acción
-          </span>
-          <span>
-            <i className="lg lg-blocked" /> Bloqueado
-          </span>
-        </div>
+        <Tabs
+          small
+          label="Qué se muestra"
+          value={tipo}
+          onChange={(v) => setTipo(v as 'todos' | 'tap' | 'misclick')}
+          items={[
+            { id: 'todos', label: 'Todo' },
+            { id: 'tap', label: 'Toques' },
+            { id: 'misclick', label: 'Sin acción' },
+          ]}
+        />
         <Heatmap project={snap} screen={screen} events={pts} mode="light" />
+        <div className="heat-escala" aria-hidden="true">
+          <span>Menos</span>
+          <i />
+          <span>Más</span>
+        </div>
         <p className="muted small">
           {pts.length} {pts.length === 1 ? 'toque' : 'toques'} en «{snap.screens.find((s) => s.id === baseId(screen))?.name}».
         </p>
