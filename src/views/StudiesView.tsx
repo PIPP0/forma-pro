@@ -186,6 +186,12 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
     }
     onClose();
     go(`/p/${project.id}/results/${id}`);
+    // El siguiente paso siempre es compartir: el enlace queda copiado al publicar.
+    const nuevo = getDb().studies.find((s) => s.id === id);
+    if (nuevo) {
+      const enlace = await studyLink(nuevo);
+      await copyText(enlace, 'Estudio publicado y enlace copiado. Pégalo donde vayas a invitar a quien participa.');
+    }
   };
 
   return (
@@ -221,7 +227,7 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
         </div>
       )}
       <Field label="Nombre del estudio">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Ej: Primera meta de ahorro" autoFocus />
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={`Ej: Primera prueba de ${project.name}`} autoFocus />
       </Field>
       <fieldset className="choice">
         <legend className="field-label">Tareas, en orden</legend>
@@ -229,7 +235,12 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
           {tasks.map((t, i) => (
             <li key={i}>
               <Field label={`Instrucción de la tarea ${i + 1}`}>
-                <textarea rows={2} value={t.prompt} onChange={(e) => update(i, { prompt: e.target.value })} placeholder="Escríbela como se la dirías a la persona. Ej: Crea una meta de ahorro de $500.000." />
+                <textarea
+                  rows={2}
+                  value={t.prompt}
+                  onChange={(e) => update(i, { prompt: e.target.value })}
+                  placeholder={`Escríbela como se la dirías a la persona. Ej: Llega a «${project.screens.find((x) => !x.variantOf && x.id !== project.startScreenId)?.name ?? 'la pantalla final'}».`}
+                />
               </Field>
               <div className="grid-2">
                 <Field label="Empieza en">

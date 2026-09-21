@@ -535,9 +535,9 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
           <span className="muted">{p.brand}</span>
           <h1>Ayúdanos a mejorar un diseño</h1>
           <p>
-            Vas a usar un prototipo y completar {study.tasks.length === 1 ? 'una tarea breve' : `${study.tasks.length} tareas breves`}. No evaluamos a ti: evaluamos el diseño. Si algo no se entiende, es justo lo que queremos saber.
+            Vas a usar un prototipo y completar {study.tasks.length === 1 ? 'una tarea breve' : `${study.tasks.length} tareas breves`}. No te evaluamos a ti: evaluamos el diseño. Si algo no se entiende, es justo lo que queremos saber.
           </p>
-          <p className="muted">Toma unos 5 minutos. No necesitas crear una cuenta.</p>
+          <p className="muted">Toma unos {Math.max(2, study.tasks.length * 2)} minutos. No necesitas crear una cuenta.</p>
           <FullscreenCard />
           {/* Continuar es la aceptación: no hay una pantalla aparte de consentimiento. */}
           <p className="consent-note">

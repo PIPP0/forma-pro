@@ -4811,6 +4811,13 @@ dialog.modal {
   border-radius: 4px;
   pointer-events: none;
 }
+/* Zona elegida, resaltada también en el panel de propiedades. */
+.zona-elegida {
+  background: rgba(93, 79, 240, 0.08);
+  border-radius: 10px;
+  padding: 8px;
+  margin: -8px -8px 0;
+}
 .parte-resaltada .parte-link {
   pointer-events: auto;
   opacity: 1;

@@ -127,7 +127,13 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [importOpen, setImportOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [quitarFigma, setQuitarFigma] = useState(false);
-  const [proto, setProto] = useState(false);
+  const [proto, setProto] = useState(() => {
+    try {
+      return localStorage.getItem('formapro.canvas.proto') === '1';
+    } catch {
+      return false;
+    }
+  });
   const framesRef = useRef<HTMLDivElement>(null);
   const [conexion, setConexion] = useState<{ screenId: string; hotspotId: string; x0: number; y0: number; x: number; y: number } | null>(null);
   const [sobre, setSobre] = useState<string>();
@@ -649,7 +655,24 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             <button type="button" className="icon-btn" aria-label={mode === 'light' ? 'Ver en modo oscuro' : 'Ver en modo claro'} title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'} onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}>
               {mode === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
             </button>
-            <Tabs small label="Modo" value={proto ? 'proto' : 'diseno'} onChange={(v) => setProto(v === 'proto')} items={[{ id: 'diseno', label: 'Diseño' }, { id: 'proto', label: 'Prototipo' }]} />
+            <Tabs
+              small
+              label="Modo"
+              value={proto ? 'proto' : 'diseno'}
+              onChange={(v) => {
+                const on = v === 'proto';
+                setProto(on);
+                try {
+                  localStorage.setItem('formapro.canvas.proto', on ? '1' : '0');
+                } catch {
+                  /* sin almacenamiento: el modo dura lo que la sesión */
+                }
+              }}
+              items={[
+                { id: 'diseno', label: 'Diseño' },
+                { id: 'proto', label: 'Prototipo' },
+              ]}
+            />
             <Tabs
               small
               label="Fidelidad"
@@ -665,8 +688,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 <IconFileImage size={14} /> Figma
               </button>
             )}
-            <button type="button" className="btn btn-outline btn-sm" onClick={() => setPlay(true)}>
-              <IconPlay size={14} /> Probar
+            <button type="button" className="btn btn-outline btn-sm" title={`Prueba el flujo empezando en «${screen.name}»`} onClick={() => setPlay(true)}>
+              <IconPlay size={14} /> {screen.id === project.startScreenId ? 'Probar' : 'Probar desde aquí'}
             </button>
           </div>
         </div>
@@ -909,6 +932,8 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 onAdd={insertBlock}
                 drawing={dibujando}
                 onDrawing={setDibujando}
+                selectedId={blockId}
+                onSelectZone={(id) => setBlockId(id)}
               />
             ))}
           {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
@@ -995,12 +1020,17 @@ function HotspotsSection({
   editable,
   drawing,
   onDrawing,
+  selected,
+  onSelect,
 }: {
   project: Project;
   screen: Screen;
   editable: boolean;
   drawing: boolean;
   onDrawing: (v: boolean) => void;
+  /** Zona elegida en el lienzo, para resaltarla también en el panel. */
+  selected?: string;
+  onSelect?: (id: string | undefined) => void;
 }) {
   const hotspots = screen.hotspots ?? [];
   const save = (next: Hotspot[], label: string) => applyOps(project.id, [edit.screen(project, screen.id, 'hotspots', next)], label);
@@ -1059,7 +1089,20 @@ function HotspotsSection({
         </p>
       )}
       {hotspots.map((h, i) => (
-        <Field key={h.id} label={h.label?.trim() || `Zona ${i + 1}`}>
+        <Field
+          key={h.id}
+          className={selected === h.id ? 'zona-elegida' : ''}
+          label={
+            onSelect ? (
+              // Desde el panel se llega a una zona aunque otra la tape en el lienzo.
+              <button type="button" className="link-btn" title="Verla en el lienzo" onClick={() => onSelect(selected === h.id ? undefined : h.id)}>
+                {h.label?.trim() || `Zona ${i + 1}`}
+              </button>
+            ) : (
+              h.label?.trim() || `Zona ${i + 1}`
+            )
+          }
+        >
           <div className="row">
             <select
               className="grow"
@@ -1175,6 +1218,8 @@ function ScreenProps({
   onAdd,
   drawing,
   onDrawing,
+  selectedId,
+  onSelectZone,
 }: {
   project: Project;
   screen: Screen;
@@ -1184,6 +1229,8 @@ function ScreenProps({
   onAdd: (b: Block) => void;
   drawing: boolean;
   onDrawing: (v: boolean) => void;
+  selectedId?: string;
+  onSelectZone?: (id: string | undefined) => void;
 }) {
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
@@ -1202,7 +1249,7 @@ function ScreenProps({
           </span>
         </span>
       </div>
-      {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} drawing={drawing} onDrawing={onDrawing} />}
+      {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} drawing={drawing} onDrawing={onDrawing} selected={selectedId} onSelect={onSelectZone} />}
       <Section title="Contenido">
         <Field label="Nombre de pantalla">
           <CommitInput

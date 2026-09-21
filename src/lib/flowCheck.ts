@@ -120,10 +120,14 @@ export function checkProject(p: Project): Issue[] {
     for (const h of s.hotspots ?? []) {
       if (h.target && !byId.has(h.target))
         add({ severity: 'error', area: 'flujo', screenId: s.id, message: `Una zona tocable de «${s.name}» apunta a una pantalla eliminada.` });
+      // Una zona sin destino se toca y no pasa nada: en la prueba se cuenta como acierto sin avance.
+      if (!h.target && !h.back)
+        add({ severity: 'warning', area: 'flujo', screenId: s.id, message: `La zona «${h.label || 'sin nombre'}» de «${s.name}» no lleva a ninguna pantalla.` });
     }
     if (s.autoNext?.target && !byId.has(s.autoNext.target))
       add({ severity: 'error', area: 'flujo', screenId: s.id, message: `«${s.name}» avanza sola a una pantalla eliminada.` });
-    if (s.image && !(s.hotspots ?? []).length && !s.autoNext)
+    // Una pantalla final no necesita salida: no se avisa de ella.
+    if (s.image && !s.terminal && !(s.hotspots ?? []).length && !s.autoNext)
       add({ severity: 'warning', area: 'flujo', screenId: s.id, message: `«${s.name}» es una imagen sin zonas tocables: no se puede avanzar desde ahí.` });
 
     if (s.blocks.some((b) => b.required) && !s.blocks.some((b) => b.type === 'button' && b.action === 'navigate'))
