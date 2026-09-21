@@ -2324,10 +2324,18 @@ dialog.modal::backdrop {
   gap: 40px;
   align-items: start;
 }
+/* La columna lateral se queda a la vista y se desplaza por su cuenta:
+   el mapa de calor es más alto que la pantalla. */
 .study-side {
   position: sticky;
   top: 16px;
   padding-top: 28px;
+  /* El mínimo evita que se colapse si el navegador reporta 100vh en cero. */
+  max-height: max(360px, calc(100vh - 150px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  padding-right: 6px;
 }
 .theme {
   padding: 16px 0;
@@ -2856,6 +2864,12 @@ dialog.modal::backdrop {
   .inspect-canvas {
     position: static;
     max-width: 520px;
+  }
+  /* Apilado en una columna, el lateral no necesita su propio scroll. */
+  .study-side {
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
   .subtabs a.minor {
     display: none;
