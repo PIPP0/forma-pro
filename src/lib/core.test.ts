@@ -256,7 +256,19 @@ describe('zonas tocables', () => {
     expect(hotspotAt([chica, grande], 0.9, 0.9)?.id).toBe('g');
     expect(hotspotAt([chica], 0.9, 0.9)).toBeUndefined();
     // Con holgura, apuntar un poco fuera del borde todavía cuenta.
-    expect(hotspotAt([chica], 0.62, 0.42, 0.03)?.id).toBe('c');
+    expect(hotspotAt([chica], 0.62, 0.42, { margen: 0.03 })?.id).toBe('c');
+  });
+
+  it('una zona sin destino no tapa a la que sí avanza', async () => {
+    const { hotspotAt } = await import('./model');
+    const todo = { id: 'todo', x: 0, y: 0, w: 1, h: 1, target: 's2' };
+    const suelta = { id: 'suelta', x: 0.1, y: 0.4, w: 0.5, h: 0.06 };
+    // En la prueba manda la que lleva a alguna parte…
+    expect(hotspotAt([todo, suelta], 0.3, 0.42, { conDestino: true })?.id).toBe('todo');
+    // …pero en el lienzo se selecciona la chica para poder editarla.
+    expect(hotspotAt([todo, suelta], 0.3, 0.42)?.id).toBe('suelta');
+    // Si ninguna lleva a ninguna parte, se devuelve la más chica igual.
+    expect(hotspotAt([{ ...todo, target: undefined }, suelta], 0.3, 0.42, { conDestino: true })?.id).toBe('suelta');
   });
 });
 

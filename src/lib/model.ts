@@ -212,10 +212,16 @@ export interface Hotspot {
 /**
  * Zona tocable bajo un punto (en fracciones de la pantalla, 0 a 1).
  * Manda la más chica de las que lo contienen, sin importar en qué orden se crearon.
+ * Con `conDestino`, una zona que no lleva a ninguna parte no tapa a otra que sí:
+ * así una zona de pantalla completa sigue avanzando aunque encima haya zonas sueltas.
  */
-export function hotspotAt(hotspots: Hotspot[] | undefined, x: number, y: number, margen = 0): Hotspot | undefined {
+export function hotspotAt(hotspots: Hotspot[] | undefined, x: number, y: number, opciones: { margen?: number; conDestino?: boolean } = {}): Hotspot | undefined {
+  const margen = opciones.margen ?? 0;
   const dentro = (hotspots ?? []).filter((h) => x >= h.x - margen && x <= h.x + h.w + margen && y >= h.y - margen && y <= h.y + h.h + margen);
-  return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : undefined;
+  if (!dentro.length) return undefined;
+  const utiles = opciones.conDestino ? dentro.filter((h) => h.target || h.back) : [];
+  const lista = utiles.length ? utiles : dentro;
+  return lista.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b));
 }
 
 export interface Screen {

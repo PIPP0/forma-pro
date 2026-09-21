@@ -108,6 +108,7 @@ En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas de
 
 La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido al de Figma:
 
+- En la prueba manda la zona más chica bajo el dedo **que lleve a alguna parte**: una zona suelta no tapa a la de pantalla completa. En el lienzo, en cambio, se selecciona la más chica para poder editarla.
 - Arrastrar sobre cualquier pantalla-imagen crea una zona tocable.
 - **Elegir un elemento del diseño:** el cursor resalta la capa de Figma que tiene debajo (botón, tarjeta, campo). Se ofrecen solo las capas que alguien podría tocar: se descartan las menores de 36 × 18 puntos, las que ocupan casi toda la pantalla y las repetidas (un botón, su fondo y su texto son una sola), y al apuntar a la etiqueta de un botón se marca el botón entero. Un toque la convierte en zona con su nombre, y arrastrar su punto la convierte en zona y saca la flecha en el mismo gesto. Funciona aunque otra zona cubra toda la pantalla.
 - Tocar una flecha selecciona su zona. Arrastrarla mueve la flecha misma: la pantalla bajo el cursor se resalta y al soltar queda conectada; si se suelta en el fondo, la flecha se quita.

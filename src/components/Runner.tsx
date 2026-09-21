@@ -133,7 +133,7 @@ export function Runner({
       const r = host.getBoundingClientRect();
       const px = (e.clientX - r.left) / r.width;
       const py = (e.clientY - r.top) / r.height;
-      hotspot = hotspotAt(current.hotspots, px, py);
+      hotspot = hotspotAt(current.hotspots, px, py, { conDestino: true });
     }
     const el = (e.target as Element).closest('[data-hotspot-id]');
     // Respaldo: si no se pudo medir la imagen, vale el elemento tocado.

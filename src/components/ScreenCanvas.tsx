@@ -283,7 +283,7 @@ export function ImageScreen({
   const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
 
   /** Zona bajo el punto: la más chica de las que lo contienen. El margen da holgura al apuntar. */
-  const zonaEn = (p: { x: number; y: number }, margen = 0) => hotspotAt(zonas, p.x, p.y, margen) ?? null;
+  const zonaEn = (p: { x: number; y: number }, margen = 0) => hotspotAt(zonas, p.x, p.y, { margen }) ?? null;
   /**
    * Capa del diseño bajo el punto. Se prefiere el control completo antes que su texto:
    * al apuntar a la etiqueta de un botón, la zona se marca sobre el botón entero.
