@@ -1042,6 +1042,16 @@ function HotspotsSection({
           )}
         </div>
       )}
+      {editable && screen.image && (
+        screen.figmaParts?.length ? (
+          <p className="muted small">
+            {screen.figmaParts.length} {screen.figmaParts.length === 1 ? 'elemento de Figma detectado' : 'elementos de Figma detectados'}: pasa el cursor sobre uno y tócalo para marcarlo, o arrastra su punto hasta otra
+            pantalla.
+          </p>
+        ) : (
+          <p className="warn-text">Esta pantalla no trae las capas de Figma, así que no se pueden elegir elementos sueltos. Vuelve a importar el archivo y quedarán disponibles.</p>
+        )
+      )}
       {editable && hotspots.length > 0 && !drawing && (
         <p className="muted small">
           Toca una zona en el lienzo para seleccionarla: se arrastra para moverla y tiene esquinas para ajustar su tamaño. En modo prototipo, arrastra su flecha a otra pantalla para cambiar el
