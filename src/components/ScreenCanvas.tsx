@@ -288,15 +288,15 @@ export function ImageScreen({
     return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
   };
   /**
-   * Qué manda bajo el cursor: la zona o la capa del diseño.
-   * Gana la más chica, así una zona que cubre toda la pantalla no tapa a sus elementos.
+   * Qué hay bajo el cursor. Manda lo más chico: así una zona que cubre toda la pantalla
+   * no tapa a sus elementos, pero sigue a la vista para poder sacarle su flecha.
    */
   const bajoCursor = (p: { x: number; y: number }) => {
-    const zona = zonaEn(p);
-    const parte = parteEn(p);
+    const zona = zonaEn(p) ?? undefined;
+    const parte = parteEn(p) ?? undefined;
     const areaZona = zona ? zona.w * zona.h : Infinity;
     const areaParte = parte ? parte.w * parte.h : Infinity;
-    return parte && areaParte < areaZona ? { parte } : { zona: zona ?? undefined };
+    return { zona, parte, manda: parte && areaParte < areaZona ? ('parte' as const) : ('zona' as const) };
   };
 
   const empezarAjuste = (e: ReactPointerEvent, h: Hotspot, modo: 'mover' | Esquina) => {
@@ -414,9 +414,9 @@ export function ImageScreen({
           className="hotspot-draw"
           onPointerDown={(e) => {
             const p = punto(e, e.currentTarget);
-            const { zona } = bajoCursor(p);
+            const { zona, manda } = bajoCursor(p);
             // Sobre una zona se arrastra esa zona; sobre un elemento del diseño se marca.
-            if (zona && onMoved) {
+            if (zona && manda === 'zona' && onMoved) {
               onSelect?.(zona.id);
               empezarAjuste(e, zona, 'mover');
               return;
@@ -433,9 +433,10 @@ export function ImageScreen({
             if (arrastre.current) return seguirAjuste(e);
             const p = punto(e, e.currentTarget);
             if (!inicio.current) {
-              const { zona, parte } = bajoCursor(p);
+              const { zona, parte, manda } = bajoCursor(p);
+              // La zona queda activa aunque mande el elemento: así su punto de flecha está a mano.
               setZonaBajo(zona?.id ?? null);
-              setResaltada(parte ?? null);
+              setResaltada(manda === 'parte' ? (parte ?? null) : null);
               return;
             }
             setResaltada(null);
