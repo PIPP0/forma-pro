@@ -135,6 +135,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     }
   });
   const framesRef = useRef<HTMLDivElement>(null);
+  // Cuántas zonas hay y cuántas tienen destino: sin destino no hay flecha que dibujar.
+  const sinConectar = useMemo(() => {
+    const todas = project.screens.flatMap((s) => s.hotspots ?? []);
+    return { zonas: todas.length, flechas: todas.filter((h) => h.target || h.back).length };
+  }, [project.screens]);
   const [conexion, setConexion] = useState<{ screenId: string; hotspotId: string; x0: number; y0: number; x: number; y: number } | null>(null);
   const [sobre, setSobre] = useState<string>();
   const [dibujando, setDibujando] = useState(false);
@@ -761,6 +766,9 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             </div>
           </header>
 
+          {proto && sinConectar.zonas > 0 && sinConectar.flechas === 0 && (
+            <p className="proto-aviso">Ninguna zona lleva todavía a otra pantalla, por eso no ves flechas. Arrastra el punto de una zona hasta la pantalla de destino.</p>
+          )}
           <div className="frames" ref={framesRef} style={{ gap: 0 }}>
             {proto && (
               <Conexiones

@@ -376,7 +376,7 @@ export function ImageScreen({
             key={h.id}
             type="button"
             data-hotspot-id={h.id}
-            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${activa ? ' activa' : ''}${marcando ? ' pasivo' : ''}`}
+            className={`hotspot${editable ? ' editable' : ''}${sel ? ' selected' : ''}${activa ? ' activa' : ''}${marcando ? ' pasivo' : ''}${proto && !h.target && !h.back ? ' sin-destino' : ''}`}
             style={{ left: `${c.x * 100}%`, top: `${c.y * 100}%`, width: `${c.w * 100}%`, height: `${c.h * 100}%` }}
             aria-label={h.label || (h.back ? 'Volver' : 'Zona tocable')}
             onClick={
