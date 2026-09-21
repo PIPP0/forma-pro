@@ -245,6 +245,21 @@ describe('hoja inferior', () => {
   });
 });
 
+describe('zonas tocables', () => {
+  it('manda la zona más chica bajo el dedo, no la última creada', async () => {
+    const { hotspotAt } = await import('./model');
+    const grande = { id: 'g', x: 0, y: 0, w: 1, h: 1, target: 's2' };
+    const chica = { id: 'c', x: 0.1, y: 0.4, w: 0.5, h: 0.06, target: 's3' };
+    // La grande se creó después, pero el toque dentro de la chica va a la chica.
+    expect(hotspotAt([chica, grande], 0.3, 0.42)?.id).toBe('c');
+    expect(hotspotAt([grande, chica], 0.3, 0.42)?.id).toBe('c');
+    expect(hotspotAt([chica, grande], 0.9, 0.9)?.id).toBe('g');
+    expect(hotspotAt([chica], 0.9, 0.9)).toBeUndefined();
+    // Con holgura, apuntar un poco fuera del borde todavía cuenta.
+    expect(hotspotAt([chica], 0.62, 0.42, 0.03)?.id).toBe('c');
+  });
+});
+
 describe('biblioteca completa en cada proyecto', () => {
   it('las tres plantillas cubren el catálogo sin errores del guardarraíl', async () => {
     const { CATALOG, coverage } = await import('./catalog');

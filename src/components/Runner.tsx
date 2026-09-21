@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type MouseEvent } from 'react';
-import type { Block, Breakpoint, Mode, Project, StudyEvent } from '../lib/model';
-import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, screenFor, withValues } from '../lib/model';
+import type { Block, Breakpoint, Hotspot, Mode, Project, StudyEvent } from '../lib/model';
+import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, hotspotAt, screenFor, withValues } from '../lib/model';
 import { BlockView } from './BlockView';
 import { ImageScreen, PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
 
@@ -122,9 +122,19 @@ export function Runner({
 
   /** Pantalla importada como imagen: se navega por sus zonas tocables. */
   const onImageClick = (e: MouseEvent) => {
+    // Se elige por geometría, no por el orden de dibujo: manda la zona más chica bajo el dedo.
+    const host = (e.currentTarget as HTMLElement).querySelector('.img-screen');
+    let hotspot: Hotspot | undefined;
+    if (host) {
+      const r = host.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width;
+      const py = (e.clientY - r.top) / r.height;
+      hotspot = hotspotAt(current.hotspots, px, py);
+    }
     const el = (e.target as Element).closest('[data-hotspot-id]');
-    const hotspot = el ? current.hotspots?.find((h) => h.id === el.getAttribute('data-hotspot-id')) : undefined;
-    const c = coords(e, el);
+    // Respaldo: si no se pudo medir la imagen, vale el elemento tocado.
+    if (!hotspot && el) hotspot = current.hotspots?.find((h) => h.id === el.getAttribute('data-hotspot-id'));
+    const c = coords(e, hotspot && el?.getAttribute('data-hotspot-id') === hotspot.id ? el : null);
     const now = performance.now();
     const gap = now - last.current;
     last.current = now;

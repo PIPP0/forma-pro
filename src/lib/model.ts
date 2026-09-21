@@ -209,6 +209,15 @@ export interface Hotspot {
   label?: string;
 }
 
+/**
+ * Zona tocable bajo un punto (en fracciones de la pantalla, 0 a 1).
+ * Manda la más chica de las que lo contienen, sin importar en qué orden se crearon.
+ */
+export function hotspotAt(hotspots: Hotspot[] | undefined, x: number, y: number, margen = 0): Hotspot | undefined {
+  const dentro = (hotspots ?? []).filter((h) => x >= h.x - margen && x <= h.x + h.w + margen && y >= h.y - margen && y <= h.y + h.h + margen);
+  return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : undefined;
+}
+
 export interface Screen {
   id: string;
   name: string;

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef, useState, type CSSProperties, type MouseEventHandler, type PointerEvent as ReactPointerEvent, type ReactNode, type Ref } from 'react';
 import type { Block, Hotspot, Mode, Project, Screen } from '../lib/model';
-import { baseId, breakpointOf, screenFor, withValues } from '../lib/model';
+import { baseId, breakpointOf, hotspotAt, screenFor, withValues } from '../lib/model';
 import { colorValue, findComponent, spaceValue } from '../lib/tokens';
 import { BlockView } from './BlockView';
 import { IconShield } from './icons';
@@ -269,7 +269,9 @@ export function ImageScreen({
   const [ajuste, setAjuste] = useState<{ id: string; actual: Caja } | null>(null);
   if (!screen.image) return null;
 
-  const zonas = screen.hotspots ?? [];
+  // De mayor a menor: la zona chica se dibuja encima y es la que recibe el toque,
+  // sin importar en qué orden se hayan creado.
+  const zonas = [...(screen.hotspots ?? [])].sort((a, b) => b.w * b.h - a.w * a.h);
   // La capa de marcado está encima en prototipo y al dibujar: así los elementos se detectan siempre.
   const marcando = !!editable && (!!proto || !!drawing);
 
@@ -281,10 +283,7 @@ export function ImageScreen({
   const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
 
   /** Zona bajo el punto: la más chica de las que lo contienen. El margen da holgura al apuntar. */
-  const zonaEn = (p: { x: number; y: number }, margen = 0) => {
-    const dentro = zonas.filter((h) => p.x >= h.x - margen && p.x <= h.x + h.w + margen && p.y >= h.y - margen && p.y <= h.y + h.h + margen);
-    return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
-  };
+  const zonaEn = (p: { x: number; y: number }, margen = 0) => hotspotAt(zonas, p.x, p.y, margen) ?? null;
   /**
    * Capa del diseño bajo el punto. Se prefiere el control completo antes que su texto:
    * al apuntar a la etiqueta de un botón, la zona se marca sobre el botón entero.
@@ -392,7 +391,7 @@ export function ImageScreen({
             onPointerUp={editable && !marcando && onMoved ? terminarAjuste : undefined}
             onPointerCancel={editable && !marcando && onMoved ? terminarAjuste : undefined}
           >
-            {proto && editable && onConnect && activa && (
+            {proto && editable && onConnect && (
               <span
                 className="hs-link"
                 role="presentation"
