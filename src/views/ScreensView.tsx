@@ -175,6 +175,12 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   };
 
   const deFigma = project.screens.filter((s) => s.figmaId);
+  /**
+   * Un flujo importado no se dibuja con bloques: fidelidad, modo oscuro, tokens y la
+   * biblioteca no cambian nada de lo que se ve, así que la vista se adapta y no los ofrece.
+   */
+  const soloImagenes = !project.screens.some((s) => !s.image && s.blocks.length > 0);
+  const dispositivos = soloImagenes ? BREAKPOINTS.filter((b) => b.id === bp || project.screens.some((s) => s.breakpoint === b.id)) : BREAKPOINTS;
 
   /** Deja el proyecto sin el prototipo importado, para traer otro archivo desde cero. */
   const quitarPantallasDeFigma = () => {
@@ -384,6 +390,11 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
     };
   }, [conexion?.hotspotId, conexion?.screenId]);
 
+  // Si la pestaña de componentes deja de existir, el explorador vuelve a las pantallas.
+  useEffect(() => {
+    if (soloImagenes && !project.components.length && explorer === 'components') setExplorer('screens');
+  }, [soloImagenes, project.components.length, explorer]);
+
   const goIssue = (i: Issue) => {
     setGuardOpen(false);
     if (i.screenId) {
@@ -415,18 +426,20 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             </button>
           )}
         </div>
-        <div className="explorer-tabs">
-          <Tabs
-            small
-            label="Contenido del explorador"
-            value={explorer}
-            onChange={setExplorer}
-            items={[
-              { id: 'screens', label: 'Pantallas' },
-              { id: 'components', label: 'Componentes' },
-            ]}
-          />
-        </div>
+        {!(soloImagenes && !project.components.length) && (
+          <div className="explorer-tabs">
+            <Tabs
+              small
+              label="Contenido del explorador"
+              value={explorer}
+              onChange={setExplorer}
+              items={[
+                { id: 'screens', label: 'Pantallas' },
+                { id: 'components', label: 'Componentes' },
+              ]}
+            />
+          </div>
+        )}
         <label className="search">
           <IconSearch size={15} />
           <input placeholder="Buscar…" value={q} onChange={(e) => setQ(e.target.value)} aria-label={explorer === 'screens' ? 'Buscar pantallas' : 'Buscar componentes'} />
@@ -656,10 +669,12 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             </span>
           </nav>
           <div className="canvas-tools">
-            <Tabs small label="Dispositivo" value={bp} onChange={setBp} items={BREAKPOINTS.map((b) => ({ id: b.id, label: b.label }))} />
-            <button type="button" className="icon-btn" aria-label={mode === 'light' ? 'Ver en modo oscuro' : 'Ver en modo claro'} title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'} onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}>
-              {mode === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
-            </button>
+            {dispositivos.length > 1 && <Tabs small label="Dispositivo" value={bp} onChange={setBp} items={dispositivos.map((b) => ({ id: b.id, label: b.label }))} />}
+            {!soloImagenes && (
+              <button type="button" className="icon-btn" aria-label={mode === 'light' ? 'Ver en modo oscuro' : 'Ver en modo claro'} title={mode === 'light' ? 'Modo oscuro' : 'Modo claro'} onClick={() => setMode((m) => (m === 'light' ? 'dark' : 'light'))}>
+                {mode === 'light' ? <IconMoon size={17} /> : <IconSun size={17} />}
+              </button>
+            )}
             <Tabs
               small
               label="Modo"
@@ -678,16 +693,18 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 { id: 'proto', label: 'Prototipo' },
               ]}
             />
-            <Tabs
-              small
-              label="Fidelidad"
-              value={wireframe ? 'wire' : 'hifi'}
-              onChange={(v) => setWireframe(v === 'wire')}
-              items={[
-                { id: 'wire', label: 'Wireframe' },
-                { id: 'hifi', label: 'Alta fidelidad' },
-              ]}
-            />
+            {!soloImagenes && (
+              <Tabs
+                small
+                label="Fidelidad"
+                value={wireframe ? 'wire' : 'hifi'}
+                onChange={(v) => setWireframe(v === 'wire')}
+                items={[
+                  { id: 'wire', label: 'Wireframe' },
+                  { id: 'hifi', label: 'Alta fidelidad' },
+                ]}
+              />
+            )}
             {editable && (
               <button type="button" className="btn btn-outline btn-sm" onClick={() => setFigmaOpen(true)}>
                 <IconFileImage size={14} /> Figma
@@ -942,6 +959,7 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
                 onDrawing={setDibujando}
                 selectedId={blockId}
                 onSelectZone={(id) => setBlockId(id)}
+                soloImagenes={soloImagenes}
               />
             ))}
           {panel === 'comments' && <CommentsPanel project={project} screen={screen} block={block} canComment={can(role, 'comment')} />}
@@ -1228,6 +1246,7 @@ function ScreenProps({
   onDrawing,
   selectedId,
   onSelectZone,
+  soloImagenes,
 }: {
   project: Project;
   screen: Screen;
@@ -1239,13 +1258,11 @@ function ScreenProps({
   onDrawing: (v: boolean) => void;
   selectedId?: string;
   onSelectZone?: (id: string | undefined) => void;
+  soloImagenes?: boolean;
 }) {
   const apply = (ops: OpInput[], label: string) => applyOps(project.id, ops, label);
   const base = project.screens.find((s) => s.id === baseId(screen))!;
   const setProject = (key: 'tagline' | 'summary' | 'flowName' | 'footnote', label: string) => (v: string) => apply([edit.project(key, v.trim() || undefined)], `Cambiar ${label}`);
-  // Los tokens y la nota al pie solo se ven en pantallas que Forma dibuja con bloques.
-  // Con un flujo importado de Figma no cambian nada, aunque el proyecto conserve su biblioteca.
-  const soloImagenes = !project.screens.some((s) => !s.image && s.blocks.length > 0);
   return (
     <>
       <div className="sel-card">

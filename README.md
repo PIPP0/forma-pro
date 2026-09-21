@@ -104,6 +104,10 @@ En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas de
 - **Volver a importar:** si cambias el diseño, importa otra vez el mismo archivo. Las pantallas que ya trajiste se actualizan en su lugar, conservando su nombre y los destinos que apuntaban a ellas.
 - **Cambiar de prototipo:** la etiqueta «Flujo de Figma · N» del encabezado del lienzo (o el propio diálogo de importar) quita las pantallas traídas y deja el proyecto listo para otro archivo.
 
+### La vista se adapta al tipo de proyecto
+
+Un flujo importado de Figma no se dibuja con bloques, así que en Diseñar desaparecen los controles que no cambiarían nada: fidelidad (wireframe / alta fidelidad), modo oscuro, tokens globales, nota al pie, la pestaña de componentes cuando la biblioteca está vacía y los dispositivos sin pantallas. Todo vuelve en cuanto el proyecto tiene una pantalla hecha con componentes.
+
 ### Modo prototipo
 
 La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido al de Figma:
