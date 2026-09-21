@@ -24,9 +24,10 @@ const MORE = [
 export function BrandLockup() {
   return (
     <a className="brand" href={href('/')} aria-label="Forma Studio, ir al workspace">
-      <span className="brand-mark" aria-hidden="true">
-        f
-      </span>
+      <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M7.5 3.3h9a4.2 4.2 0 0 1 4.2 4.2v9a4.2 4.2 0 0 1-4.2 4.2h-9a4.2 4.2 0 0 1-4.2-4.2v-9a4.2 4.2 0 0 1 4.2-4.2Z" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round" />
+        <circle cx="16.7" cy="12" r="2.05" fill="currentColor" />
+      </svg>
       <span className="brand-name">forma</span>
       <span className="brand-sub">STUDIO</span>
     </a>
