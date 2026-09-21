@@ -996,6 +996,22 @@ function HotspotsSection({
           <Button size="sm" tone={drawing ? 'primary' : undefined} aria-pressed={drawing} onClick={() => onDrawing(!drawing)}>
             {drawing ? 'Listo' : 'Dibujar zona'}
           </Button>
+          {!hotspots.some((h) => h.w >= 0.99 && h.h >= 0.99) && (
+            <Button
+              size="sm"
+              onClick={() => {
+                // Toda la imagen avanza: útil para pantallas de paso o de confirmación.
+                const bases = project.screens.filter((x) => !x.variantOf);
+                const i = bases.findIndex((x) => x.id === baseId(screen));
+                const siguiente = i >= 0 ? bases[i + 1] : undefined;
+                const zona: Hotspot = { id: uid('h_'), x: 0, y: 0, w: 1, h: 1, label: 'Toda la pantalla', ...(siguiente ? { target: siguiente.id } : {}) };
+                save([...hotspots, zona], `Marcar toda «${screen.name}» como zona`);
+                notify(siguiente ? `Toda la pantalla avanza a «${siguiente.name}».` : 'Toda la pantalla queda tocable. Elige a qué pantalla lleva.', 'success');
+              }}
+            >
+              Toda la pantalla
+            </Button>
+          )}
           {drawing && (
             <span className="muted small">
               {screen.figmaParts?.length ? 'Toca un elemento del diseño para marcarlo, o arrastra para dibujar la zona.' : 'Arrastra sobre la imagen para marcar dónde se toca.'}

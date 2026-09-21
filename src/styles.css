@@ -4620,9 +4620,9 @@ dialog.modal {
   cursor: pointer;
   border-radius: 6px;
 }
+/* Sin seleccionar se ve la imagen tal cual: solo un contorno fino marca la zona. */
 .hotspot.editable {
-  background: rgba(93, 79, 240, 0.12);
-  outline: 1px dashed rgba(93, 79, 240, 0.65);
+  outline: 1px dashed rgba(93, 79, 240, 0.5);
 }
 .hotspot.movible {
   cursor: move;
@@ -4641,7 +4641,8 @@ dialog.modal {
   z-index: 6;
 }
 .hotspot.activa {
-  background: rgba(93, 79, 240, 0.2);
+  background: rgba(93, 79, 240, 0.16);
+  outline-color: rgba(93, 79, 240, 0.85);
 }
 /* Punto para arrastrar la flecha hasta la pantalla de destino. */
 .hs-link {

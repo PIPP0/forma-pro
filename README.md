@@ -88,7 +88,7 @@ En **Diseñar** hay un botón «Importar desde Figma» (barra de herramientas de
 - Las imágenes se copian a la nube de Forma (las de Figma vencen a los 30 días).
 - Necesitas un **token personal de lectura** de Figma: Ajustes → Figma. Se guarda solo en ese navegador.
 - En las pruebas se registran toques, mapa de calor, tiempos, abandono y audio igual que en las pantallas hechas con componentes.
-- **¿Tu Figma no tiene flechas de prototipo?** En Propiedades → Zonas tocables, «Dibujar zona» permite marcarlas a mano sobre la imagen.
+- **¿Tu Figma no tiene flechas de prototipo?** En Propiedades → Zonas tocables, «Dibujar zona» permite marcarlas a mano sobre la imagen, y «Toda la pantalla» marca la imagen completa para avanzar a la siguiente.
 - **Volver a importar:** si cambias el diseño, importa otra vez el mismo archivo. Las pantallas que ya trajiste se actualizan en su lugar, conservando su nombre y los destinos que apuntaban a ellas.
 - **Cambiar de prototipo:** la etiqueta «Flujo de Figma · N» del encabezado del lienzo (o el propio diálogo de importar) quita las pantallas traídas y deja el proyecto listo para otro archivo.
 
