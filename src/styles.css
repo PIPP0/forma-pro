@@ -24,7 +24,10 @@
   --font-ui: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-display: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-code: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --r-chip: 6px;
   --r-control: 8px;
+  --r-card: 12px;
+  --r-panel: 16px;
   --shadow-float: 0 1px 2px rgba(20, 20, 40, 0.06), 0 10px 30px -12px rgba(20, 20, 40, 0.22);
   color-scheme: light;
 }
@@ -812,7 +815,7 @@ select.input {
   display: inline-flex;
   background: var(--panel-2);
   border: 1px solid var(--rule);
-  border-radius: 9px;
+  border-radius: 8px;
   padding: 3px;
 }
 .seg-item {
@@ -898,7 +901,7 @@ select.input {
 
 dialog.modal {
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 0;
   width: min(560px, calc(100vw - 24px));
   background: var(--panel);
@@ -1289,7 +1292,7 @@ dialog.modal::backdrop {
 .tree-tag {
   font-size: 11px;
   padding: 2px 6px;
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1330,7 +1333,7 @@ dialog.modal::backdrop {
 .lib-card-icon {
   width: 36px;
   height: 36px;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--accent-soft);
   color: var(--accent);
   display: grid;
@@ -1371,7 +1374,7 @@ dialog.modal::backdrop {
   cursor: pointer;
   font: 500 12.5px/1 var(--font-ui);
   padding: 7px 9px;
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1513,7 +1516,7 @@ dialog.modal::backdrop {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--warn-soft);
   color: var(--warn);
   font-size: 11px;
@@ -1644,7 +1647,7 @@ dialog.modal::backdrop {
   color: var(--accent-2);
 }
 .frame-device {
-  border-radius: 20px;
+  border-radius: 16px;
   transition: box-shadow 0.12s;
 }
 .frame-device.is-selected {
@@ -1652,7 +1655,7 @@ dialog.modal::backdrop {
 }
 .frame-missing {
   border: 1.5px dashed #cfcfda;
-  border-radius: 18px;
+  border-radius: 16px;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -1681,7 +1684,7 @@ dialog.modal::backdrop {
   cursor: pointer;
   margin-top: 32px;
   border: 1.5px dashed #cfcfda;
-  border-radius: 18px;
+  border-radius: 16px;
   display: grid;
   place-content: center;
   justify-items: center;
@@ -1712,7 +1715,7 @@ dialog.modal::backdrop {
   flex-direction: column;
 }
 .device-wide {
-  border-radius: 14px;
+  border-radius: 12px;
 }
 .device > .screen,
 .device > .device-scroll,
@@ -2286,7 +2289,7 @@ dialog.modal::backdrop {
   width: 100%;
   max-width: 480px;
   height: 10px;
-  border-radius: 5px;
+  border-radius: 4px;
 }
 .mat-lite {
   background: var(--ground);
@@ -2578,20 +2581,23 @@ dialog.modal::backdrop {
 .rating label {
   position: relative;
   border: 1px solid var(--rule);
-  border-radius: 10px;
-  padding: 10px 2px;
-  text-align: center;
+  border-radius: var(--r-control);
   cursor: pointer;
   display: grid;
-  gap: 2px;
-  font-size: 12px;
+  place-items: center;
+  min-height: 52px;
   color: var(--ink-2);
-  min-height: 60px;
-  align-content: center;
 }
 .rating label strong {
-  font-size: 18px;
+  font: 600 17px/1 var(--font-ui);
   color: var(--ink);
+}
+.rating-ends {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--ink-2);
 }
 .rating input {
   position: absolute;
@@ -2958,7 +2964,7 @@ dialog.modal::backdrop {
 }
 .funnel-bar {
   height: 10px;
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--panel-2);
   overflow: hidden;
   box-shadow: inset 0 0 0 1px var(--rule-soft);
@@ -3044,7 +3050,7 @@ dialog.modal::backdrop {
 .ai-color i {
   width: 18px;
   height: 18px;
-  border-radius: 5px;
+  border-radius: 4px;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 .ai-components {
@@ -3159,7 +3165,7 @@ label.btn {
 .card {
   background: var(--panel);
   border: 1px solid #ebebf0;
-  border-radius: 18px;
+  border-radius: 16px;
 }
 .card-title {
   font-size: 20px;
@@ -3170,7 +3176,7 @@ label.btn {
 .icon-tile {
   width: 56px;
   height: 56px;
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--accent-soft);
   color: var(--accent-2);
   display: grid;
@@ -3184,7 +3190,7 @@ label.btn {
 }
 .empty-card {
   border: 1.5px dashed #dcdce4;
-  border-radius: 18px;
+  border-radius: 16px;
   background: var(--panel);
   display: grid;
   justify-items: center;
@@ -3446,7 +3452,7 @@ label.btn {
 }
 .assistant-preview {
   background: var(--ground);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 14px;
 }
 .assistant-name {
@@ -3454,7 +3460,7 @@ label.btn {
 }
 
 dialog.modal {
-  border-radius: 20px;
+  border-radius: 16px;
   border-color: #ebebf0;
 }
 .modal-head {
@@ -3586,7 +3592,7 @@ dialog.modal {
 .system-tabs .seg-item {
   padding: 10px 22px;
   font-size: 15px;
-  border-radius: 9px;
+  border-radius: 8px;
 }
 .system-panel {
   padding: 28px 32px;
@@ -3991,7 +3997,7 @@ dialog.modal {
 }
 .cs-card {
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 18px 20px;
   background: var(--panel);
   min-width: 0;
@@ -4060,7 +4066,7 @@ dialog.modal {
 }
 .cs-styles-preview {
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 16px 16px 28px;
   position: sticky;
   top: 12px;
@@ -4234,7 +4240,7 @@ dialog.modal {
 }
 .imp-preview {
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 14px;
   display: grid;
   gap: 12px;
@@ -4492,7 +4498,7 @@ dialog.modal {
   display: grid;
   gap: 12px;
   border: 1px solid var(--rule);
-  border-radius: 14px;
+  border-radius: 12px;
   padding: 14px;
   background: var(--panel);
 }

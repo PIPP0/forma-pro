@@ -649,12 +649,16 @@ function Flow({ study, local, onRestart }: { study: SharedStudy; local: boolean;
             <legend>¿Qué tan difícil fue esta tarea?</legend>
             <div className="rating">
               {[1, 2, 3, 4, 5].map((n) => (
-                <label key={n}>
+                <label key={n} aria-label={n === 1 ? '1, muy fácil' : n === 5 ? '5, muy difícil' : String(n)}>
                   <input type="radio" name="difficulty" checked={difficulty === n} onChange={() => setDifficulty(n)} />
                   <strong>{n}</strong>
-                  <span>{n === 1 ? 'Muy fácil' : n === 5 ? 'Muy difícil' : ''}</span>
                 </label>
               ))}
+            </div>
+            {/* Los extremos van fuera: así las cinco casillas son idénticas y los números quedan alineados. */}
+            <div className="rating-ends" aria-hidden="true">
+              <span>Muy fácil</span>
+              <span>Muy difícil</span>
             </div>
           </fieldset>
           <label className="field">
