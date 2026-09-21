@@ -280,9 +280,9 @@ export function ImageScreen({
   };
   const rectDe = (a: { x: number; y: number }, b: { x: number; y: number }) => ({ x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(a.x - b.x), h: Math.abs(a.y - b.y) });
 
-  /** Zona bajo el punto: la más chica de las que lo contienen. */
-  const zonaEn = (p: { x: number; y: number }) => {
-    const dentro = zonas.filter((h) => p.x >= h.x && p.x <= h.x + h.w && p.y >= h.y && p.y <= h.y + h.h);
+  /** Zona bajo el punto: la más chica de las que lo contienen. El margen da holgura al apuntar. */
+  const zonaEn = (p: { x: number; y: number }, margen = 0) => {
+    const dentro = zonas.filter((h) => p.x >= h.x - margen && p.x <= h.x + h.w + margen && p.y >= h.y - margen && p.y <= h.y + h.h + margen);
     return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
   };
   /** Capa del diseño bajo el punto: la más chica de las que lo contienen. */
@@ -294,8 +294,8 @@ export function ImageScreen({
    * Qué hay bajo el cursor. Manda lo más chico: así una zona que cubre toda la pantalla
    * no tapa a sus elementos, pero sigue a la vista para poder sacarle su flecha.
    */
-  const bajoCursor = (p: { x: number; y: number }) => {
-    const zona = zonaEn(p) ?? undefined;
+  const bajoCursor = (p: { x: number; y: number }, margen = 0) => {
+    const zona = zonaEn(p, margen) ?? undefined;
     const parte = parteEn(p) ?? undefined;
     const areaZona = zona ? zona.w * zona.h : Infinity;
     const areaParte = parte ? parte.w * parte.h : Infinity;
@@ -436,7 +436,8 @@ export function ImageScreen({
             if (arrastre.current) return seguirAjuste(e);
             const p = punto(e, e.currentTarget);
             if (!inicio.current) {
-              const { zona, parte, manda } = bajoCursor(p);
+              // Al mover se da holgura: el punto de la flecha no se escapa al acercarse.
+              const { zona, parte, manda } = bajoCursor(p, 0.03);
               // La zona queda activa aunque mande el elemento: así su punto de flecha está a mano.
               setZonaBajo(zona?.id ?? null);
               setResaltada(manda === 'parte' ? (parte ?? null) : null);

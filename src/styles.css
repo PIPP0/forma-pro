@@ -4649,15 +4649,24 @@ dialog.modal {
   opacity: 0;
   transition: opacity 0.12s ease;
   position: absolute;
-  right: -7px;
+  /* Dentro de la zona: acercarse al punto no obliga a salirse de ella. */
+  right: 4px;
   top: 50%;
-  width: 14px;
-  height: 14px;
-  margin-top: -7px;
+  width: 16px;
+  height: 16px;
+  margin-top: -8px;
   border-radius: 50%;
   background: var(--accent, #5d4ff0);
   border: 2px solid var(--panel, #fff);
+  box-shadow: 0 1px 4px rgba(20, 20, 40, 0.35);
   cursor: crosshair;
+}
+/* Área de toque generosa alrededor del punto. */
+.hs-link::after {
+  content: '';
+  position: absolute;
+  inset: -12px;
+  border-radius: 50%;
 }
 /* Flechas entre zonas y pantallas, y la que se arrastra en ese momento. */
 .conexiones {
