@@ -285,10 +285,18 @@ export function ImageScreen({
     const dentro = zonas.filter((h) => p.x >= h.x - margen && p.x <= h.x + h.w + margen && p.y >= h.y - margen && p.y <= h.y + h.h + margen);
     return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
   };
-  /** Capa del diseño bajo el punto: la más chica de las que lo contienen. */
+  /**
+   * Capa del diseño bajo el punto. Se prefiere el control completo antes que su texto:
+   * al apuntar a la etiqueta de un botón, la zona se marca sobre el botón entero.
+   */
   const parteEn = (p: { x: number; y: number }) => {
     const dentro = (screen.figmaParts ?? []).filter((q) => p.x >= q.x && p.x <= q.x + q.w && p.y >= q.y && p.y <= q.y + q.h);
-    return dentro.length ? dentro.reduce((a, b) => (a.w * a.h <= b.w * b.h ? a : b)) : null;
+    if (!dentro.length) return null;
+    const area = (q: { w: number; h: number }) => q.w * q.h;
+    const chica = dentro.reduce((a, b) => (area(a) <= area(b) ? a : b));
+    if (chica.k !== 't' && chica.k !== 'v') return chica;
+    const envolventes = dentro.filter((q) => (q.k === 'i' || q.k === 'f') && area(q) <= area(chica) * 6);
+    return envolventes.length ? envolventes.reduce((a, b) => (area(a) <= area(b) ? a : b)) : chica;
   };
   /**
    * Qué hay bajo el cursor. Manda lo más chico: así una zona que cubre toda la pantalla

@@ -106,12 +106,15 @@ describe('importar desde Figma', () => {
     expect(ordenarPorFlujo(frames, '1:2').map((f) => f.id)).toEqual(['1:2', '1:30', '1:10', '9:9']);
   });
 
-  it('lista las capas del frame para poder elegir un elemento', () => {
+  it('lista solo las capas que valen como zona', () => {
     const partes = framesFromPage(page)[0].partes;
-    // La más grande primero; las diminutas y las ocultas quedan fuera.
+    // La más grande primero; las ocultas y las diminutas quedan fuera.
     expect(partes[0].id).toBe('1:4');
     expect(partes.some((p) => p.id === '1:12')).toBe(false);
-    expect(partes.find((p) => p.id === '1:5')).toMatchObject({ x: 0.1, y: 0.118, w: 0.5 });
+    expect(partes.find((p) => p.id === '1:5')).toMatchObject({ x: 0.1, y: 0.118, w: 0.5, k: 'f' });
+    // «Ayuda» mide 60 × 40 y pasa; una capa de 20 × 10 no llegaría al mínimo tocable.
+    expect(partes.find((p) => p.id === '1:6')).toMatchObject({ k: 'i' });
+    expect(partes.some((p) => p.id === '1:20')).toBe(false);
   });
 
   it('toma el toque puesto sobre el frame completo', () => {

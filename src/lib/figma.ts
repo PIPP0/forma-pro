@@ -81,6 +81,8 @@ export interface FigmaParte {
   y: number;
   w: number;
   h: number;
+  /** Qué clase de capa es: i = componente, f = contenedor, t = texto, v = forma. */
+  k: 'i' | 'f' | 't' | 'v';
 }
 
 export interface FigmaFrame {
@@ -178,24 +180,40 @@ export function hotspotsIn(frame: FigmaNode): FigmaHotspot[] {
   return out.sort((a, b) => b.w * b.h - a.w * a.h);
 }
 
-/** Capas de un frame con tamaño propio, de la más grande a la más chica. */
-export function partesDe(frame: FigmaNode, tope = 300): FigmaParte[] {
+const TIPO_COMPONENTE = new Set(['INSTANCE', 'COMPONENT', 'COMPONENT_SET']);
+const TIPO_CONTENEDOR = new Set(['FRAME', 'GROUP', 'SECTION']);
+const claseDe = (t: string): FigmaParte['k'] => (TIPO_COMPONENTE.has(t) ? 'i' : TIPO_CONTENEDOR.has(t) ? 'f' : t === 'TEXT' ? 't' : 'v');
+const PESO: Record<FigmaParte['k'], number> = { i: 3, f: 2, t: 1, v: 0 };
+
+/**
+ * Capas de un frame que vale la pena ofrecer como zona.
+ * Un archivo de Figma trae cientos de nodos; aquí se quedan los que alguien podría tocar:
+ * se descartan las capas diminutas, las que ocupan casi todo el frame y las repetidas.
+ */
+export function partesDe(frame: FigmaNode, tope = 200): FigmaParte[] {
   const box = frame.absoluteBoundingBox;
   if (!box?.width || !box.height) return [];
-  const out: FigmaParte[] = [];
+  const bruto: FigmaParte[] = [];
   const walk = (node: FigmaNode) => {
     if (node.visible === false) return;
     const b = node.absoluteBoundingBox;
-    // Se omiten las capas diminutas y las que se salen del frame: no se pueden tocar.
-    if (node !== frame && b?.width && b.height && b.width >= box.width * 0.02 && b.height >= box.height * 0.008) {
+    // Mínimo tocable: nada más chico que ~36 × 18 puntos, ni casi tan grande como la pantalla.
+    if (node !== frame && b?.width && b.height && b.width >= 36 && b.height >= 18 && b.width * b.height < box.width * box.height * 0.92) {
       const x = clamp01((b.x - box.x) / box.width);
       const y = clamp01((b.y - box.y) / box.height);
-      if (x < 1 && y < 1) out.push({ id: node.id, name: node.name, x, y, w: clamp01(b.width / box.width), h: clamp01(b.height / box.height) });
+      if (x < 1 && y < 1) bruto.push({ id: node.id, name: node.name, x, y, w: clamp01(b.width / box.width), h: clamp01(b.height / box.height), k: claseDe(node.type) });
     }
     for (const c of node.children ?? []) walk(c);
   };
   walk(frame);
-  return out.sort((a, b) => b.w * b.h - a.w * a.h).slice(0, tope);
+  // Un botón suele ser un grupo, su fondo y su texto con el mismo recuadro: queda uno solo.
+  const porCaja = new Map<string, FigmaParte>();
+  for (const p of bruto) {
+    const clave = [p.x, p.y, p.w, p.h].map((n) => Math.round(n * 200)).join(':');
+    const previa = porCaja.get(clave);
+    if (!previa || PESO[p.k] > PESO[previa.k]) porCaja.set(clave, p);
+  }
+  return [...porCaja.values()].sort((a, b) => b.w * b.h - a.w * a.h).slice(0, tope);
 }
 
 const FRAME_TYPES = ['FRAME', 'COMPONENT', 'COMPONENT_SET', 'INSTANCE', 'SECTION'];
