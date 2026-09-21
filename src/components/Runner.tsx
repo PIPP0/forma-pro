@@ -261,7 +261,7 @@ export function Runner({
   return (
     <ScaledFrame width={bp.width} height={bp.height} fixed maxScale={maxScale}>
       <div className="device-scroll">
-        <PhoneChrome project={project} mode={mode} enabled={current.breakpoint === 'mobile'} dim={sheet}>
+        <PhoneChrome project={project} mode={mode} enabled={current.breakpoint === 'mobile' && !current.image} dim={sheet}>
           {body}
         </PhoneChrome>
       </div>

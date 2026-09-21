@@ -567,13 +567,18 @@ export function ScreenCanvas({
   );
   return (
     <ScaledFrame width={bp.width} height={bp.height} scale={scale}>
-      <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile'} dim={sheet}>
+      {/* Una pantalla-imagen ya trae su propia barra de estado: no se le agrega otra. */}
+      <PhoneChrome project={project} mode={mode} wireframe={wireframe} enabled={screen.breakpoint === 'mobile' && !screen.image} dim={sheet}>
         {sheet ? (
           <SheetLayout project={project} mode={mode} wireframe={wireframe} backdrop={sheetBackdrop(project, screen)} overlay={overlay} minHeight={bp.height - 90} onClick={() => onSelect?.(undefined)}>
             {nodes}
           </SheetLayout>
         ) : (
-          <div className="screen" style={screenStyle(project, mode, wireframe)} onClick={() => onSelect?.(undefined)}>
+          <div
+            className={`screen${screen.image ? ' screen-image' : ''}`}
+            style={screen.image ? { position: 'relative', minHeight: '100%' } : screenStyle(project, mode, wireframe)}
+            onClick={() => onSelect?.(undefined)}
+          >
             <div style={{ display: 'contents' }}>{nodes}</div>
             {overlay}
           </div>
