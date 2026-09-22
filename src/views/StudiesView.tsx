@@ -8,7 +8,7 @@ import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
-import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
+import { construirInforme, NIVELES, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
 import { descargarDeck, type TemaIa } from '../lib/deck';
 import { consumoDeIa, getAiKey, iaDisponible, summarizeResearch, type IaConsumo, type VerifiedTheme } from '../lib/ai';
@@ -1002,19 +1002,41 @@ function Tablero({ m, hallazgos, o }: { m: Metricas; hallazgos: Hallazgo[]; o: O
     <section className="card tablero">
       {m.indice != null && (
         <div className="tablero-indice">
-          <Anillo valor={m.indice} />
-          <div>
-            <h2>
-              Índice Forma <strong>{m.indice}</strong> <span className="muted">de 100</span>
-            </h2>
-            <p>{m.lectura}</p>
-            <p className="muted small">Combina tareas logradas (45%), eficiencia frente al camino más corto (25%) y esfuerzo percibido (30%).</p>
+          <span className="indice-medidor">
+            <Anillo valor={m.indice} />
+            <em>Índice Forma</em>
+          </span>
+          <div className="indice-texto">
+            <h2>{m.titulo}</h2>
+            <p>{m.consejo}</p>
+            <div className="indice-escala" role="img" aria-label={`Índice Forma ${m.indice} de 100: ${m.titulo}`}>
+              {NIVELES.map((n, i) => {
+                const hasta = NIVELES[i + 1]?.desde ?? 100;
+                return (
+                  <span key={n.id} className={`tramo ${m.nivel === n.id ? 'aqui' : ''}`} style={{ flexGrow: hasta - n.desde }}>
+                    <i />
+                    <em>{n.etiqueta}</em>
+                    <span className="tramo-rango">{n.desde}</span>
+                  </span>
+                );
+              })}
+              <span className="indice-marca" style={{ left: `${m.indice}%` }}>
+                <b>{m.indice}</b>
+              </span>
+            </div>
+            <details className="indice-como">
+              <summary>Cómo se calcula</summary>
+              <p className="muted small">
+                Índice Forma: tareas logradas (45%), eficiencia frente al camino más corto (25%) y esfuerzo percibido (30%). Es una medida propia de esta plataforma para comparar versiones de un mismo flujo, no un
+                estándar de la industria.
+              </p>
+            </details>
+            {m.confianza !== 'alta' && (
+              <span className="aviso-muestra">
+                Muestra {m.confianza === 'media' ? 'acotada' : 'exploratoria'}: {m.sesiones} {m.sesiones === 1 ? 'sesión' : 'sesiones'}. Sirve para priorizar, no para afirmar magnitudes.
+              </span>
+            )}
           </div>
-          {m.confianza !== 'alta' && (
-            <span className="aviso-muestra">
-              Muestra {m.confianza === 'media' ? 'acotada' : 'exploratoria'}: {m.sesiones} {m.sesiones === 1 ? 'sesión' : 'sesiones'}. Sirve para priorizar, no para afirmar magnitudes.
-            </span>
-          )}
         </div>
       )}
       <dl className="kpis">

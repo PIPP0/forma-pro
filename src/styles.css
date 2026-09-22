@@ -5379,32 +5379,131 @@ dialog.modal {
   height: 84px;
   flex: none;
 }
-.tablero-indice h2 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 500;
-  color: var(--ink-2);
-  letter-spacing: 0;
+.indice-medidor {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
 }
-.tablero-indice h2 strong {
-  font-size: 22px;
-  font-weight: 600;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-.tablero-indice h2 .muted {
-  font-size: 13px;
-}
-.tablero-indice p {
-  margin: 0 0 4px;
-  max-width: 74ch;
-  color: var(--ink);
-}
-.tablero-indice p.small {
+.indice-medidor em {
+  font-style: normal;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--ink-3);
 }
+.indice-texto {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.tablero-indice h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.tablero-indice p {
+  margin: 0;
+  max-width: 78ch;
+  color: var(--ink-2);
+}
+/* Escala: responde «¿y 85 es bueno?» sin tener que explicarlo. */
+.indice-escala {
+  position: relative;
+  display: flex;
+  gap: 3px;
+  margin: 14px 0 6px;
+  max-width: 460px;
+}
+.indice-escala .tramo {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  /* Sin base cero, el ancho del texto desalinea los tramos y la marca cae en el tramo vecino. */
+  flex-basis: 0;
+}
+.indice-escala .tramo i {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--rule);
+}
+.indice-escala .tramo.aqui i {
+  background: var(--accent);
+}
+.indice-escala .tramo em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.indice-escala .tramo.aqui em {
+  color: var(--ink);
+  font-weight: 600;
+}
+.tramo-rango {
+  display: none;
+}
+.indice-marca {
+  position: absolute;
+  top: -20px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+.indice-marca::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -5px;
+  width: 1px;
+  height: 5px;
+  background: var(--accent-line);
+}
+.indice-como {
+  margin-top: 2px;
+}
+@media (max-width: 560px) {
+  /* En pantalla angosta los cuatro rótulos se truncan: queda el tramo en el que estás. */
+  .indice-escala .tramo:not(.aqui) em {
+    visibility: hidden;
+  }
+}
+.indice-como summary {
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: fit-content;
+}
+.indice-como summary::-webkit-details-marker {
+  display: none;
+}
+.indice-como summary::before {
+  content: '▸';
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+.indice-como[open] summary::before {
+  transform: rotate(90deg);
+}
+.indice-como summary:hover {
+  color: var(--ink-2);
+}
+.indice-como p {
+  margin: 6px 0 0;
+  max-width: 78ch;
+}
 .aviso-muestra {
-  grid-column: 2;
   justify-self: start;
   font-size: 12.5px;
   color: var(--warn);

@@ -5,6 +5,15 @@ import type { Analysis, Citation, Quote, ThemeKind } from './analysis';
 import { analyzeStudy, blockLabel, consentedSessions, fmt1, fmtDuration, screenName, taskFunnel } from './analysis';
 
 export type Severidad = 'critica' | 'alta' | 'media' | 'baja';
+export type Nivel = 'avanzar' | 'ajustar' | 'corregir' | 'rehacer' | 'sin-datos';
+
+/** Los cuatro tramos del índice, del peor al mejor. La escala se dibuja en este orden. */
+export const NIVELES: { id: Exclude<Nivel, 'sin-datos'>; etiqueta: string; desde: number }[] = [
+  { id: 'rehacer', etiqueta: 'Rehacer', desde: 0 },
+  { id: 'corregir', etiqueta: 'Corregir', desde: 55 },
+  { id: 'ajustar', etiqueta: 'Ajustar', desde: 70 },
+  { id: 'avanzar', etiqueta: 'Avanzar', desde: 85 },
+];
 export type Confianza = 'alta' | 'media' | 'exploratoria';
 
 export const SEVERIDAD_LABEL: Record<Severidad, string> = {
@@ -80,6 +89,13 @@ export interface Metricas {
   dudasPorSesion: number;
   /** Índice propio de Forma, 0 a 100: éxito, eficiencia y esfuerzo percibido. */
   indice: number | null;
+  /** En qué tramo cae el índice: es lo que responde «¿y eso es bueno?». */
+  nivel: Nivel;
+  /** Veredicto en dos o tres palabras. */
+  titulo: string;
+  /** Qué hacer con ese veredicto. */
+  consejo: string;
+  /** Veredicto y consejo juntos, para los documentos. */
   lectura: string;
   confianza: Confianza;
 }
@@ -287,16 +303,16 @@ export function metricasGenerales(study: Study, sessions: Session[], events: Stu
   const pesos = partes.reduce((a, [, w]) => a + w, 0);
   const indice = intentos ? Math.round((partes.reduce((a, [v, w]) => a + v * w, 0) / pesos) * 100) : null;
 
-  const lectura =
-    indice == null
-      ? 'Sin datos suficientes para puntuar el flujo.'
-      : indice >= 85
-        ? 'El flujo está listo para construirse: corrige los detalles menores y avanza.'
-        : indice >= 70
-          ? 'El flujo funciona, pero hay fricción concreta que conviene resolver antes de construir.'
-          : indice >= 55
-            ? 'Hay problemas de fondo: corrige los hallazgos críticos y vuelve a probar antes de comprometer desarrollo.'
-            : 'El flujo no sostiene la tarea: rediseña el camino principal antes de seguir.';
+  const nivel: Nivel = indice == null ? 'sin-datos' : indice >= 85 ? 'avanzar' : indice >= 70 ? 'ajustar' : indice >= 55 ? 'corregir' : 'rehacer';
+  const veredicto: Record<Nivel, { titulo: string; consejo: string }> = {
+    avanzar: { titulo: 'Listo para construir', consejo: 'La gente logra la tarea sin pelear con el flujo. Corrige los detalles menores y avanza.' },
+    ajustar: { titulo: 'Funciona, con fricción', consejo: 'La tarea se completa, pero cuesta más de lo que debería. Resuelve los hallazgos de arriba antes de construir.' },
+    corregir: { titulo: 'Problemas de fondo', consejo: 'Hay puntos donde la gente se queda. Corrige los hallazgos críticos y vuelve a probar antes de comprometer desarrollo.' },
+    rehacer: { titulo: 'El flujo no sostiene la tarea', consejo: 'La mayoría no llega al objetivo. Rediseña el camino principal antes de seguir.' },
+    'sin-datos': { titulo: 'Sin datos suficientes', consejo: 'Hacen falta sesiones para puntuar el flujo.' },
+  };
+  const { titulo, consejo } = veredicto[nivel];
+  const lectura = `${titulo}. ${consejo}`;
 
   return {
     sesiones: ok.length,
@@ -312,6 +328,9 @@ export function metricasGenerales(study: Study, sessions: Session[], events: Stu
     erroresPorSesion: ok.length ? evs.filter((e) => e.kind === 'misclick').length / ok.length : 0,
     dudasPorSesion: ok.length ? evs.filter((e) => e.kind === 'hesitation').length / ok.length : 0,
     indice,
+    nivel,
+    titulo,
+    consejo,
     lectura,
     confianza: confianzaDe(ok.length),
   };
