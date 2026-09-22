@@ -488,6 +488,11 @@ p {
   background: var(--err-soft);
   color: var(--ink);
 }
+.notice-warn {
+  border-color: #e9d8ac;
+  background: var(--warn-soft);
+  color: var(--ink);
+}
 .error-text {
   color: var(--err);
   font-weight: 500;

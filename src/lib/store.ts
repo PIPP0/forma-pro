@@ -542,6 +542,11 @@ export function addSyntheticSessions(studyId: string, salidas: { session: Sessio
   return salidas.length;
 }
 
+/** Guarda el resumen por IA junto al estudio para no volver a pedirlo si nada cambió. */
+export function saveStudySummary(studyId: string, summary: Study['summary']) {
+  commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, summary } : s)) });
+}
+
 /** Quita una sesión de los resultados: sus respuestas, sus eventos y su grabación. */
 export function deleteSession(sessionId: string) {
   const s = db.sessions.find((x) => x.id === sessionId);

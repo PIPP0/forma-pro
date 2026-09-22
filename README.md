@@ -132,6 +132,7 @@ La clave de Anthropic vive en el proyecto en la nube (`forma-pro-cl26`), no en l
 - La clave se lee de Secret Manager en caliente, con caché de cinco minutos: cargar una versión nueva basta para que empiece a funcionar, sin volver a desplegar.
 - Cada llamada anota el consumo real en `iaUso/{uid}_{AAAAMM}`, que es lo que Ajustes muestra como gasto del mes.
 - Quien prefiera pagar de su cuenta puede guardar su propia clave en Ajustes; mientras exista, esa clave manda y el equipo no gasta.
+- El resumen por IA se guarda junto al estudio con la huella de las sesiones que lo produjeron. Mientras esas sesiones no cambien, el botón dice «Al día» y no hay forma de pagar dos veces por el mismo resultado; si se agregan o quitan sesiones, avisa que quedó desactualizado.
 
 Desplegar: `npm run deploy:ia` y `npm run deploy:iauso`. La clave se carga aparte, sin pasar por el repositorio:
 

@@ -353,7 +353,18 @@ export interface Study {
   /** La copia congelada está publicada en la nube: el enlace es corto (#/t/<id>). */
   shortLink?: boolean;
   example?: boolean;
+  /** Último resumen por IA, con la huella de las sesiones que lo produjeron: no se paga dos veces por lo mismo. */
+  summary?: StudySummary;
   created: number;
+}
+
+export interface StudySummary {
+  /** Temas verificados, tal como se mostraron. */
+  themes: unknown[];
+  discardedThemes: number;
+  /** Qué sesiones había cuando se generó. Si cambia, el resumen queda desactualizado. */
+  huella: string;
+  at: number;
 }
 
 export interface TaskFeedback {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../lib/model';
 import { baseId } from '../lib/model';
-import { createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
+import { createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, saveStudySummary, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
 import { deleteCloudSession, deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
 import { useCloudAccount } from '../components/useCloudAccount';
 import { notify } from '../lib/toast';
@@ -10,7 +10,7 @@ import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
-import { summarizeResearch, iaDisponible, type VerifiedTheme } from '../lib/ai';
+import { consumoDeIa, getAiKey, iaDisponible, summarizeResearch, type IaConsumo, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
@@ -1065,30 +1065,53 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
   );
 }
 
+/** Huella de las sesiones que alimentan el resumen: si cambia, el guardado quedó viejo. */
+const huellaDe = (sessions: Session[]) =>
+  sessions
+    .map((s) => `${s.id}:${s.feedback.length}:${s.endedAt ?? 0}`)
+    .sort()
+    .join('|');
+
 function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions: Session[]; events: StudyEvent[]; onOpen: (sessionId: string) => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState<{ themes: VerifiedTheme[]; discardedThemes: number } | null>(null);
   const { account: cuenta } = useCloudAccount();
+  const ok = useMemo(() => consentedSessions(study, sessions), [study, sessions]);
+  const huella = useMemo(() => huellaDe(ok), [ok]);
+  const guardado = study.summary;
+  // El resumen guardado se muestra tal cual; solo se vuelve a pagar si las sesiones cambiaron.
+  const vigente = guardado?.huella === huella;
+  const result = guardado ? { themes: guardado.themes as VerifiedTheme[], discardedThemes: guardado.discardedThemes } : null;
+  const [gasto, setGasto] = useState<IaConsumo | null>(null);
+
+  useEffect(() => {
+    let vivo = true;
+    if (cuenta?.email && !getAiKey()) consumoDeIa().then((c) => vivo && setGasto(c)).catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [cuenta?.email, busy]);
+
   const run = async () => {
     setBusy(true);
     setError('');
     try {
-      const ok = consentedSessions(study, sessions);
-      setResult(await summarizeResearch(buildAiDataset(study, sessions, events), new Map(ok.map((s) => [s.id, s.participant]))));
+      const salida = await summarizeResearch(buildAiDataset(study, sessions, events), new Map(ok.map((s) => [s.id, s.participant])));
+      saveStudySummary(study.id, { themes: salida.themes, discardedThemes: salida.discardedThemes, huella, at: Date.now() });
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setBusy(false);
     }
   };
+
   return (
     <section className="card-section">
       <div className="section-head">
         <h2 className="section-title">Resumen por IA</h2>
         {iaDisponible(cuenta?.email) !== 'no' ? (
-          <Button size="sm" disabled={busy} onClick={run}>
-            {busy ? 'Agrupando sesiones…' : result ? 'Volver a generar' : 'Generar resumen'}
+          <Button size="sm" tone={vigente ? 'default' : 'primary'} disabled={busy || (vigente && !!result)} onClick={run}>
+            {busy ? 'Agrupando sesiones…' : !result ? 'Generar resumen' : vigente ? 'Al día' : 'Actualizar resumen'}
           </Button>
         ) : (
           <a className="btn btn-default btn-sm" href={href('/settings')}>
@@ -1096,8 +1119,21 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
           </a>
         )}
       </div>
-      <p className="muted">Agrupa las sesiones por tema. Solo se muestran afirmaciones con citas a sesiones que existen en este estudio; el resto se descarta.</p>
+      <p className="muted">
+        Agrupa las sesiones por tema. Solo se muestran afirmaciones con citas a sesiones que existen en este estudio; el resto se descarta. Se guarda con el estudio: mientras las sesiones no cambien, no se vuelve a
+        consultar.
+      </p>
+      {gasto && (
+        <p className="muted small">
+          Llevas ${Math.round(gasto.clp).toLocaleString('es-CL')} de ${gasto.topeUsuario.toLocaleString('es-CL')} este mes en consultas de IA.
+        </p>
+      )}
       {error && <p className="error-text">{error}</p>}
+      {guardado && !vigente && !busy && (
+        <div className="notice notice-warn">
+          Las sesiones cambiaron desde este resumen ({timeAgo(guardado.at)}). Actualízalo para incorporar lo nuevo.
+        </div>
+      )}
       {result && (
         <>
           {result.themes.map((t, i) => (
@@ -1121,6 +1157,7 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
               Se descartaron {result.discardedThemes} {result.discardedThemes === 1 ? 'tema' : 'temas'} porque no citaban sesiones verificables.
             </p>
           )}
+          {guardado && <p className="muted small">Generado {timeAgo(guardado.at)}.</p>}
         </>
       )}
     </section>
