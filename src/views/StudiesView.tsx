@@ -8,6 +8,8 @@ import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
+import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
+import { informeHtml, informeMarkdown } from '../lib/report';
 import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
@@ -342,6 +344,8 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const sessions = !sinteticas || filtro === 'todas' ? todas : todas.filter((s) => (s.source === 'synthetic') === (filtro === 'sinteticas'));
   const events = db.events.filter((e) => sessions.some((s) => s.id === e.sessionId));
   const analysis = analyzeStudy(study, sessions, events);
+  // Todo el tablero se apoya en el mismo informe que se exporta: lo que se ve es lo que se manda.
+  const informe = useMemo(() => construirInforme(study, sessions, events), [study, sessions, events]);
   const snap = study.snapshot;
   const manage = can(role, 'runStudy');
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
@@ -503,6 +507,18 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
           />
         )}
         <div className="row">
+          <Button
+            size="sm"
+            tone="primary"
+            disabled={analysis.total === 0}
+            title="Documento con resumen ejecutivo, hallazgos priorizados y método, listo para imprimir o compartir"
+            onClick={() => download(`${slug(study.name)}-informe.html`, informeHtml(study, sessions, events, userName(db, study.owner)), 'text/html')}
+          >
+            Generar informe
+          </Button>
+          <Button size="sm" disabled={analysis.total === 0} onClick={() => void copyText(informeMarkdown(study, sessions, events), 'Copiaste el informe en texto. Pégalo en un correo o en un ticket.')}>
+            Copiar resumen
+          </Button>
           <Button size="sm" disabled={exporting} onClick={() => void exportJson()}>
             {exporting ? 'Preparando archivo…' : 'Exportar JSON'}
           </Button>
@@ -558,35 +574,65 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
         />
       ) : (
         <>
-          <Kpis o={overview(study, sessions, events, analysis)} />
+          <Tablero m={informe.metricas} hallazgos={informe.hallazgos} o={overview(study, sessions, events, analysis)} />
           <div className="study-grid">
             <div className="card study-body">
               <section className="card-section">
-                <h2 className="section-title">Tareas</h2>
+                <div className="section-head">
+                  <h2 className="section-title">Desempeño por tarea</h2>
+                  <span className="muted small">Pasos compara el recorrido real con el camino más corto del prototipo.</span>
+                </div>
                 <div className="table-wrap">
                   <table className="table">
                     <thead>
                       <tr>
                         <th>Tarea</th>
-                        <th>Completada</th>
-                        <th>Mediana de tiempo</th>
-                        <th>Toques sin acción</th>
+                        <th>Lograda</th>
+                        <th>Mediana</th>
+                        <th>Pasos</th>
                         <th>Dificultad</th>
+                        <th>Se pierde en</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {analysis.tasks.map((t) => (
+                      {informe.tareas.map((t) => (
                         <tr key={t.taskId}>
                           <td>{t.prompt}</td>
                           <td className="nowrap">
-                            <div className="bar" role="img" aria-label={`${Math.round(t.successRate * 100)}% completada`}>
-                              <span style={{ width: `${t.successRate * 100}%` }} />
+                            <div className="bar" role="img" aria-label={`${pct(t.exitoPct)} lograda`}>
+                              <span style={{ width: `${t.exitoPct * 100}%` }} />
                             </div>
-                            {t.success} de {t.started}
+                            {t.exito} de {t.personas}
+                            <span className="sub">IC {pct(t.ic[0])}–{pct(t.ic[1])}</span>
                           </td>
-                          <td>{t.medianMs != null ? fmtDuration(t.medianMs) : 'n/a'}</td>
-                          <td>{fmt1(t.avgMisclicks)} por sesión</td>
-                          <td>{t.avgDifficulty != null ? `${fmt1(t.avgDifficulty)} de 5` : 'n/a'}</td>
+                          <td className="nowrap">
+                            {t.medianaMs != null ? fmtDuration(t.medianaMs) : 'n/a'}
+                            {t.p75Ms != null && <span className="sub">75% bajo {fmtDuration(t.p75Ms)}</span>}
+                          </td>
+                          <td className="nowrap">
+                            {t.pasosMediana ?? 'n/a'}
+                            {t.pasosOptimos != null && <span className="sub">óptimo {t.pasosOptimos}</span>}
+                          </td>
+                          <td className="nowrap">
+                            {t.dificultad != null ? `${fmt1(t.dificultad)} de 5` : 'n/a'}
+                          </td>
+                          <td>
+                            {t.corte ? (
+                              <>
+                                {t.corte.desde} → {t.corte.hacia}
+                                <span className="sub">
+                                  −{t.corte.perdidos} {t.corte.perdidos === 1 ? 'persona' : 'personas'}
+                                </span>
+                              </>
+                            ) : t.fuga ? (
+                              <>
+                                {t.fuga.nombre}
+                                <span className="sub">{t.fuga.n} {t.fuga.n === 1 ? 'persona' : 'personas'}</span>
+                              </>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -594,24 +640,57 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                 </div>
               </section>
 
+              {informe.segmentos.length > 1 && (
+                <section className="card-section">
+                  <div className="section-head">
+                    <h2 className="section-title">Comparativa por perfil</h2>
+                    <span className="muted small">Arriba, a quien el flujo le exige más.</span>
+                  </div>
+                  <div className="table-wrap">
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Perfil o dispositivo</th>
+                          <th>Sesiones</th>
+                          <th>Tareas logradas</th>
+                          <th>Mediana</th>
+                          <th>Dificultad</th>
+                          <th>Toques sin acción</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {informe.segmentos.map((g) => (
+                          <tr key={g.nombre}>
+                            <td>{g.nombre}</td>
+                            <td>{g.n}</td>
+                            <td className="nowrap">
+                              <div className="bar" role="img" aria-label={`${pct(g.exitoPct)} logradas`}>
+                                <span style={{ width: `${g.exitoPct * 100}%` }} />
+                              </div>
+                              {pct(g.exitoPct)}
+                            </td>
+                            <td>{g.medianaMs != null ? fmtDuration(g.medianaMs) : 'n/a'}</td>
+                            <td>{g.dificultad != null ? `${fmt1(g.dificultad)} de 5` : 'n/a'}</td>
+                            <td>{fmt1(g.erroresPorPersona)} por sesión</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
               <Funnel study={study} sessions={sessions} events={events} />
 
               <section className="card-section">
-                <h2 className="section-title">Hallazgos</h2>
-                <p className="muted">Calculados a partir de los eventos de cada sesión. Cada cita abre el momento exacto.</p>
-                {analysis.themes.length === 0 && <p className="muted">No se detectaron dudas, bloqueos ni abandonos.</p>}
-                {analysis.themes.map((t) => (
-                  <article key={t.id} className="theme">
-                    <h3>{t.title}</h3>
-                    <p>{t.detail}</p>
-                    <div className="cites">
-                      {t.citations.map((c) => (
-                        <button key={`${c.sessionId}-${c.elapsed}`} type="button" className="cite" onClick={() => setOpenSession({ id: c.sessionId, at: c.elapsed })}>
-                          {c.participant} en {clock(c.elapsed)}
-                        </button>
-                      ))}
-                    </div>
-                  </article>
+                <div className="section-head">
+                  <h2 className="section-title">Hallazgos priorizados</h2>
+                  <span className="muted small">Ordenados por impacto sobre la tarea.</span>
+                </div>
+                <p className="muted">El impacto combina qué tan grave es el problema con cuánta gente lo vivió. Cada cita abre el momento exacto de esa sesión.</p>
+                {informe.hallazgos.length === 0 && <p className="muted">No se detectaron dudas, bloqueos ni abandonos.</p>}
+                {informe.hallazgos.map((h, i) => (
+                  <HallazgoCard key={h.id} h={h} orden={i + 1} onCita={(id, at) => setOpenSession({ id, at })} />
                 ))}
               </section>
 
@@ -765,27 +844,100 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   );
 }
 
-function Kpis({ o }: { o: Overview }) {
+/** Anillo del índice: la cifra que resume si el flujo está para construirse. */
+function Anillo({ valor }: { valor: number }) {
+  const r = 34;
+  const c = 2 * Math.PI * r;
+  const avance = (Math.max(0, Math.min(100, valor)) / 100) * c;
+  return (
+    <svg className="anillo" viewBox="0 0 84 84" role="img" aria-label={`Índice Forma ${valor} de 100`}>
+      <circle cx="42" cy="42" r={r} fill="none" stroke="var(--accent-line)" strokeWidth="8" />
+      <circle cx="42" cy="42" r={r} fill="none" stroke="var(--accent)" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${avance} ${c - avance}`} transform="rotate(-90 42 42)" />
+      <text x="42" y="48" textAnchor="middle" fontSize="22" fontWeight="600" fill="var(--ink)">
+        {valor}
+      </text>
+    </svg>
+  );
+}
+
+function Tablero({ m, hallazgos, o }: { m: Metricas; hallazgos: Hallazgo[]; o: Overview }) {
+  const prioritarios = hallazgos.filter((h) => h.severidad === 'critica' || h.severidad === 'alta').length;
   const items = [
-    { label: 'Sesiones', value: String(o.sessions), note: o.withAudio ? `${o.withAudio} con audio` : undefined },
-    { label: 'Tareas completadas', value: `${Math.round(o.completion * 100)}%` },
-    { label: 'Mediana por tarea', value: o.medianTaskMs != null ? fmtDuration(o.medianTaskMs) : 'n/a' },
-    { label: 'Dudas detectadas', value: String(o.hesitations) },
-    { label: 'Toques sin acción', value: fmt1(o.misclicksPerSession), note: 'por sesión' },
-    { label: 'Dificultad percibida', value: o.avgDifficulty != null ? fmt1(o.avgDifficulty) : 'n/a', note: 'de 5' },
+    { label: 'Tareas logradas', value: pct(m.exitoPct), note: `IC 95%: ${pct(m.ic[0])}–${pct(m.ic[1])}` },
+    { label: 'Mediana por tarea', value: m.medianaMs != null ? fmtDuration(m.medianaMs) : 'n/a', note: m.p75Ms != null ? `75% bajo ${fmtDuration(m.p75Ms)}` : undefined },
+    { label: 'Eficiencia de recorrido', value: m.eficiencia != null ? pct(m.eficiencia) : 'n/a', note: 'camino más corto vs. real' },
+    { label: 'Dificultad percibida', value: m.dificultad != null ? fmt1(m.dificultad) : 'n/a', note: 'de 5' },
+    { label: 'Toques sin acción', value: fmt1(m.erroresPorSesion), note: 'por sesión' },
+    { label: 'Dudas detectadas', value: String(o.hesitations), note: `${fmt1(m.dudasPorSesion)} por sesión` },
+    { label: 'Hallazgos prioritarios', value: String(prioritarios), note: 'severidad crítica o alta' },
+    { label: 'Sesiones', value: String(m.sesiones), note: m.sinteticas ? `${m.reales} reales · ${m.sinteticas} sintéticas` : o.withAudio ? `${o.withAudio} con audio` : undefined },
   ];
   return (
-    <dl className="kpis card">
-      {items.map((i) => (
-        <div key={i.label}>
-          <dt>{i.label}</dt>
-          <dd>
-            {i.value}
-            {i.note && <span> {i.note}</span>}
-          </dd>
+    <section className="card tablero">
+      {m.indice != null && (
+        <div className="tablero-indice">
+          <Anillo valor={m.indice} />
+          <div>
+            <h2>
+              Índice Forma <strong>{m.indice}</strong> <span className="muted">de 100</span>
+            </h2>
+            <p>{m.lectura}</p>
+            <p className="muted small">Combina tareas logradas (45%), eficiencia frente al camino más corto (25%) y esfuerzo percibido (30%).</p>
+          </div>
+          {m.confianza !== 'alta' && (
+            <span className="aviso-muestra">
+              Muestra {m.confianza === 'media' ? 'acotada' : 'exploratoria'}: {m.sesiones} {m.sesiones === 1 ? 'sesión' : 'sesiones'}. Sirve para priorizar, no para afirmar magnitudes.
+            </span>
+          )}
         </div>
-      ))}
-    </dl>
+      )}
+      <dl className="kpis">
+        {items.map((i) => (
+          <div key={i.label}>
+            <dt>{i.label}</dt>
+            <dd>
+              {i.value}
+              {i.note && <span> {i.note}</span>}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
+function HallazgoCard({ h, orden, onCita }: { h: Hallazgo; orden: number; onCita: (sessionId: string, at: number) => void }) {
+  return (
+    <article className={`hallazgo sev-${h.severidad}`}>
+      <header>
+        <span className="hallazgo-orden">{String(orden).padStart(2, '0')}</span>
+        <div>
+          <h3>{h.titulo}</h3>
+          <p className="hallazgo-meta">
+            <span className="sev-chip">{SEVERIDAD_LABEL[h.severidad]}</span>
+            <span>afecta a {h.afectados} de {h.total}</span>
+            <span>impacto {h.puntaje}/100</span>
+            {h.segmentos.length > 0 && <span>se concentra en {h.segmentos.join(', ')}</span>}
+          </p>
+        </div>
+      </header>
+      <ul className="hallazgo-evidencia">
+        {h.evidencia.map((e) => (
+          <li key={e}>{e}</li>
+        ))}
+      </ul>
+      <p className="hallazgo-accion">
+        <span>Qué hacer</span>
+        {h.recomendacion}
+      </p>
+      <div className="cites">
+        {h.citations.map((c) => (
+          <button key={`${c.sessionId}-${c.elapsed}`} type="button" className="cite" onClick={() => onCita(c.sessionId, c.elapsed)}>
+            {c.participant} en {clock(c.elapsed)}
+          </button>
+        ))}
+      </div>
+    </article>
   );
 }
 

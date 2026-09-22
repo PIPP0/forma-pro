@@ -376,6 +376,8 @@ export interface Session {
   source: 'local' | 'import' | 'example' | 'cloud' | 'synthetic';
   /** Persona sintética que produjo la sesión, cuando no hubo alguien real. */
   syntheticId?: string;
+  /** Circunstancia en que ocurrió la sesión, ej: «en la calle, a una mano». */
+  context?: string;
   /** Última actualización recibida desde la nube (solo sesiones que llegaron solas). */
   cloudUpdatedAt?: number;
   startedAt: number;

@@ -159,45 +159,217 @@ function distanciasAlObjetivo(p: Project, objetivo: string): Map<string, number>
   }
   return dist;
 }
-
 const entre = (n: number, min: number, max: number) => Math.max(min, Math.min(max, n));
 
-/** Frases de cierre, en la voz de cada perfil, según cómo le fue. */
-function comentario(u: SyntheticUser, errores: number, dudas: number, logrado: boolean, pantalla: string, azar: () => number): string | undefined {
+type Rasgos = SyntheticUser['traits'];
+
+/** En qué circunstancia ocurre la sesión. Dos personas del mismo perfil casi nunca llegan igual. */
+interface Contexto {
+  id: string;
+  etiqueta: string;
+  ajuste: Partial<Rasgos>;
+  /** Peso por perfil: quién llega más seguido en esta circunstancia. */
+  peso: (u: SyntheticUser) => number;
+  nota?: string;
+}
+
+const CONTEXTOS: Contexto[] = [
+  {
+    id: 'tranquilo',
+    etiqueta: 'en casa, con tiempo',
+    ajuste: { paciencia: 1, lectura: 1, prisa: -1 },
+    peso: (u) => (u.traits.prisa <= 2 ? 3 : 1),
+  },
+  {
+    id: 'movimiento',
+    etiqueta: 'en la calle, a una mano',
+    ajuste: { paciencia: -1, lectura: -1, prisa: 1 },
+    peso: (u) => (u.traits.digital >= 4 ? 3 : 1),
+    nota: 'Iba caminando, lo hice a una mano.',
+  },
+  {
+    id: 'interrumpido',
+    etiqueta: 'entre interrupciones',
+    ajuste: { paciencia: -1, prisa: 1 },
+    peso: (u) => (u.segment === 'Familiar' ? 4 : 2),
+    nota: 'Me interrumpieron a la mitad y tuve que retomar.',
+  },
+  {
+    id: 'apuro',
+    etiqueta: 'con el tiempo justo',
+    ajuste: { paciencia: -2, lectura: -1, prisa: 2 },
+    peso: (u) => (u.traits.prisa >= 4 ? 3 : 1),
+    nota: 'Andaba con el tiempo justo.',
+  },
+  {
+    id: 'primera',
+    etiqueta: 'primera vez en esta app',
+    ajuste: { digital: -1, lectura: 1, prisa: -1 },
+    peso: (u) => (u.traits.digital <= 2 ? 3 : 1),
+    nota: 'Es primera vez que entro a algo así.',
+  },
+  {
+    id: 'rutina',
+    etiqueta: 'algo que ya hace seguido',
+    ajuste: { digital: 1, lectura: -1 },
+    peso: (u) => (u.traits.digital >= 3 ? 2 : 1),
+  },
+];
+
+/** Elige contexto con la ruleta ponderada del perfil. */
+function contextoDe(u: SyntheticUser, azar: () => number): Contexto {
+  const pesos = CONTEXTOS.map((c) => c.peso(u));
+  const suma = pesos.reduce((a, b) => a + b, 0);
+  let corte = azar() * suma;
+  for (let i = 0; i < CONTEXTOS.length; i++) {
+    corte -= pesos[i];
+    if (corte <= 0) return CONTEXTOS[i];
+  }
+  return CONTEXTOS[CONTEXTOS.length - 1];
+}
+
+/** El perfil marca la tendencia; el día y el ánimo la mueven un punto arriba o abajo. */
+function rasgosDelDia(u: SyntheticUser, ctx: Contexto, azar: () => number): Rasgos {
+  const ruido = () => (azar() < 0.22 ? -1 : azar() < 0.28 ? 1 : 0);
+  const r = { ...u.traits };
+  for (const k of Object.keys(r) as (keyof Rasgos)[]) r[k] = entre(r[k] + (ctx.ajuste[k] ?? 0) + ruido(), 1, 5);
+  return r;
+}
+
+/** Tamaños reales de pantalla: no todo el mundo prueba en el mismo teléfono. */
+const PANTALLAS: Record<Breakpoint, [number, number][]> = {
+  mobile: [
+    [375, 667],
+    [390, 844],
+    [393, 852],
+    [412, 915],
+    [430, 932],
+  ],
+  tablet: [
+    [768, 1024],
+    [834, 1112],
+  ],
+  desktop: [
+    [1366, 768],
+    [1440, 900],
+    [1680, 1050],
+  ],
+};
+
+interface Dolor {
+  pantalla: string;
+  elemento: string;
+  tipo: 'duda' | 'toque' | 'desvio' | 'campo';
+}
+
+interface Cierre {
+  logrado: boolean;
+  errores: number;
+  dudas: number;
+  desvios: number;
+  bloqueos: number;
+  dolor?: Dolor;
+  pantalla: string;
+}
+
+const elegir = <T,>(xs: T[], azar: () => number) => xs[Math.floor(azar() * xs.length)];
+
+/** Elige sin repetir dentro de la misma sesión: nadie dice dos veces exactamente lo mismo. */
+function elegirNuevo(xs: string[], dichas: Set<string>, azar: () => number): string {
+  const libres = xs.filter((x) => !dichas.has(x));
+  const elegido = elegir(libres.length ? libres : xs, azar);
+  dichas.add(elegido);
+  return elegido;
+}
+
+/** Coletillas propias de cada perfil: lo que esa persona siempre termina diciendo. */
+const MANIAS: Record<string, string[]> = {
+  sy_universitario: ['Muy largo para lo simple que era.', 'Esperaba resolverlo en dos toques.', 'Si esto me pasa apurado, lo dejo para después.', 'Prefiero mil veces hacerlo desde el celular, pero rápido.'],
+  sy_masivo: ['Me habría gustado ver el saldo antes de confirmar.', 'Quedé con la duda de si se hizo o no.', 'Necesito el comprobante a mano, si no, no me quedo tranquila.', 'Con la plata justa uno no puede equivocarse.'],
+  sy_preferencial: ['Faltó el detalle: quiero ver los números antes de aceptar.', 'No vi dónde comparar las opciones.', 'Me falta saber el costo total, no solo la cuota.', 'Si no está la letra chica a la vista, desconfío.'],
+  sy_premium: ['Demasiados pasos para algo que debería ser inmediato.', 'Si me pasa esto, termino llamando a mi ejecutiva.', 'No tengo tiempo de andar buscando dónde está cada cosa.', 'Esperaba tenerlo en la primera pantalla.'],
+  sy_mayor: ['La letra es chica y los botones quedan muy juntos.', 'Me habría ayudado un aviso de que iba bien encaminado.', 'Prefiero ir despacio y estar seguro de lo que aprieto.', 'Cuando cambia de lugar un botón, me pierdo.'],
+  sy_familiar: ['Si me interrumpen aquí, pierdo lo que llevaba.', 'No distinguí bien entre una cuenta y la otra.', 'Necesito poder retomar donde iba.', 'Lo hago en ratos cortos, tiene que ser rápido de volver.'],
+};
+
+/**
+ * Comentario de cierre: se arma con la circunstancia, lo que pasó y dónde pasó.
+ * Cada parte se elige aparte, así dos sesiones del mismo perfil casi nunca dicen lo mismo.
+ */
+function comentario(u: SyntheticUser, ctx: Contexto, c: Cierre, dichas: Set<string>, azar: () => number): string | undefined {
+  const donde = c.dolor?.pantalla ?? c.pantalla;
+  const que = c.dolor?.elemento;
+  const conElemento = que ? `«${que}»` : 'lo que había que tocar';
+
   const facil = [
     'Se entendió al tiro, no tuve que pensarlo.',
     'Fue directo, justo lo que esperaba.',
     'Claro. Terminé antes de lo que creía.',
+    `Encontré ${conElemento} de inmediato.`,
+    'Sin vueltas: hice lo que venía a hacer y salí.',
+    'Me resultó obvio dónde seguir en cada paso.',
   ];
   const dudo = [
-    `En «${pantalla}» dudé un rato: no tenía claro qué tocar.`,
-    `Me detuve en «${pantalla}» porque no sabía si esa era la opción.`,
-    `Tuve que leer dos veces «${pantalla}» para decidir.`,
+    `En «${donde}» me detuve: no tenía claro si ${conElemento} era lo correcto.`,
+    `Dudé un rato en «${donde}». Tuve que leer dos veces para decidirme.`,
+    `Me quedé mirando «${donde}» sin saber por dónde seguía.`,
+    `${conElemento[0].toUpperCase()}${conElemento.slice(1)} no me decía del todo qué iba a pasar al tocarlo.`,
+    `Avancé, pero no con la seguridad que me gustaría en «${donde}».`,
   ];
-  const fallo = [
-    `Toqué donde no era en «${pantalla}» y no pasó nada.`,
-    `Me perdí en «${pantalla}»; probé por otro lado y volví.`,
-    `En «${pantalla}» me fui por el camino equivocado.`,
+  const toque = [
+    `Toqué en «${donde}» donde creí que había algo y no pasó nada.`,
+    `Le di a ${conElemento} y no reaccionó como esperaba.`,
+    `En «${donde}» probé un par de cosas antes de dar con la buena.`,
+    `Me confundí: en «${donde}» hay cosas que parecen botones y no lo son.`,
+  ];
+  const desvio = [
+    `Me fui para «${donde}» pensando que por ahí era, y tuve que volver.`,
+    `Terminé en «${donde}» sin querer y perdí el hilo.`,
+    `Entré a ${conElemento} buscando otra cosa y me desvié.`,
+    `Di una vuelta larga: pasé por «${donde}» y no era por ahí.`,
+  ];
+  const campo = [
+    `Intenté continuar en «${donde}» y me frenó sin decirme claramente qué faltaba.`,
+    `No me di cuenta de que había un campo obligatorio hasta que no me dejó avanzar.`,
+    `El botón de «${donde}» no hacía nada y recién ahí vi lo que faltaba llenar.`,
   ];
   const abandono = [
-    `No encontré cómo seguir desde «${pantalla}».`,
-    `Me quedé dando vueltas en «${pantalla}» y preferí dejarlo.`,
-    `Después de intentarlo varias veces en «${pantalla}», lo dejé.`,
+    `No encontré cómo seguir desde «${donde}».`,
+    `Me quedé dando vueltas en «${donde}» y preferí dejarlo.`,
+    `Después de varios intentos en «${donde}», lo dejé hasta ahí.`,
+    `No me resultó. En «${donde}» me rendí.`,
+    `Habría preguntado en una sucursal antes que seguir peleando con «${donde}».`,
   ];
-  const propias: Record<string, string[]> = {
-    sy_universitario: ['Muy largo para lo simple que era.', 'Esperaba resolverlo en dos toques.'],
-    sy_masivo: ['Me habría gustado ver el saldo antes de confirmar.', 'Quedé con la duda de si se hizo o no.'],
-    sy_preferencial: ['Faltó el detalle: quiero ver los números antes de aceptar.', 'No vi dónde comparar las opciones.'],
-    sy_premium: ['Demasiados pasos para algo que debería ser inmediato.', 'Si me pasa esto, termino llamando a mi ejecutiva.'],
-    sy_mayor: ['La letra es chica y los botones quedan muy juntos.', 'Me habría ayudado un aviso de que iba bien encaminado.'],
-    sy_familiar: ['Si me interrumpen aquí, pierdo lo que llevaba.', 'No distinguí bien entre una cuenta y la otra.'],
-  };
-  const pool = !logrado ? abandono : errores > 0 ? fallo : dudas > 0 ? dudo : facil;
-  const base = pool[Math.floor(azar() * pool.length)];
-  const extra = propias[u.id] ?? [];
-  // Cuando algo salió mal, la persona suele agregar su propia manía.
-  if (extra.length && (errores > 0 || !logrado || azar() < 0.3)) return `${base} ${extra[Math.floor(azar() * extra.length)]}`;
-  return errores === 0 && dudas === 0 && azar() < 0.45 ? undefined : base;
+
+  const pool = !c.logrado
+    ? abandono
+    : c.bloqueos > 0 && (c.dolor?.tipo === 'campo' || azar() < 0.5)
+      ? campo
+      : c.desvios > 0 && (c.dolor?.tipo === 'desvio' || azar() < 0.5)
+        ? desvio
+        : c.errores > 0
+          ? toque
+          : c.dudas > 0
+            ? dudo
+            : facil;
+
+  const partes = [elegirNuevo(pool, dichas, azar)];
+  // La circunstancia se menciona una sola vez por sesión, cuando explica algo de lo que pasó.
+  if (ctx.nota && !dichas.has(ctx.nota) && (!c.logrado || c.errores > 0 || azar() < 0.35)) {
+    dichas.add(ctx.nota);
+    partes.unshift(ctx.nota);
+  }
+  const manias = (MANIAS[u.id] ?? []).filter((m) => !dichas.has(m));
+  if (manias.length && (!c.logrado || c.errores > 0 || c.bloqueos > 0 || azar() < 0.35)) partes.push(elegirNuevo(manias, dichas, azar));
+
+  // Quien logra todo sin tropiezos a veces no comenta nada, como en la vida real.
+  if (c.logrado && c.errores === 0 && c.dudas === 0 && c.bloqueos === 0 && azar() < 0.4) return undefined;
+  return partes.join(' ');
+}
+
+/** Campos obligatorios que hay que llenar antes de avanzar en esta pantalla. */
+function camposRequeridos(s: Screen) {
+  return s.blocks.filter((b) => b.required && (b.type === 'input' || b.type === 'select' || b.type === 'textarea'));
 }
 
 /** Recorre el prototipo con una persona y devuelve su sesión con todos los eventos. */
@@ -208,26 +380,45 @@ export function simularSesion(study: Study, persona: SyntheticUser, indice: numb
   const sessionId = uid('se_');
   const events: StudyEvent[] = [];
   const feedback: TaskFeedback[] = [];
-  const t = persona.traits;
+  const ctx = contextoDe(persona, azar);
+  // Lo que esta persona ya dijo: evita que las dos tareas suenen calcadas.
+  const dichas = new Set<string>();
+  const base = rasgosDelDia(persona, ctx, azar);
+  // Ritmo personal: hay gente que hace lo mismo al doble de velocidad.
+  const ritmo = 0.7 + azar() * 0.75;
   let reloj = 0;
 
   const anotar = (e: Omit<StudyEvent, 'id' | 'sessionId' | 'elapsed'>) => {
     events.push({ ...e, id: uid('ev_'), sessionId, elapsed: reloj });
   };
 
-  for (const tarea of study.tasks) {
+  study.tasks.forEach((tarea, iTarea) => {
     const inicioTarea = reloj;
+    // Cansancio y aprendizaje: al avanzar el estudio hay menos paciencia, pero más oficio.
+    const fatiga = study.tasks.length > 1 ? iTarea / (study.tasks.length - 1) : 0;
+    const t: Rasgos = {
+      digital: entre(base.digital + (fatiga > 0.5 ? 1 : 0), 1, 5),
+      paciencia: entre(Math.round(base.paciencia - fatiga * 1.5), 1, 5),
+      lectura: entre(Math.round(base.lectura - fatiga), 1, 5),
+      cautela: base.cautela,
+      prisa: entre(Math.round(base.prisa + fatiga * 1.5), 1, 5),
+    };
     const distancias = distanciasAlObjetivo(p, tarea.successScreenId);
     const baseDe = (id: string) => {
       const s = p.screens.find((x) => x.id === id);
       return s ? baseId(s) : id;
     };
     let actual = p.screens.find((s) => s.id === tarea.startScreenId) ?? p.screens[0];
+    let anterior: Screen | undefined;
     let errores = 0;
     let dudas = 0;
+    let desvios = 0;
+    let bloqueos = 0;
     let pasos = 0;
     let logrado = false;
+    let dolor: Dolor | undefined;
     let ultima = actual.name;
+    const llenados = new Set<string>();
     // La paciencia marca cuántos tropiezos aguanta antes de rendirse.
     const tope = 2 + t.paciencia;
     const maxPasos = 4 + study.tasks.length * 2 + t.paciencia * 2;
@@ -245,7 +436,7 @@ export function simularSesion(study: Study, persona: SyntheticUser, indice: numb
 
       // Leer y decidir: quien lee más tarda más, quien anda con prisa tarda menos.
       const lectura = 700 + t.lectura * 420 + salidas.length * 130 - t.prisa * 120;
-      const pensar = Math.max(320, lectura * (0.6 + azar() * 0.8));
+      const pensar = Math.max(320, lectura * (0.6 + azar() * 0.8) * ritmo);
       reloj += Math.round(pensar);
 
       // Elegir salida: la que acerca al objetivo, salvo que se equivoque.
@@ -254,25 +445,53 @@ export function simularSesion(study: Study, persona: SyntheticUser, indice: numb
       const alternativas = puntuadas.filter((x) => x.s.destino !== mejor.s.destino);
       const probError = entre(0.34 - t.digital * 0.05 - t.lectura * 0.03 + t.prisa * 0.025 + (salidas.length - 2) * 0.04, 0.02, 0.55);
       const elegida = alternativas.length && azar() < probError ? alternativas[Math.floor(azar() * alternativas.length)] : mejor;
-      if (elegida.d > mejor.d) errores++;
+      const desvia = elegida.d > mejor.d;
+      if (desvia) {
+        errores++;
+        desvios++;
+        dolor = { pantalla: p.screens.find((s) => s.id === elegida.s.destino)?.name ?? actual.name, elemento: elegida.s.etiqueta, tipo: 'desvio' };
+      }
+
+      // Campos obligatorios: con prisa se intenta avanzar antes de llenarlos.
+      const requeridos = camposRequeridos(actual).filter((b) => !llenados.has(b.id));
+      if (requeridos.length) {
+        const saltaLectura = azar() < entre(0.2 + t.prisa * 0.1 - t.lectura * 0.05 - t.cautela * 0.04, 0.05, 0.6);
+        if (saltaLectura) {
+          bloqueos++;
+          errores++;
+          dolor = { pantalla: actual.name, elemento: elegida.s.etiqueta, tipo: 'campo' };
+          anotar({ kind: 'blocked', taskId: tarea.id, screen: actual.id, block: elegida.s.elemento, x: elegida.s.x, y: elegida.s.y });
+          reloj += Math.round((1400 + azar() * 2200) * ritmo);
+        }
+        for (const campo of requeridos) {
+          llenados.add(campo.id);
+          anotar({ kind: 'input', taskId: tarea.id, screen: actual.id, block: campo.id, x: 0.5, y: 0.5 });
+          reloj += Math.round((1800 + azar() * 2600 + (5 - t.digital) * 700) * ritmo);
+        }
+      }
 
       // Duda: se queda mirando el elemento antes de tocarlo. Queda anotada sobre ese elemento.
       const probDuda = entre(0.36 - t.digital * 0.05 + (5 - t.paciencia) * 0.02 + (salidas.length - 1) * 0.05, 0.03, 0.6);
       if (azar() < probDuda) {
         dudas++;
-        const dwell = 2600 + Math.round(azar() * 3200) + (5 - t.digital) * 500;
+        const dwell = Math.round((2600 + azar() * 3200 + (5 - t.digital) * 500) * ritmo);
+        if (!dolor || dwell > 5000) dolor = { pantalla: actual.name, elemento: elegida.s.etiqueta, tipo: 'duda' };
         anotar({ kind: 'hesitation', taskId: tarea.id, screen: actual.id, block: elegida.s.elemento, x: elegida.s.x, y: elegida.s.y, dwell });
         reloj += dwell;
       }
 
       // Toque sin acción: más probable con poca soltura digital y mucha prisa.
-      const probMisclick = entre(0.3 - t.digital * 0.045 + t.prisa * 0.02 - t.lectura * 0.015, 0.02, 0.45);
-      if (azar() < probMisclick) {
+      const probMisclick = entre(0.2 - t.digital * 0.035 + t.prisa * 0.01 - t.lectura * 0.005, 0.02, 0.3);
+      let toquesVacios = 0;
+      // Insistir dos veces en el mismo punto muerto es raro; tres, casi nunca.
+      while (toquesVacios < 2 && azar() < probMisclick / (toquesVacios * 3 + 1)) {
+        toquesVacios++;
         errores++;
+        if (!dolor) dolor = { pantalla: actual.name, elemento: elegida.s.etiqueta, tipo: 'toque' };
         anotar({ kind: 'misclick', taskId: tarea.id, screen: actual.id, x: 0.2 + azar() * 0.6, y: 0.2 + azar() * 0.6 });
-        reloj += 900 + Math.round(azar() * 1200);
-        if (errores > tope) break;
+        reloj += Math.round((900 + azar() * 1200) * ritmo);
       }
+      if (errores > tope) break;
 
       const jitter = (n: number) => entre(n + (azar() - 0.5) * 0.06, 0.02, 0.98);
       anotar({
@@ -285,34 +504,46 @@ export function simularSesion(study: Study, persona: SyntheticUser, indice: numb
         bx: entre(0.5 + (azar() - 0.5) * 0.7, 0.05, 0.95),
         by: entre(0.5 + (azar() - 0.5) * 0.6, 0.1, 0.9),
       });
-      reloj += 260 + Math.round(azar() * 260);
+      reloj += Math.round((260 + azar() * 260) * ritmo);
 
       const siguiente = p.screens.find((s) => s.id === elegida.s.destino);
       if (!siguiente) break;
+      anterior = actual;
       actual = siguiente;
       pasos++;
       anotar({ kind: 'navigate', taskId: tarea.id, screen: actual.id, x: 0.5, y: 0.5 });
       if (errores > tope) break;
+
+      // Volver atrás: quien se dio cuenta del desvío rehace el camino en vez de seguir perdido.
+      if (desvia && anterior && azar() < entre(0.25 + t.digital * 0.1 + t.cautela * 0.05, 0.2, 0.85)) {
+        reloj += Math.round((900 + azar() * 1800) * ritmo);
+        actual = anterior;
+        pasos++;
+        anotar({ kind: 'navigate', taskId: tarea.id, screen: actual.id, x: 0.5, y: 0.5 });
+      }
     }
 
     if (baseDe(actual.id) === baseDe(tarea.successScreenId)) logrado = true;
     anotar({ kind: logrado ? 'task_success' : 'task_giveup', taskId: tarea.id, screen: actual.id, x: 0.5, y: 0.5 });
 
-    // Dificultad percibida: parte del sesgo del perfil y sube con cada tropiezo.
+    // Dificultad percibida: parte del sesgo del perfil, sube con cada tropiezo y nunca es del todo previsible.
     const sesgo = 1.4 + (5 - t.digital) * 0.35 + (5 - t.paciencia) * 0.15;
-    const dificultad = entre(Math.round(sesgo + errores * 0.9 + dudas * 0.4 + (logrado ? 0 : 1.2)), 1, 5);
+    // Quien no tropezó no califica difícil; el resto tiene un día mejor o peor.
+    const tropiezos = errores + dudas + bloqueos;
+    const humor = tropiezos === 0 ? (azar() < 0.25 ? -1 : 0) : azar() < 0.3 ? (azar() < 0.5 ? -1 : 1) : 0;
+    const dificultad = entre(Math.round(sesgo + errores * 0.75 + dudas * 0.4 + bloqueos * 0.5 + (logrado ? 0 : 1.2) + humor), 1, 5);
     feedback.push({
       taskId: tarea.id,
       outcome: logrado ? 'success' : 'giveup',
       difficulty: dificultad,
-      comment: comentario(persona, errores, dudas, logrado, ultima, azar),
+      comment: comentario(persona, ctx, { logrado, errores, dudas, desvios, bloqueos, dolor, pantalla: ultima }, dichas, azar),
       durationMs: Math.max(1500, reloj - inicioTarea),
     });
-    reloj += 1200;
-  }
+    reloj += Math.round((1200 + azar() * 1600) * ritmo);
+  });
 
-  const anchos: Record<Breakpoint, [number, number]> = { mobile: [390, 844], tablet: [834, 1112], desktop: [1440, 900] };
-  const [w, h] = anchos[persona.device] ?? anchos.mobile;
+  const opciones = PANTALLAS[persona.device] ?? PANTALLAS.mobile;
+  const [w, h] = opciones[Math.floor(azar() * opciones.length)];
   const session: Session = {
     id: sessionId,
     studyId: study.id,
@@ -323,6 +554,7 @@ export function simularSesion(study: Study, persona: SyntheticUser, indice: numb
     status: 'completed',
     source: 'synthetic',
     syntheticId: persona.id,
+    context: ctx.etiqueta,
     startedAt: t0,
     endedAt: t0 + reloj,
   };
