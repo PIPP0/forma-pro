@@ -7,7 +7,17 @@ import { uid } from './ids';
 // La IA propone, la persona decide: nada de lo que devuelve este módulo se aplica solo.
 
 const KEY = 'formapro.ai.key';
-export const AI_MODEL = 'claude-opus-5';
+
+/**
+ * Un modelo por tipo de tarea, no el más caro para todo.
+ * Sintetizar sesiones o revisar una pantalla es trabajo acotado y estructurado: lo resuelve Haiku.
+ * Proponer pantallas o leer un sistema de diseño ajeno tiene criterio de por medio: ahí va Sonnet.
+ */
+export const AI_MODELS = {
+  analisis: 'claude-haiku-4-5',
+  diseno: 'claude-sonnet-5',
+} as const;
+export const AI_MODEL = AI_MODELS.diseno;
 
 export const getAiKey = () => {
   try {
@@ -89,18 +99,20 @@ export async function fileToImage(file: File): Promise<ImageInput> {
   }
 }
 
-async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>): Promise<T> {
+async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>, model: string = AI_MODELS.diseno): Promise<T> {
   const apiKey = getAiKey();
   if (!apiKey) throw new AiError('Agrega tu clave de API de Anthropic en Ajustes para usar la IA.');
   // El SDK se carga solo cuando alguien usa la IA, para no pesar en la carga inicial.
   const { default: Sdk } = await import('@anthropic-ai/sdk');
   try {
+    // El razonamiento adaptativo existe desde la generación 4.6; Haiku 4.5 no lo acepta.
+    const razona = model.startsWith('claude-haiku-4-5') ? {} : { thinking: { type: 'adaptive' as const } };
     const stream = new Sdk({ apiKey, dangerouslyAllowBrowser: true }).beta.messages.stream({
-      model: AI_MODEL,
+      model,
       max_tokens: 32000,
       betas: ['server-side-fallback-2026-07-01'],
       fallbacks: 'default',
-      thinking: { type: 'adaptive' },
+      ...razona,
       output_config: { format: { type: 'json_schema', schema } },
       system,
       messages: turns.map((t) => ({ role: t.role, content: t.content })),
@@ -168,7 +180,7 @@ export async function summarizeResearch(
     'El título debe incluir el conteo exacto de personas respaldado por esas citas, con la forma «X de N personas…», donde N es el total de sesiones.',
     'El detalle explica qué pasó y por qué importa para el diseño, sin inventar causas que los datos no muestran. Escribe en español neutro, frases breves.',
   ].join('\n');
-  const out = await askJson<{ themes: AiTheme[] }>(system, [{ role: 'user', content: JSON.stringify(dataset) }], schema);
+  const out = await askJson<{ themes: AiTheme[] }>(system, [{ role: 'user', content: JSON.stringify(dataset) }], schema, AI_MODELS.analisis);
   let discardedThemes = 0;
   const themes: VerifiedTheme[] = [];
   for (const t of out.themes ?? []) {
@@ -465,5 +477,6 @@ export async function critiqueScreen(project: Project, screen: Screen, issues: I
     system,
     [{ role: 'user', content: JSON.stringify({ pantalla: screen, hallazgos_automaticos: issues.map((i) => i.message) }) }],
     schema,
+    AI_MODELS.analisis,
   );
 }

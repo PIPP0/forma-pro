@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { currentUser, exportWorkspace, importWorkspace, resetWorkspace, useDb } from '../lib/store';
-import { AI_MODEL, getAiKey, setAiKey } from '../lib/ai';
+import { AI_MODELS, getAiKey, setAiKey } from '../lib/ai';
 import { download } from '../lib/share';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
@@ -33,7 +33,8 @@ export function SettingsView() {
       <section className="section">
         <h2 className="section-title">Inteligencia artificial</h2>
         <p className="muted">
-          El copiloto y el resumen de investigación usan la API de Anthropic con el modelo <code>{AI_MODEL}</code>. La clave se guarda solo en este navegador y se envía únicamente a api.anthropic.com. No se incluye en los respaldos.
+          El asistente de diseño usa <code>{AI_MODELS.diseno}</code> y el resumen de investigación, <code>{AI_MODELS.analisis}</code>: cada tarea con el modelo que le corresponde, para no pagar de más. La clave se
+          guarda solo en este navegador, se envía únicamente a api.anthropic.com y no se incluye en los respaldos.
         </p>
         <div className="row">
           {hasKey ? <Badge tone="ok">Clave configurada</Badge> : <Badge>Sin clave</Badge>}
