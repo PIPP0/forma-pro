@@ -103,6 +103,14 @@ export async function completeAccessLink(): Promise<CloudAccount> {
   return { uid: user.uid, email: user.email ?? email };
 }
 
+/** Credencial de la sesión actual para llamar a las funciones del proyecto. Vacía si la cuenta es anónima. */
+export async function idTokenConCorreo(): Promise<string | null> {
+  const c = await cloud();
+  const u = c.auth.currentUser;
+  if (!u || u.isAnonymous || !u.email) return null;
+  return u.getIdToken();
+}
+
 export async function disconnectCloud() {
   const c = await cloud();
   await c.fa.signOut(c.auth);

@@ -18,6 +18,14 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // La configuración y el consumo de la IA solo los toca el servidor (Admin SDK): nadie los lee desde el cliente.
+    match /config/{doc} {
+      allow read, write: if false;
+    }
+    match /iaUso/{doc} {
+      allow read, write: if false;
+    }
+
     match /studies/{studyId} {
       allow read, delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
       allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;

@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "deploy:ia": "gcloud functions deploy ia --gen2 --runtime=nodejs22 --region=southamerica-west1 --source=functions --entry-point=ia --trigger-http --allow-unauthenticated --memory=512Mi --timeout=300s --set-secrets=ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest --project=forma-pro-cl26",
+    "deploy:iauso": "gcloud functions deploy iaUso --gen2 --runtime=nodejs22 --region=southamerica-west1 --source=functions --entry-point=iaUso --trigger-http --allow-unauthenticated --memory=256Mi --timeout=60s --project=forma-pro-cl26"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.125.0",

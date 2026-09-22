@@ -121,3 +121,18 @@ La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido 
 - Cada zona muestra un punto a su derecha: arrástralo hasta otra pantalla para conectarla.
 - Las flechas entre zonas y pantallas se dibujan sobre el lienzo.
 - Una zona seleccionada se mueve arrastrándola y se ajusta desde sus esquinas: sirve cuando Figma trae la flecha en el frame completo y solo un botón debería avanzar.
+
+## IA del equipo
+
+La clave de Anthropic vive en el proyecto en la nube (`forma-pro-cl26`), no en los navegadores: quien tenga su correo en la lista autorizada usa el asistente y el resumen de investigación desde cualquier equipo, solo con guardar su acceso por correo en Ajustes.
+
+- La función `ia` (Cloud Functions, `southamerica-west1`) valida el token de Firebase, comprueba que el correo esté autorizado, aplica la cuota del mes y recién entonces llama a la API con la clave del servidor.
+- `config/ia` en Firestore guarda `correos`, `topeUsuarioUsd` y `topeTotalUsd`. Solo lo lee el servidor: las reglas lo bloquean para todo cliente.
+- Cada llamada anota el consumo real en `iaUso/{uid}_{AAAAMM}`, que es lo que Ajustes muestra como gasto del mes.
+- Quien prefiera pagar de su cuenta puede guardar su propia clave en Ajustes; mientras exista, esa clave manda y el equipo no gasta.
+
+Desplegar: `npm run deploy:ia` y `npm run deploy:iauso`. La clave se carga aparte, sin pasar por el repositorio:
+
+```
+printf %s "$(pbpaste)" | gcloud secrets versions add ANTHROPIC_API_KEY --data-file=- --project=forma-pro-cl26
+```

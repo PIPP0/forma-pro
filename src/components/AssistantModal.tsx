@@ -3,7 +3,8 @@ import type { Project, Role } from '../lib/model';
 import { applyOps } from '../lib/store';
 import { can } from '../lib/permissions';
 import { edit } from '../lib/ops';
-import { fileToImage, generateScreen, getAiKey, proposalToScreen, type ImageInput, type ScreenProposal } from '../lib/ai';
+import { useCloudAccount } from './useCloudAccount';
+import { fileToImage, generateScreen, iaDisponible, proposalToScreen, type ImageInput, type ScreenProposal } from '../lib/ai';
 import { notify } from '../lib/toast';
 import { go, href } from '../lib/router';
 import { ScreenCanvas } from './ScreenCanvas';
@@ -20,7 +21,8 @@ export function AssistantModal({ project, role, open, onClose }: { project: Proj
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [proposal, setProposal] = useState<ScreenProposal | null>(null);
-  const hasKey = open && !!getAiKey();
+  const { account } = useCloudAccount();
+  const hasKey = open && iaDisponible(account?.email) !== 'no';
   const screen = useMemo(() => (proposal ? proposalToScreen(project, proposal) : null), [proposal, project]);
 
   const close = () => {

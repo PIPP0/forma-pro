@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { currentUser, exportWorkspace, importWorkspace, resetWorkspace, useDb } from '../lib/store';
-import { AI_MODELS, getAiKey, setAiKey } from '../lib/ai';
+import { AI_MODELS, consumoDeIa, getAiKey, setAiKey, type IaConsumo } from '../lib/ai';
 import { download } from '../lib/share';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
@@ -30,44 +30,7 @@ export function SettingsView() {
 
       <CloudSection email={user?.email ?? ''} />
 
-      <section className="section">
-        <h2 className="section-title">Inteligencia artificial</h2>
-        <p className="muted">
-          El asistente de diseño usa <code>{AI_MODELS.diseno}</code> y el resumen de investigación, <code>{AI_MODELS.analisis}</code>: cada tarea con el modelo que le corresponde, para no pagar de más. La clave se
-          guarda solo en este navegador, se envía únicamente a api.anthropic.com y no se incluye en los respaldos.
-        </p>
-        <div className="row">
-          {hasKey ? <Badge tone="ok">Clave configurada</Badge> : <Badge>Sin clave</Badge>}
-        </div>
-        <form
-          className="row add-row"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!key.trim().startsWith('sk-')) return notify('La clave de API de Anthropic empieza con «sk-».', 'error');
-            setAiKey(key.trim());
-            setKey('');
-            setHasKey(true);
-            notify('Guardaste la clave de API en este navegador.', 'success');
-          }}
-        >
-          <input className="input grow" type="password" autoComplete="off" aria-label="Clave de API de Anthropic" placeholder={hasKey ? 'Reemplazar clave' : 'Pega aquí tu clave de API'} value={key} onChange={(e) => setKey(e.target.value)} />
-          <Button tone="primary" type="submit">
-            Guardar clave
-          </Button>
-          {hasKey && (
-            <Button
-              tone="ghost"
-              onClick={() => {
-                setAiKey('');
-                setHasKey(false);
-                notify('Quitaste la clave de API.', 'success');
-              }}
-            >
-              Quitar clave
-            </Button>
-          )}
-        </form>
-      </section>
+      <IaSection hasKey={hasKey} keyValue={key} setKeyValue={setKey} setHasKey={setHasKey} />
 
       <FigmaSection />
 
@@ -259,6 +222,97 @@ function CloudSection({ email }: { email: string }) {
         </form>
       )}
       {sentTo && !account?.email && <p className="small">Te enviamos un enlace a {sentTo}. Ábrelo en este mismo navegador para terminar de conectar. Si no llega en un par de minutos, revisa la carpeta de spam.</p>}
+    </section>
+  );
+}
+
+/** Estado de la IA: la del equipo viaja con tu sesión; la propia, solo con este navegador. */
+function IaSection({ hasKey, keyValue, setKeyValue, setHasKey }: { hasKey: boolean; keyValue: string; setKeyValue: (v: string) => void; setHasKey: (v: boolean) => void }) {
+  const { account } = useCloudAccount();
+  const [consumo, setConsumo] = useState<IaConsumo | null>(null);
+  const [propia, setPropia] = useState(hasKey);
+
+  useEffect(() => {
+    let vivo = true;
+    if (account?.email) consumoDeIa().then((c) => vivo && setConsumo(c)).catch(() => undefined);
+    return () => {
+      vivo = false;
+    };
+  }, [account?.email]);
+
+  const equipo = !!account?.email && consumo?.autorizado;
+  return (
+    <section className="section">
+      <h2 className="section-title">Inteligencia artificial</h2>
+      <p className="muted">
+        El asistente de diseño usa <code>{AI_MODELS.diseno}</code> y el resumen de investigación, <code>{AI_MODELS.analisis}</code>: cada tarea con el modelo que le corresponde, para no pagar de más.
+      </p>
+      <div className="row">
+        {hasKey ? (
+          <Badge tone="ok">Usando tu clave</Badge>
+        ) : equipo ? (
+          <Badge tone="ok">IA del equipo activa</Badge>
+        ) : consumo && !consumo.autorizado ? (
+          <Badge tone="warn">Tu correo no está autorizado</Badge>
+        ) : (
+          <Badge>Sin IA</Badge>
+        )}
+        {consumo && !hasKey && (
+          <span className="muted small">
+            Llevas US${consumo.usd.toFixed(2)} este mes en {consumo.llamadas} {consumo.llamadas === 1 ? 'consulta' : 'consultas'}, de un tope de US${consumo.topeUsuario}.
+          </span>
+        )}
+      </div>
+      <p className="muted small">
+        {equipo
+          ? 'La clave vive en el proyecto en la nube, no en este navegador: la IA te sigue a cualquier equipo con solo iniciar sesión con tu correo.'
+          : consumo && !consumo.autorizado
+            ? 'Pide que agreguen tu correo a la lista de la IA del equipo, o usa tu propia clave aquí abajo.'
+            : 'Guarda tu acceso con correo más arriba y la IA del equipo queda disponible en cualquier navegador. También puedes usar tu propia clave.'}
+      </p>
+
+      <details className="found-more" open={propia}>
+        <summary onClick={() => setPropia((v) => !v)}>Usar mi propia clave en este navegador</summary>
+        <p className="muted small">
+          La clave se guarda solo aquí, se envía únicamente a api.anthropic.com y no se incluye en los respaldos. Mientras exista, tus consultas se cobran a tu cuenta y no a la del equipo.
+        </p>
+        <form
+          className="row add-row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!keyValue.trim().startsWith('sk-')) return notify('La clave de API de Anthropic empieza con «sk-».', 'error');
+            setAiKey(keyValue.trim());
+            setKeyValue('');
+            setHasKey(true);
+            notify('Guardaste la clave de API en este navegador.', 'success');
+          }}
+        >
+          <input
+            className="input grow"
+            type="password"
+            autoComplete="off"
+            aria-label="Clave de API de Anthropic"
+            placeholder={hasKey ? 'Reemplazar clave' : 'Pega aquí tu clave de API'}
+            value={keyValue}
+            onChange={(e) => setKeyValue(e.target.value)}
+          />
+          <Button tone="primary" type="submit">
+            Guardar clave
+          </Button>
+          {hasKey && (
+            <Button
+              tone="ghost"
+              onClick={() => {
+                setAiKey('');
+                setHasKey(false);
+                notify('Quitaste la clave de API. Vuelves a usar la IA del equipo.', 'success');
+              }}
+            >
+              Quitar clave
+            </Button>
+          )}
+        </form>
+      </details>
     </section>
   );
 }

@@ -19,6 +19,33 @@ export const AI_MODELS = {
 } as const;
 export const AI_MODEL = AI_MODELS.diseno;
 
+/** Funciones del proyecto en la nube: la clave del equipo vive allá, no en este navegador. */
+const PROXY = 'https://southamerica-west1-forma-pro-cl26.cloudfunctions.net';
+
+/**
+ * De dónde sale la IA para quien está usando la app:
+ * «propia» si guardó su clave en este navegador, «equipo» si basta con su sesión, «no» si aún no hay ninguna.
+ */
+export const iaDisponible = (email?: string | null): 'propia' | 'equipo' | 'no' => (getAiKey() ? 'propia' : email ? 'equipo' : 'no');
+
+/** Último consumo informado por el proxy, para mostrarlo sin pedirlo de nuevo. */
+export interface IaConsumo {
+  usd: number;
+  llamadas: number;
+  topeUsuario: number;
+  mes: string;
+  autorizado: boolean;
+}
+
+export async function consumoDeIa(): Promise<IaConsumo | null> {
+  const { idTokenConCorreo } = await import('./cloud');
+  const token = await idTokenConCorreo().catch(() => null);
+  if (!token) return null;
+  const r = await fetch(`${PROXY}/iaUso`, { headers: { authorization: `Bearer ${token}` } });
+  if (!r.ok) return null;
+  return (await r.json()) as IaConsumo;
+}
+
 export const getAiKey = () => {
   try {
     return localStorage.getItem(KEY) ?? '';
@@ -99,9 +126,8 @@ export async function fileToImage(file: File): Promise<ImageInput> {
   }
 }
 
-async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>, model: string = AI_MODELS.diseno): Promise<T> {
-  const apiKey = getAiKey();
-  if (!apiKey) throw new AiError('Agrega tu clave de API de Anthropic en Ajustes para usar la IA.');
+/** Llama con la clave de este navegador: quien trae la suya paga lo suyo. */
+async function conClavePropia(apiKey: string, model: string, system: string, turns: Turn[], schema: Record<string, unknown>): Promise<string> {
   // El SDK se carga solo cuando alguien usa la IA, para no pesar en la carga inicial.
   const { default: Sdk } = await import('@anthropic-ai/sdk');
   try {
@@ -120,19 +146,47 @@ async function askJson<T>(system: string, turns: Turn[], schema: Record<string, 
     const res = await stream.finalMessage();
     if (res.stop_reason === 'refusal') throw new AiError('El modelo no pudo responder esta solicitud. Reformúlala e intenta de nuevo.');
     if (res.stop_reason === 'max_tokens') throw new AiError('La respuesta quedó incompleta. Intenta con una solicitud más acotada.');
-    const text = res.content
+    return res.content
       .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text')
       .map((b) => b.text)
       .join('');
-    return JSON.parse(text) as T;
   } catch (e) {
     if (e instanceof AiError) throw e;
     if (e instanceof Sdk.AuthenticationError) throw new AiError('La clave de API no es válida. Revísala en Ajustes.');
     if (e instanceof Sdk.RateLimitError) throw new AiError('Se alcanzó el límite de uso de la API. Espera un momento e intenta de nuevo.');
     if (e instanceof Sdk.APIConnectionError) throw new AiError('No hay conexión con la API de Anthropic. Revisa tu red.');
-    if (e instanceof Sdk.APIError) throw new AiError(`La API respondió con un error (${e.status ?? 'sin código'}): ${e.message}`);
-    if (e instanceof SyntaxError) throw new AiError('La respuesta de la IA no tenía el formato esperado.');
-    throw new AiError((e as Error).message);
+    throw new AiError('La IA no pudo responder. Intenta de nuevo en un momento.');
+  }
+}
+
+/** Llama a través del proyecto en la nube: la clave del equipo nunca baja al navegador. */
+async function conClaveDelEquipo(model: string, system: string, turns: Turn[], schema: Record<string, unknown>): Promise<string> {
+  const { idTokenConCorreo } = await import('./cloud');
+  const token = await idTokenConCorreo().catch(() => null);
+  if (!token) throw new AiError('Guarda tu acceso con correo en Ajustes para usar la IA del equipo, o agrega tu propia clave de API.');
+  let r: Response;
+  try {
+    r = await fetch(`${PROXY}/ia`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: JSON.stringify({ model, system, schema, messages: turns.map((t) => ({ role: t.role, content: t.content })) }),
+    });
+  } catch {
+    throw new AiError('No hay conexión con la IA del equipo. Revisa tu red e intenta de nuevo.');
+  }
+  const data = (await r.json().catch(() => ({}))) as { text?: string; error?: string };
+  if (!r.ok) throw new AiError(data.error ?? 'La IA del equipo no pudo responder. Intenta de nuevo.');
+  if (!data.text) throw new AiError('La IA del equipo devolvió una respuesta vacía. Intenta de nuevo.');
+  return data.text;
+}
+
+async function askJson<T>(system: string, turns: Turn[], schema: Record<string, unknown>, model: string = AI_MODELS.diseno): Promise<T> {
+  const apiKey = getAiKey();
+  const text = apiKey ? await conClavePropia(apiKey, model, system, turns, schema) : await conClaveDelEquipo(model, system, turns, schema);
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new AiError('La respuesta de la IA no tenía el formato esperado. Intenta de nuevo.');
   }
 }
 

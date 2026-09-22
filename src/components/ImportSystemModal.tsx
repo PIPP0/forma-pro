@@ -3,7 +3,8 @@ import type { Block, Component, Mode, Project } from '../lib/model';
 import { completeSystem, componentSample, ensureColors, variantKey } from '../lib/catalog';
 import { ROLES, buildTokens, candidatesFromText, emptyCandidates, mergeCandidates, mode as mostCommon, suggestMapping, validComponents, type Candidates } from '../lib/systemIO';
 import { candidatesFromImage, candidatesFromPdf } from '../lib/pdfExtract';
-import { extractSystem, fileToImage, fileToPdf, getAiKey, type ExtractedSystem } from '../lib/ai';
+import { useCloudAccount } from './useCloudAccount';
+import { extractSystem, fileToImage, fileToPdf, iaDisponible, type ExtractedSystem } from '../lib/ai';
 import { applyOps, saveVersion } from '../lib/store';
 import { edit } from '../lib/ops';
 import { colorValue, contrast } from '../lib/tokens';
@@ -46,7 +47,8 @@ export function ImportSystemModal({ p, open, onClose }: { p: Project; open: bool
   const [ai, setAi] = useState<ExtractedSystem | null>(null);
   const [source, setSource] = useState<'map' | 'ai'>('map');
   const [previewMode, setPreviewMode] = useState<Mode>('light');
-  const hasKey = !!getAiKey();
+  const { account } = useCloudAccount();
+  const hasKey = iaDisponible(account?.email) !== 'no';
 
   const close = () => {
     setStep('upload');

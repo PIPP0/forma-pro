@@ -10,7 +10,7 @@ import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
-import { summarizeResearch, getAiKey, type VerifiedTheme } from '../lib/ai';
+import { summarizeResearch, iaDisponible, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
@@ -1069,6 +1069,7 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<{ themes: VerifiedTheme[]; discardedThemes: number } | null>(null);
+  const { account: cuenta } = useCloudAccount();
   const run = async () => {
     setBusy(true);
     setError('');
@@ -1085,7 +1086,7 @@ function AiSummary({ study, sessions, events, onOpen }: { study: Study; sessions
     <section className="card-section">
       <div className="section-head">
         <h2 className="section-title">Resumen por IA</h2>
-        {getAiKey() ? (
+        {iaDisponible(cuenta?.email) !== 'no' ? (
           <Button size="sm" disabled={busy} onClick={run}>
             {busy ? 'Agrupando sesiones…' : result ? 'Volver a generar' : 'Generar resumen'}
           </Button>

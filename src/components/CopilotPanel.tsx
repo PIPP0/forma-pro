@@ -3,7 +3,8 @@ import type { Project, Screen } from '../lib/model';
 import { applyOps } from '../lib/store';
 import { edit } from '../lib/ops';
 import { checkProject } from '../lib/flowCheck';
-import { critiqueScreen, fileToImage, generateScreen, getAiKey, proposalToScreen, type Critique, type ImageInput, type ScreenProposal, type Turn } from '../lib/ai';
+import { useCloudAccount } from './useCloudAccount';
+import { critiqueScreen, fileToImage, generateScreen, iaDisponible, proposalToScreen, type Critique, type ImageInput, type ScreenProposal, type Turn } from '../lib/ai';
 import { notify } from '../lib/toast';
 import { href } from '../lib/router';
 import { ScreenCanvas } from './ScreenCanvas';
@@ -33,8 +34,9 @@ export function CopilotPanel({
   const [critique, setCritique] = useState<Critique | null>(null);
   const [image, setImage] = useState<ImageInput | null>(null);
   const preview = useMemo(() => (proposal ? proposalToScreen(project, proposal) : null), [proposal, project]);
+  const { account } = useCloudAccount();
 
-  if (!getAiKey())
+  if (iaDisponible(account?.email) === 'no')
     return (
       <Empty
         title="Conecta la IA"
@@ -44,7 +46,7 @@ export function CopilotPanel({
           </a>
         }
       >
-        El copiloto usa tu clave de API de Anthropic, que se guarda solo en este navegador.
+        Guarda tu acceso con correo para usar la IA del equipo en cualquier navegador, o agrega tu propia clave de API.
       </Empty>
     );
 
