@@ -5,12 +5,13 @@ import { ROLE_LABEL, can } from '../lib/permissions';
 import { href } from '../lib/router';
 import { Button, Modal } from './ui';
 import { AssistantModal } from './AssistantModal';
-import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconSparkle, IconUpload } from './icons';
+import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconSparkle, IconUpload, IconUsers } from './icons';
 
 const TABS = [
   { id: 'screens', label: 'Diseñar', Icon: IconSend },
   { id: 'system', label: 'Sistema de diseño', Icon: IconDiamond },
   { id: 'studies', label: 'Pruebas', Icon: IconPlay },
+  { id: 'users', label: 'Usuarios sintéticos', Icon: IconUsers },
   { id: 'results', label: 'Resultados', Icon: IconChart },
 ];
 

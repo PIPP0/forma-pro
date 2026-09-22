@@ -187,6 +187,15 @@ export const IconSun = (p: IconProps = {}) =>
   );
 export const IconMoon = (p: IconProps = {}) => svg(<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z" />, p);
 export const IconTrash = (p: IconProps = {}) => svg(<path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13" />, p);
+export const IconUsers = (p: IconProps = {}) =>
+  svg(
+    <>
+      <circle cx="9" cy="8.5" r="3.3" />
+      <path d="M3.5 19.5c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8" />
+      <path d="M16 5.6a3.2 3.2 0 0 1 0 6M17.2 14.9c2.1.4 3.3 2 3.3 4.1" />
+    </>,
+    p,
+  );
 export const IconClose = (p: IconProps = {}) => svg(<path d="M6 6l12 12M18 6L6 18" />, p);
 
 export const IconRefresh = (p: IconProps = {}) =>

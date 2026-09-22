@@ -294,12 +294,14 @@ export function ResultsView({ project, role, studyId }: { project: Project; role
   const db = useDb();
   const studies = db.studies.filter((s) => s.projectId === project.id).sort((a, b) => b.created - a.created);
   const study = studies.find((s) => s.id === studyId) ?? studies[0];
+  // La promesa se mantiene: nada se inventa a tus espaldas, y lo sintético viaja siempre etiquetado.
+  const conSinteticas = db.sessions.some((s) => s.source === 'synthetic' && studies.some((x) => x.id === s.studyId));
   return (
     <div className="page page-wide">
       <PageHead
         eyebrow="EVIDENCIA, NO SUPOSICIONES"
         title="Cada interacción cuenta."
-        sub="Resultados reales de tus pruebas. Sin sesiones ni métricas inventadas."
+        sub={conSinteticas ? 'Lo que hicieron las personas en tus pruebas. Las sesiones sintéticas van marcadas y se pueden separar.' : 'Resultados reales de tus pruebas. Sin sesiones ni métricas inventadas.'}
         actions={
           <Button
             onClick={() => {
@@ -333,7 +335,11 @@ export function ResultsView({ project, role, studyId }: { project: Project; role
 
 function StudyDetail({ project, role, study, studies }: { project: Project; role: Role; study: Study; studies: Study[] }) {
   const db = useDb();
-  const sessions = db.sessions.filter((s) => s.studyId === study.id);
+  const todas = db.sessions.filter((s) => s.studyId === study.id);
+  const sinteticas = todas.filter((s) => s.source === 'synthetic').length;
+  const [filtro, setFiltro] = useState<'todas' | 'reales' | 'sinteticas'>('todas');
+  // Las sesiones sintéticas conviven con las reales, pero siempre se pueden separar.
+  const sessions = !sinteticas || filtro === 'todas' ? todas : todas.filter((s) => (s.source === 'synthetic') === (filtro === 'sinteticas'));
   const events = db.events.filter((e) => sessions.some((s) => s.id === e.sessionId));
   const analysis = analyzeStudy(study, sessions, events);
   const snap = study.snapshot;
@@ -456,6 +462,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
           <div className="row">
             {study.status === 'open' ? <Badge tone="ok">Abierto</Badge> : <Badge>Cerrado</Badge>}
             {study.example && <Badge tone="warn">Datos de ejemplo simulados</Badge>}
+            {!!sinteticas && <Badge tone="accent">{sinteticas} {sinteticas === 1 ? 'sesión sintética' : 'sesiones sintéticas'}</Badge>}
             {study.askAudio && <Badge>Pide audio</Badge>}
           </div>
         </div>
@@ -482,6 +489,19 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
       </section>
 
       <div className="study-tools">
+        {!!sinteticas && (
+          <Tabs
+            small
+            label="Filtrar sesiones por origen"
+            value={filtro}
+            onChange={setFiltro}
+            items={[
+              { id: 'todas', label: `Todas · ${todas.length}` },
+              { id: 'reales', label: `Personas reales · ${todas.length - sinteticas}` },
+              { id: 'sinteticas', label: `Sintéticas · ${sinteticas}` },
+            ]}
+          />
+        )}
         <div className="row">
           <Button size="sm" disabled={exporting} onClick={() => void exportJson()}>
             {exporting ? 'Preparando archivo…' : 'Exportar JSON'}
@@ -489,6 +509,11 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
           <Button size="sm" onClick={exportCsv}>
             Exportar CSV
           </Button>
+          {manage && (
+            <a className="btn btn-default btn-sm" href={href(`/p/${project.id}/users?run=1`)}>
+              Probar con usuarios sintéticos
+            </a>
+          )}
           {manage && (
             <>
               <Button
@@ -519,7 +544,18 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
       </div>
 
       {analysis.total === 0 ? (
-        <EmptyCard icon={<IconChart size={32} />} title="Todavía no hay sesiones" text="Comparte el enlace. Los resultados aparecen cuando termina la primera sesión." />
+        <EmptyCard
+          icon={<IconChart size={32} />}
+          title={filtro === 'reales' ? 'Todavía no hay sesiones de personas reales' : filtro === 'sinteticas' ? 'Todavía no hay sesiones sintéticas' : 'Todavía no hay sesiones'}
+          text={filtro === 'reales' ? 'Comparte el enlace del estudio: lo que ves arriba viene de usuarios sintéticos.' : 'Comparte el enlace, o haz una primera pasada con usuarios sintéticos para detectar tropiezos evidentes.'}
+          action={
+            manage && (
+              <a className="btn btn-outline" href={href(`/p/${project.id}/users?run=1`)}>
+                Probar con usuarios sintéticos
+              </a>
+            )
+          }
+        />
       ) : (
         <>
           <Kpis o={overview(study, sessions, events, analysis)} />
@@ -636,7 +672,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
                             </span>
                           </td>
                           <td>{s.hasAudio ? 'Sí' : s.consent.audio ? 'Aceptó, sin archivo' : 'No'}</td>
-                          <td>{s.source === 'example' ? 'Ejemplo' : s.source === 'import' ? 'Importada' : s.source === 'cloud' ? 'Nube' : 'Este navegador'}</td>
+                          <td>{s.source === 'synthetic' ? <Badge tone="accent">Sintética</Badge> : s.source === 'example' ? 'Ejemplo' : s.source === 'import' ? 'Importada' : s.source === 'cloud' ? 'Nube' : 'Este navegador'}</td>
                           <td className="muted">{timeAgo(s.startedAt)}</td>
                           <td className="t-right">
                             {manage && (
@@ -1191,6 +1227,12 @@ function SessionDrawer({ study, session, events, at, onClose }: { study: Study; 
           <div className="muted small">
             {new Date(session.startedAt).toLocaleString('es-CL')}, {session.device.width}×{session.device.height}
           </div>
+          {session.source === 'synthetic' && (
+            <div className="drawer-sint">
+              <Badge tone="accent">Sesión sintética</Badge>
+              <span className="muted small">Recorrido simulado con una persona del catálogo, no una persona real.</span>
+            </div>
+          )}
         </div>
         <button type="button" className="icon-btn" aria-label="Cerrar sesión" onClick={onClose}>
           ×

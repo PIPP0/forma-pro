@@ -10,6 +10,7 @@ import { SystemView } from './views/SystemView';
 import { ScreensView } from './views/ScreensView';
 import { ResultsView, StudiesView } from './views/StudiesView';
 import { ParticipantView } from './views/ParticipantView';
+import { SyntheticView } from './views/SyntheticView';
 import { HandoffView } from './views/HandoffView';
 import { LibraryView } from './views/LibraryView';
 import { HistoryView } from './views/HistoryView';
@@ -69,6 +70,7 @@ export default function App() {
         ),
         studies: d ? <ResultsView project={project} role={role} studyId={d} /> : <StudiesView project={project} role={role} openNew={route.query.get('new') === '1'} />,
         results: <ResultsView project={project} role={role} studyId={d} />,
+        users: <SyntheticView project={project} role={role} openRun={route.query.get('run') === '1'} />,
         handoff: <HandoffView project={project} role={role} />,
         library: <LibraryView project={project} role={role} />,
         history: <HistoryView project={project} role={role} />,

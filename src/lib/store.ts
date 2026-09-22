@@ -1,9 +1,10 @@
 import { useSyncExternalStore } from 'react';
-import type { Comment, DB, LibraryRelease, Op, OpInput, Project, ProjectVersion, Role, Session, Study, StudyEvent, StudyTask, User } from './model';
+import type { Comment, DB, LibraryRelease, Op, OpInput, Project, ProjectVersion, Role, Session, Study, StudyEvent, StudyTask, SyntheticUser, User } from './model';
 import { emptyDb } from './model';
 import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
 import { blankProject, exampleStudy, transferProject } from './seed';
+import { personasBase } from './synthetic';
 import { bancoNewProject } from './seedBancoNew';
 import { completeSystem, upgradeProjectStates } from './catalog';
 import { checkProject, hasBlockingErrors } from './flowCheck';
@@ -158,7 +159,14 @@ export function migrate(d: DB): DB {
   );
   // Cada proyecto tiene la biblioteca completa: se agregan los patrones y colores que falten.
   const projects = sheets.map((p) => upgradeProjectStates(completeSystem(p)));
-  return projects.every((p, i) => p === d.projects[i]) ? d : { ...d, projects };
+  // Los seis perfiles de banca vienen de fábrica; si faltan, se reponen sin tocar los propios.
+  const base = personasBase();
+  const propias = (d.synthetics ?? []).filter((u) => !u.builtIn);
+  const deFabrica = base.map((u) => (d.synthetics ?? []).find((x) => x.id === u.id) ?? u);
+  const synthetics = [...deFabrica, ...propias];
+  const igualSint = synthetics.length === (d.synthetics ?? []).length && synthetics.every((u, i) => u === d.synthetics[i]);
+  if (projects.every((p, i) => p === d.projects[i]) && igualSint) return d;
+  return { ...d, projects, synthetics };
 }
 
 /** Copia el ejemplo con identificadores nuevos y la persona actual como dueña. */
@@ -502,6 +510,36 @@ export function deleteStudy(studyId: string) {
     events: db.events.filter((e) => !sessionIds.has(e.sessionId)),
   });
   notify(`Eliminaste «${s.name}» y sus resultados.`, 'success');
+}
+
+// ---------- Personas sintéticas ----------
+
+/** Crea o actualiza una persona. Las de fábrica se pueden editar, pero no dejan de serlo. */
+export function saveSynthetic(u: SyntheticUser) {
+  const previa = db.synthetics.find((x) => x.id === u.id);
+  commit({ ...db, synthetics: previa ? db.synthetics.map((x) => (x.id === u.id ? { ...u, builtIn: previa.builtIn } : x)) : [...db.synthetics, u] });
+  notify(previa ? `Guardaste a ${u.name}.` : `Creaste a ${u.name}.`, 'success');
+  return true;
+}
+
+export function deleteSynthetic(id: string) {
+  const u = db.synthetics.find((x) => x.id === id);
+  if (!u || u.builtIn) return false;
+  commit({ ...db, synthetics: db.synthetics.filter((x) => x.id !== id) });
+  notify(`Eliminaste a ${u.name}.`, 'success');
+  return true;
+}
+
+/** Guarda las sesiones de una tanda sintética. */
+export function addSyntheticSessions(studyId: string, salidas: { session: Session; events: StudyEvent[] }[]) {
+  const study = db.studies.find((s) => s.id === studyId);
+  if (!study || !guard(study.projectId, 'runStudy')) return 0;
+  commit({
+    ...db,
+    sessions: [...db.sessions, ...salidas.map((s) => s.session)],
+    events: [...db.events, ...salidas.flatMap((s) => s.events)],
+  });
+  return salidas.length;
 }
 
 /** Quita una sesión de los resultados: sus respuestas, sus eventos y su grabación. */

@@ -373,7 +373,9 @@ export interface Session {
   hasAudio?: boolean;
   feedback: TaskFeedback[];
   status: 'in_progress' | 'completed' | 'abandoned';
-  source: 'local' | 'import' | 'example' | 'cloud';
+  source: 'local' | 'import' | 'example' | 'cloud' | 'synthetic';
+  /** Persona sintética que produjo la sesión, cuando no hubo alguien real. */
+  syntheticId?: string;
   /** Última actualización recibida desde la nube (solo sesiones que llegaron solas). */
   cloudUpdatedAt?: number;
   startedAt: number;
@@ -420,6 +422,39 @@ export interface Comment {
   resolved: boolean;
 }
 
+/**
+ * Persona sintética: un perfil con el que se puede recorrer un prototipo sin convocar gente.
+ * Los rasgos van de 1 a 5 y gobiernan cómo se comporta en la simulación.
+ */
+export interface SyntheticUser {
+  id: string;
+  name: string;
+  age: number;
+  segment: string;
+  role: string;
+  city: string;
+  bio: string;
+  quote: string;
+  goals: string[];
+  frustrations: string[];
+  device: Breakpoint;
+  traits: {
+    /** Soltura con aplicaciones: acierta a la primera y se orienta solo. */
+    digital: number;
+    /** Aguante ante la fricción antes de abandonar. */
+    paciencia: number;
+    /** Cuánto lee antes de tocar. */
+    lectura: number;
+    /** Miedo a equivocarse, sobre todo con dinero. */
+    cautela: number;
+    /** Prisa: recorre la pantalla sin detenerse. */
+    prisa: number;
+  };
+  /** Los seis perfiles que vienen de fábrica; no se pueden eliminar. */
+  builtIn?: boolean;
+  createdAt: number;
+}
+
 export interface DB {
   schema: 1;
   users: User[];
@@ -433,6 +468,7 @@ export interface DB {
   sessions: Session[];
   events: StudyEvent[];
   comments: Comment[];
+  synthetics: SyntheticUser[];
 }
 
 export const emptyDb = (): DB => ({
@@ -447,6 +483,7 @@ export const emptyDb = (): DB => ({
   sessions: [],
   events: [],
   comments: [],
+  synthetics: [],
 });
 
 /** Pantalla base (la que agrupa variantes) */
