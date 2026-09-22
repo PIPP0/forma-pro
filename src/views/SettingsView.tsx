@@ -259,7 +259,8 @@ function IaSection({ hasKey, keyValue, setKeyValue, setHasKey }: { hasKey: boole
         )}
         {consumo && !hasKey && (
           <span className="muted small">
-            Llevas US${consumo.usd.toFixed(2)} este mes en {consumo.llamadas} {consumo.llamadas === 1 ? 'consulta' : 'consultas'}, de un tope de US${consumo.topeUsuario}.
+            Llevas ${Math.round(consumo.clp).toLocaleString('es-CL')} este mes en {consumo.llamadas} {consumo.llamadas === 1 ? 'consulta' : 'consultas'}, de un tope de $
+            {consumo.topeUsuario.toLocaleString('es-CL')}.
           </span>
         )}
       </div>

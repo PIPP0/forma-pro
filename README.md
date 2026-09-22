@@ -127,7 +127,9 @@ La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido 
 La clave de Anthropic vive en el proyecto en la nube (`forma-pro-cl26`), no en los navegadores: quien tenga su correo en la lista autorizada usa el asistente y el resumen de investigación desde cualquier equipo, solo con guardar su acceso por correo en Ajustes.
 
 - La función `ia` (Cloud Functions, `southamerica-west1`) valida el token de Firebase, comprueba que el correo esté autorizado, aplica la cuota del mes y recién entonces llama a la API con la clave del servidor.
-- `config/ia` en Firestore guarda `correos`, `topeUsuarioUsd` y `topeTotalUsd`. Solo lo lee el servidor: las reglas lo bloquean para todo cliente.
+- `config/ia` en Firestore guarda `correos`, `topeUsuarioClp`, `topeTotalClp` y `clpPorUsd`. Solo lo lee el servidor: las reglas lo bloquean para todo cliente. Hoy el tope es de $5.000 por persona y $5.000 para el proyecto al mes.
+- El token de sesión viaja en la cabecera `X-Forma-Token`, no en `Authorization`: Cloud Run intercepta esa última y rechaza cualquier token que no sea de Google antes de que la petición llegue a la función.
+- La clave se lee de Secret Manager en caliente, con caché de cinco minutos: cargar una versión nueva basta para que empiece a funcionar, sin volver a desplegar.
 - Cada llamada anota el consumo real en `iaUso/{uid}_{AAAAMM}`, que es lo que Ajustes muestra como gasto del mes.
 - Quien prefiera pagar de su cuenta puede guardar su propia clave en Ajustes; mientras exista, esa clave manda y el equipo no gasta.
 

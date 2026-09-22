@@ -3,19 +3,35 @@
 //
 // config/ia (Firestore, solo lectura desde el servidor)
 //   correos: ['persona@dominio.cl', …]   quiénes pueden usarla
-//   topeUsuarioUsd: número               gasto máximo por persona y mes
-//   topeTotalUsd: número                 gasto máximo del proyecto por mes
+//   topeUsuarioClp: número               gasto máximo por persona y mes, en pesos
+//   topeTotalClp: número                 gasto máximo del proyecto por mes, en pesos
+//   clpPorUsd: número                    cambio con el que se convierte el costo real de la API
 // iaUso/{uid}_{YYYYMM}                   consumo real medido, para la cuota y para mostrarlo en Ajustes
 import { onRequest } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { SecretManagerServiceClient } from '@google-cloud/secret-manager';
 import Anthropic from '@anthropic-ai/sdk';
 
-const CLAVE = defineSecret('ANTHROPIC_API_KEY');
-
 initializeApp();
+
+const secretos = new SecretManagerServiceClient();
+const RUTA_CLAVE = 'projects/forma-pro-cl26/secrets/ANTHROPIC_API_KEY/versions/latest';
+let clave = { valor: '', hasta: 0 };
+
+/**
+ * La clave se lee de Secret Manager en caliente, no como variable de entorno:
+ * cargar una versión nueva basta para que empiece a funcionar, sin volver a desplegar.
+ */
+async function claveAnthropic() {
+  if (clave.valor && Date.now() < clave.hasta) return clave.valor;
+  const [version] = await secretos.accessSecretVersion({ name: RUTA_CLAVE });
+  const valor = (version.payload?.data?.toString('utf8') ?? '').trim();
+  if (!valor) throw new Error('secreto vacío');
+  clave = { valor, hasta: Date.now() + 5 * 60 * 1000 };
+  return valor;
+}
 
 /** Modelos permitidos y su precio por millón de tokens. Nadie puede pedir otro desde el cliente. */
 const MODELOS = {
@@ -25,9 +41,11 @@ const MODELOS = {
 
 const ORIGENES = ['https://pipp0.github.io', 'http://localhost:5188', 'http://localhost:5173'];
 
-/** Topes por defecto si nadie configuró config/ia. Prudentes a propósito. */
-const TOPE_USUARIO = 10;
-const TOPE_TOTAL = 60;
+/** Topes por defecto en pesos, si nadie configuró config/ia. Prudentes a propósito. */
+const TOPE_USUARIO = 5000;
+const TOPE_TOTAL = 5000;
+/** La API se factura en dólares; el tope se controla en pesos. Cambio conservador y configurable. */
+const CLP_POR_USD = 1000;
 
 const mesActual = () => new Date().toISOString().slice(0, 7).replace('-', '');
 
@@ -38,14 +56,17 @@ function cors(req, res) {
     res.set('Vary', 'Origin');
   }
   res.set('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.set('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  res.set('Access-Control-Allow-Headers', 'X-Forma-Token, Content-Type');
   res.set('Access-Control-Max-Age', '3600');
 }
 
-/** Quién llama: solo cuentas con correo verificado, nunca las anónimas de los participantes. */
+/**
+ * Quién llama: solo cuentas con correo verificado, nunca las anónimas de los participantes.
+ * El token viaja en una cabecera propia porque Cloud Run intercepta «Authorization» y rechaza
+ * cualquier token que no sea de Google antes de que la petición llegue hasta acá.
+ */
 async function identificar(req) {
-  const header = req.headers.authorization ?? '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+  const token = String(req.headers['x-forma-token'] ?? '');
   if (!token) return { error: 'Inicia sesión con tu correo para usar la IA del equipo.', code: 401 };
   try {
     const claims = await getAuth().verifyIdToken(token);
@@ -58,7 +79,7 @@ async function identificar(req) {
 }
 
 export const ia = onRequest(
-  { region: 'southamerica-west1', secrets: [CLAVE], timeoutSeconds: 300, memory: '512MiB', maxInstances: 10, cors: false },
+  { region: 'southamerica-west1', timeoutSeconds: 300, memory: '512MiB', maxInstances: 10, cors: false },
   async (req, res) => {
     cors(req, res);
     if (req.method === 'OPTIONS') return res.status(204).send('');
@@ -73,17 +94,19 @@ export const ia = onRequest(
     if (!correos.includes(quien.email))
       return res.status(403).json({ error: `${quien.email} no está en la lista de personas autorizadas para usar la IA. Pide que te agreguen.` });
 
-    const topeUsuario = Number(conf.topeUsuarioUsd ?? TOPE_USUARIO);
-    const topeTotal = Number(conf.topeTotalUsd ?? TOPE_TOTAL);
+    const cambio = Number(conf.clpPorUsd ?? CLP_POR_USD);
+    const topeUsuario = Number(conf.topeUsuarioClp ?? TOPE_USUARIO);
+    const topeTotal = Number(conf.topeTotalClp ?? TOPE_TOTAL);
     const mes = mesActual();
     const usoRef = db.doc(`iaUso/${quien.uid}_${mes}`);
     const totalRef = db.doc(`iaUso/_total_${mes}`);
     const [usoSnap, totalSnap] = await Promise.all([usoRef.get(), totalRef.get()]);
-    const gastado = Number(usoSnap.data()?.usd ?? 0);
-    const gastadoTotal = Number(totalSnap.data()?.usd ?? 0);
+    const gastado = Number(usoSnap.data()?.usd ?? 0) * cambio;
+    const gastadoTotal = Number(totalSnap.data()?.usd ?? 0) * cambio;
     if (gastado >= topeUsuario)
-      return res.status(429).json({ error: `Alcanzaste tu tope mensual de IA (US$${topeUsuario}). Se renueva el día 1 del próximo mes.` });
-    if (gastadoTotal >= topeTotal) return res.status(429).json({ error: 'El equipo alcanzó su tope mensual de IA. Habla con quien administra el espacio de trabajo.' });
+      return res.status(429).json({ error: `Alcanzaste tu tope mensual de IA ($${Math.round(topeUsuario).toLocaleString('es-CL')}). Se renueva el día 1 del próximo mes.` });
+    if (gastadoTotal >= topeTotal)
+      return res.status(429).json({ error: `El equipo alcanzó su tope mensual de IA ($${Math.round(topeTotal).toLocaleString('es-CL')}). Habla con quien administra el espacio de trabajo.` });
 
     const { model, system, messages, schema } = req.body ?? {};
     const perfil = MODELOS[model];
@@ -92,8 +115,7 @@ export const ia = onRequest(
       return res.status(400).json({ error: 'Petición mal formada.' });
 
     try {
-      // El .trim() evita que un salto de línea al pegar la clave la invalide.
-      const anthropic = new Anthropic({ apiKey: CLAVE.value().trim() });
+      const anthropic = new Anthropic({ apiKey: await claveAnthropic() });
       const stream = anthropic.beta.messages.stream({
         model,
         max_tokens: 32000,
@@ -120,8 +142,10 @@ export const ia = onRequest(
         .filter((b) => b.type === 'text')
         .map((b) => b.text)
         .join('');
-      return res.json({ text, usage: { entrada, salida, usd, gastadoMes: gastado + usd, topeUsuario } });
+      return res.json({ text, usage: { entrada, salida, clp: usd * cambio, gastadoMes: gastado + usd * cambio, topeUsuario } });
     } catch (e) {
+      if (e?.message === 'secreto vacío' || e?.code === 5)
+        return res.status(503).json({ error: 'La IA del equipo todavía no tiene su clave cargada. Avisa a quien administra el espacio de trabajo.' });
       const status = e?.status;
       if (status === 401) return res.status(500).json({ error: 'La clave de API del equipo no es válida. Avisa a quien administra el espacio de trabajo.' });
       if (status === 429) return res.status(429).json({ error: 'La API está al límite de uso en este momento. Espera un poco e intenta de nuevo.' });
@@ -142,11 +166,12 @@ export const iaUso = onRequest({ region: 'southamerica-west1', maxInstances: 5, 
   const mes = mesActual();
   const [conf, uso] = await Promise.all([db.doc('config/ia').get(), db.doc(`iaUso/${quien.uid}_${mes}`).get()]);
   const correos = (conf.data()?.correos ?? []).map((c) => String(c).toLowerCase());
+  const cambio = Number(conf.data()?.clpPorUsd ?? CLP_POR_USD);
   return res.json({
     autorizado: correos.includes(quien.email),
-    usd: Number(uso.data()?.usd ?? 0),
+    clp: Number(uso.data()?.usd ?? 0) * cambio,
     llamadas: Number(uso.data()?.llamadas ?? 0),
-    topeUsuario: Number(conf.data()?.topeUsuarioUsd ?? TOPE_USUARIO),
+    topeUsuario: Number(conf.data()?.topeUsuarioClp ?? TOPE_USUARIO),
     mes,
   });
 });

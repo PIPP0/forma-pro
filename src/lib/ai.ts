@@ -30,7 +30,8 @@ export const iaDisponible = (email?: string | null): 'propia' | 'equipo' | 'no' 
 
 /** Último consumo informado por el proxy, para mostrarlo sin pedirlo de nuevo. */
 export interface IaConsumo {
-  usd: number;
+  /** Gasto del mes en pesos, con el cambio que fija el proyecto. */
+  clp: number;
   llamadas: number;
   topeUsuario: number;
   mes: string;
@@ -41,7 +42,7 @@ export async function consumoDeIa(): Promise<IaConsumo | null> {
   const { idTokenConCorreo } = await import('./cloud');
   const token = await idTokenConCorreo().catch(() => null);
   if (!token) return null;
-  const r = await fetch(`${PROXY}/iaUso`, { headers: { authorization: `Bearer ${token}` } });
+  const r = await fetch(`${PROXY}/iaUso`, { headers: { 'x-forma-token': token } });
   if (!r.ok) return null;
   return (await r.json()) as IaConsumo;
 }
@@ -168,7 +169,7 @@ async function conClaveDelEquipo(model: string, system: string, turns: Turn[], s
   try {
     r = await fetch(`${PROXY}/ia`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      headers: { 'content-type': 'application/json', 'x-forma-token': token },
       body: JSON.stringify({ model, system, schema, messages: turns.map((t) => ({ role: t.role, content: t.content })) }),
     });
   } catch {
