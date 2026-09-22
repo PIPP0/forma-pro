@@ -10,7 +10,7 @@ import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
-import { descargarDeck } from '../lib/deck';
+import { descargarDeck, type TemaIa } from '../lib/deck';
 import { consumoDeIa, getAiKey, iaDisponible, summarizeResearch, type IaConsumo, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
@@ -352,6 +352,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [entregables, setEntregables] = useState(false);
+  const [armandoPpt, setArmandoPpt] = useState(false);
   const [confirmSession, setConfirmSession] = useState<Session>();
   const [link, setLink] = useState('');
   const { account, loading: cloudLoading } = useCloudAccount();
@@ -411,6 +412,21 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
       alive = false;
     };
   }, [study, waitingShortLink]);
+
+  // El resumen por IA solo viaja a la presentación si sigue correspondiendo a estas sesiones.
+  const resumenVigente = study.summary && study.summary.huella === huellaDe(consentedSessions(study, sessions)) ? (study.summary.themes as TemaIa[]) : undefined;
+
+  const crearPpt = async () => {
+    setArmandoPpt(true);
+    try {
+      const laminas = await descargarDeck(study, sessions, events, `${slug(study.name)}-presentacion.pptx`, { autor: userName(db, study.owner), temasIa: resumenVigente });
+      notify(`Listo: ${laminas} láminas. Se abre en PowerPoint, Keynote o Google Slides.`, 'success');
+    } catch {
+      notify('No pudimos armar la presentación. Intenta de nuevo.', 'error');
+    } finally {
+      setArmandoPpt(false);
+    }
+  };
 
   const [exporting, setExporting] = useState(false);
   const exportJson = async () => {
@@ -528,6 +544,11 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
               >
                 Importar resultados
               </Button>
+              {!!resumenVigente?.length && (
+                <Button size="sm" disabled={armandoPpt} title="Presentación de once láminas, con la síntesis por IA incluida" onClick={() => void crearPpt()}>
+                  {armandoPpt ? 'Armando láminas…' : 'Crear PPT'}
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={() => {
@@ -777,6 +798,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
         sessions={sessions}
         events={events}
         autor={userName(db, study.owner)}
+        temasIa={resumenVigente}
         exportando={exporting}
         onJson={() => void exportJson()}
         onCsv={exportCsv}
@@ -851,6 +873,7 @@ function EntregablesModal({
   sessions,
   events,
   autor,
+  temasIa,
   exportando,
   onJson,
   onCsv,
@@ -861,6 +884,7 @@ function EntregablesModal({
   sessions: Session[];
   events: StudyEvent[];
   autor: string;
+  temasIa?: TemaIa[];
   exportando: boolean;
   onJson: () => void;
   onCsv: () => void;
@@ -870,7 +894,7 @@ function EntregablesModal({
   const deck = async () => {
     setArmando(true);
     try {
-      const laminas = await descargarDeck(study, sessions, events, `${slug(study.name)}-presentacion.pptx`, { autor });
+      const laminas = await descargarDeck(study, sessions, events, `${slug(study.name)}-presentacion.pptx`, { autor, temasIa });
       notify(`Listo: ${laminas} láminas. Se abre en PowerPoint, Keynote o Google Slides.`, 'success');
       onClose();
     } catch {
@@ -885,7 +909,9 @@ function EntregablesModal({
       id: 'deck',
       titulo: 'Presentación',
       formato: '.pptx',
-      texto: 'Once láminas editables para defender la decisión frente a otras personas: el índice, los tres hallazgos más graves con su evidencia y su cita, el desempeño por tarea y los próximos pasos.',
+      texto: `${temasIa?.length ? 'Doce' : 'Once'} láminas editables para defender la decisión frente a otras personas: el índice, los tres hallazgos más graves con su evidencia y su cita, el desempeño por tarea y los próximos pasos.${
+        temasIa?.length ? ' Incluye la síntesis por IA que ya generaste.' : ''
+      }`,
       accion: (
         <Button tone="primary" disabled={armando} onClick={() => void deck()}>
           {armando ? 'Armando láminas…' : 'Descargar presentación'}

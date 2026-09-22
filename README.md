@@ -126,12 +126,12 @@ La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido 
 
 En Resultados, el botón **Entregables** reúne todo lo que el estudio puede darle a otra persona, sin API y sin costo:
 
-- **Presentación (`.pptx`)** — once láminas editables (`src/lib/deck.ts`, con PptxGenJS cargado solo al exportar): portada, Índice Forma, indicadores, resumen ejecutivo, los tres hallazgos más graves —uno por lámina, con evidencia, cita y acción—, desempeño por tarea, comparativa por perfil, método y próximos pasos. Cada lámina trae notas para quien presenta.
+- **Presentación (`.pptx`)** — once láminas editables (doce si el estudio ya tiene resumen por IA vigente, que gana lámina propia y va identificada como tal) (`src/lib/deck.ts`, con PptxGenJS cargado solo al exportar): portada, Índice Forma, indicadores, resumen ejecutivo, los tres hallazgos más graves —uno por lámina, con evidencia, cita y acción—, desempeño por tarea, comparativa por perfil, método y próximos pasos. Cada lámina trae notas para quien presenta.
 - **Informe (`.html`)** — seis hojas para leer y archivar, imprimibles a PDF.
 - **Resumen en texto** — el mismo contenido al portapapeles.
 - **Datos** — JSON con grabaciones o CSV de eventos.
 
-Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exactamente lo mismo.
+Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exactamente lo mismo. Cuando el estudio tiene un resumen por IA que sigue correspondiendo a sus sesiones, aparece además un botón **Crear PPT** en la barra, junto a «Importar resultados»: es el atajo para quien ya hizo el análisis y solo quiere el archivo.
 
 ## IA del equipo
 

@@ -23,8 +23,17 @@ const COLOR_SEVERIDAD: Record<Hallazgo['severidad'], string> = {
 
 const fmt1 = (n: number) => n.toFixed(1).replace('.', ',');
 
+/** Tema del resumen por IA, tal como quedó guardado con el estudio. */
+export interface TemaIa {
+  title: string;
+  detail: string;
+  session_ids: string[];
+}
+
 export interface OpcionesDeck {
   autor?: string;
+  /** Síntesis por IA vigente. Si viene, gana una lámina propia, siempre identificada como tal. */
+  temasIa?: TemaIa[];
 }
 
 /** Arma la presentación y la descarga. Devuelve cuántas láminas quedaron. */
@@ -167,7 +176,33 @@ export async function descargarDeck(study: Study, sessions: Session[], events: S
     );
   }
 
-  // ---------- 5 a 7. Un hallazgo por lámina ----------
+  // ---------- 5. Síntesis por IA, si el estudio la tiene ----------
+  const temas = (opciones.temasIa ?? []).filter((t) => t.title?.trim()).slice(0, 4);
+  if (temas.length) {
+    const s = lamina('Síntesis por IA', 'Esta lámina es la única generada con IA: agrupa las sesiones por tema. Cada tema cita sesiones que existen en el estudio; lo que no se pudo verificar se descartó.');
+    titulo(s, 'Lo que se repite entre sesiones', 'Agrupado por IA sobre los datos de este estudio, con citas verificables.');
+    let y = 1.78;
+    for (const t of temas) {
+      s.addShape('rect', { x: MARGEN, y: y + 0.06, w: 0.045, h: 0.34, fill: { color: ACENTO } });
+      s.addText(t.title, { x: MARGEN + 0.22, y, w: UTIL - 0.22, h: 0.34, fontSize: 13, bold: true, color: TINTA, fontFace: FUENTE, valign: 'top', shrinkText: true });
+      // Un detalle de dos líneas necesita su propio aire: el paso no puede ser fijo.
+      const largo = t.detail.length > 105;
+      s.addText(t.detail, { x: MARGEN + 0.22, y: y + 0.34, w: UTIL - 0.5, h: largo ? 0.62 : 0.4, fontSize: 10.5, color: GRIS_TEXTO, fontFace: FUENTE, valign: 'top', shrinkText: true });
+      y += largo ? 1.05 : 0.85;
+    }
+    s.addText('Síntesis asistida por IA sobre las sesiones de este estudio. Las cifras de las demás láminas no pasan por IA: se calculan con los eventos registrados.', {
+      x: MARGEN,
+      y: 4.85,
+      w: UTIL,
+      h: 0.3,
+      fontSize: 9,
+      italic: true,
+      color: GRIS,
+      fontFace: FUENTE,
+    });
+  }
+
+  // ---------- Un hallazgo por lámina ----------
   const comentarioDe = (sessionId: string, taskId: string) => {
     const ses = sessions.find((x) => x.id === sessionId);
     const f = ses?.feedback.find((x) => x.taskId === taskId);
