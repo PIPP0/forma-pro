@@ -5522,3 +5522,53 @@ dialog.modal {
     margin-left: 0;
   }
 }
+
+/* ---------- Entregables del estudio ---------- */
+
+.entregables {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.entregables li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-card);
+  background: var(--panel);
+}
+.entregables li:first-child {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+}
+.entregable-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.entregable-main strong {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.entregable-main .small {
+  line-height: 1.55;
+  max-width: 62ch;
+}
+.entregable-formato {
+  font-family: var(--font-code);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink-3);
+  margin-left: 6px;
+}
+@media (max-width: 720px) {
+  .entregables li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+}

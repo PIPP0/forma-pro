@@ -10,13 +10,14 @@ import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
 import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
+import { descargarDeck } from '../lib/deck';
 import { consumoDeIa, getAiKey, iaDisponible, summarizeResearch, type IaConsumo, type VerifiedTheme } from '../lib/ai';
 import { blobToAudio, download, megabytes, resultsFile, studyLink, toCsv, type AudioMap } from '../lib/share';
 import { getAudio, saveAudio } from '../lib/blobs';
 import { go, href } from '../lib/router';
 import { Heatmap } from '../components/Heatmap';
 import { Badge, Button, EmptyCard, Field, Modal, PageHead, Tabs, copyText, pickFile, timeAgo } from '../components/ui';
-import { IconChart, IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconClose, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
+import { IconChart, IconCheck, IconChevronDown, IconChevronLeft, IconChevronRight, IconClose, IconDownload, IconPlay, IconPlus, IconRefresh, IconTarget } from '../components/icons';
 
 const KIND_LABEL: Record<StudyEvent['kind'], string> = {
   task_start: 'Empezó la tarea',
@@ -350,6 +351,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
   const manage = can(role, 'runStudy');
   const [openSession, setOpenSession] = useState<{ id: string; at?: number }>();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [entregables, setEntregables] = useState(false);
   const [confirmSession, setConfirmSession] = useState<Session>();
   const [link, setLink] = useState('');
   const { account, loading: cloudLoading } = useCloudAccount();
@@ -507,23 +509,8 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
           />
         )}
         <div className="row">
-          <Button
-            size="sm"
-            tone="primary"
-            disabled={analysis.total === 0}
-            title="Documento con resumen ejecutivo, hallazgos priorizados y método, listo para imprimir o compartir"
-            onClick={() => download(`${slug(study.name)}-informe.html`, informeHtml(study, sessions, events, userName(db, study.owner)), 'text/html')}
-          >
-            Generar informe
-          </Button>
-          <Button size="sm" disabled={analysis.total === 0} onClick={() => void copyText(informeMarkdown(study, sessions, events), 'Copiaste el informe en texto. Pégalo en un correo o en un ticket.')}>
-            Copiar resumen
-          </Button>
-          <Button size="sm" disabled={exporting} onClick={() => void exportJson()}>
-            {exporting ? 'Preparando archivo…' : 'Exportar JSON'}
-          </Button>
-          <Button size="sm" onClick={exportCsv}>
-            Exportar CSV
+          <Button size="sm" tone="primary" disabled={analysis.total === 0} title="Presentación, informe, resumen y datos de este estudio" onClick={() => setEntregables(true)}>
+            <IconDownload size={15} /> Entregables
           </Button>
           {manage && (
             <a className="btn btn-default btn-sm" href={href(`/p/${project.id}/users?run=1`)}>
@@ -783,6 +770,18 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
         <SessionDrawer study={study} session={sessions.find((s) => s.id === openSession.id)} events={events.filter((e) => e.sessionId === openSession.id)} at={openSession.at} onClose={() => setOpenSession(undefined)} />
       )}
 
+      <EntregablesModal
+        open={entregables}
+        onClose={() => setEntregables(false)}
+        study={study}
+        sessions={sessions}
+        events={events}
+        autor={userName(db, study.owner)}
+        exportando={exporting}
+        onJson={() => void exportJson()}
+        onCsv={exportCsv}
+      />
+
       <Modal
         open={!!confirmSession}
         title="Eliminar esta sesión"
@@ -841,6 +840,107 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
         <p>Se eliminarán «{study.name}», sus {sessions.length} sesiones y sus grabaciones. Exporta los resultados antes si quieres conservarlos.</p>
       </Modal>
     </>
+  );
+}
+
+/** Todo lo que este estudio puede entregarle a otra persona, en un solo lugar. */
+function EntregablesModal({
+  open,
+  onClose,
+  study,
+  sessions,
+  events,
+  autor,
+  exportando,
+  onJson,
+  onCsv,
+}: {
+  open: boolean;
+  onClose: () => void;
+  study: Study;
+  sessions: Session[];
+  events: StudyEvent[];
+  autor: string;
+  exportando: boolean;
+  onJson: () => void;
+  onCsv: () => void;
+}) {
+  const [armando, setArmando] = useState(false);
+
+  const deck = async () => {
+    setArmando(true);
+    try {
+      const laminas = await descargarDeck(study, sessions, events, `${slug(study.name)}-presentacion.pptx`, { autor });
+      notify(`Listo: ${laminas} láminas. Se abre en PowerPoint, Keynote o Google Slides.`, 'success');
+      onClose();
+    } catch {
+      notify('No pudimos armar la presentación. Intenta de nuevo.', 'error');
+    } finally {
+      setArmando(false);
+    }
+  };
+
+  const items = [
+    {
+      id: 'deck',
+      titulo: 'Presentación',
+      formato: '.pptx',
+      texto: 'Once láminas editables para defender la decisión frente a otras personas: el índice, los tres hallazgos más graves con su evidencia y su cita, el desempeño por tarea y los próximos pasos.',
+      accion: (
+        <Button tone="primary" disabled={armando} onClick={() => void deck()}>
+          {armando ? 'Armando láminas…' : 'Descargar presentación'}
+        </Button>
+      ),
+    },
+    {
+      id: 'informe',
+      titulo: 'Informe completo',
+      formato: '.html',
+      texto: 'Seis hojas para leer y archivar: resumen ejecutivo, hallazgos priorizados, desempeño por tarea con embudos, comparativa por perfil, método y anexo de sesiones. Se imprime a PDF desde el navegador.',
+      accion: (
+        <Button onClick={() => download(`${slug(study.name)}-informe.html`, informeHtml(study, sessions, events, autor), 'text/html')}>Descargar informe</Button>
+      ),
+    },
+    {
+      id: 'texto',
+      titulo: 'Resumen en texto',
+      formato: 'portapapeles',
+      texto: 'El mismo contenido en texto plano, para pegarlo en un correo, un ticket o un mensaje.',
+      accion: <Button onClick={() => void copyText(informeMarkdown(study, sessions, events), 'Copiaste el informe en texto. Pégalo donde lo necesites.')}>Copiar resumen</Button>,
+    },
+    {
+      id: 'datos',
+      titulo: 'Datos en bruto',
+      formato: '.json · .csv',
+      texto: 'Las sesiones completas con sus grabaciones (JSON) o todos los eventos uno por fila para analizar aparte (CSV).',
+      accion: (
+        <span className="row">
+          <Button disabled={exportando} onClick={onJson}>
+            {exportando ? 'Preparando…' : 'JSON'}
+          </Button>
+          <Button onClick={onCsv}>CSV</Button>
+        </span>
+      ),
+    },
+  ];
+
+  return (
+    <Modal open={open} wide title="Entregables" onClose={onClose}>
+      <p className="muted modal-lede">Todo se arma en este navegador con los datos del estudio: nada se envía a ningún servicio ni tiene costo.</p>
+      <ul className="entregables">
+        {items.map((i) => (
+          <li key={i.id}>
+            <span className="entregable-main">
+              <strong>
+                {i.titulo} <span className="entregable-formato">{i.formato}</span>
+              </strong>
+              <span className="muted small">{i.texto}</span>
+            </span>
+            {i.accion}
+          </li>
+        ))}
+      </ul>
+    </Modal>
   );
 }
 

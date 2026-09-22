@@ -122,6 +122,17 @@ La pestaña **Diseño / Prototipo**, sobre el lienzo, cambia a un modo parecido 
 - Las flechas entre zonas y pantallas se dibujan sobre el lienzo.
 - Una zona seleccionada se mueve arrastrándola y se ajusta desde sus esquinas: sirve cuando Figma trae la flecha en el frame completo y solo un botón debería avanzar.
 
+## Entregables de un estudio
+
+En Resultados, el botón **Entregables** reúne todo lo que el estudio puede darle a otra persona, sin API y sin costo:
+
+- **Presentación (`.pptx`)** — once láminas editables (`src/lib/deck.ts`, con PptxGenJS cargado solo al exportar): portada, Índice Forma, indicadores, resumen ejecutivo, los tres hallazgos más graves —uno por lámina, con evidencia, cita y acción—, desempeño por tarea, comparativa por perfil, método y próximos pasos. Cada lámina trae notas para quien presenta.
+- **Informe (`.html`)** — seis hojas para leer y archivar, imprimibles a PDF.
+- **Resumen en texto** — el mismo contenido al portapapeles.
+- **Datos** — JSON con grabaciones o CSV de eventos.
+
+Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exactamente lo mismo.
+
 ## IA del equipo
 
 La clave de Anthropic vive en el proyecto en la nube (`forma-pro-cl26`), no en los navegadores: quien tenga su correo en la lista autorizada usa el asistente y el resumen de investigación desde cualquier equipo, solo con guardar su acceso por correo en Ajustes.
