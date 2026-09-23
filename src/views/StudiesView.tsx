@@ -8,7 +8,7 @@ import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
 import { checkProject, hasBlockingErrors } from '../lib/flowCheck';
 import { analyzeStudy, blockLabel, buildAiDataset, consentedSessions, fmt1, fmtDuration, overview, screenName, taskFunnel, type Overview } from '../lib/analysis';
-import { construirInforme, NIVELES, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
+import { construirInforme, pct, SEVERIDAD_LABEL, type Hallazgo, type Metricas } from '../lib/insights';
 import { informeHtml, informeMarkdown } from '../lib/report';
 import { descargarDeck, type TemaIa } from '../lib/deck';
 import { consumoDeIa, getAiKey, iaDisponible, summarizeResearch, type IaConsumo, type VerifiedTheme } from '../lib/ai';
@@ -970,22 +970,6 @@ function EntregablesModal({
   );
 }
 
-/** Anillo del índice: la cifra que resume si el flujo está para construirse. */
-function Anillo({ valor }: { valor: number }) {
-  const r = 34;
-  const c = 2 * Math.PI * r;
-  const avance = (Math.max(0, Math.min(100, valor)) / 100) * c;
-  return (
-    <svg className="anillo" viewBox="0 0 84 84" role="img" aria-label={`Índice Forma ${valor} de 100`}>
-      <circle cx="42" cy="42" r={r} fill="none" stroke="var(--accent-line)" strokeWidth="8" />
-      <circle cx="42" cy="42" r={r} fill="none" stroke="var(--accent)" strokeWidth="8" strokeLinecap="round" strokeDasharray={`${avance} ${c - avance}`} transform="rotate(-90 42 42)" />
-      <text x="42" y="48" textAnchor="middle" fontSize="22" fontWeight="600" fill="var(--ink)">
-        {valor}
-      </text>
-    </svg>
-  );
-}
-
 function Tablero({ m, hallazgos, o }: { m: Metricas; hallazgos: Hallazgo[]; o: Overview }) {
   const prioritarios = hallazgos.filter((h) => h.severidad === 'critica' || h.severidad === 'alta').length;
   const items = [
@@ -1001,45 +985,28 @@ function Tablero({ m, hallazgos, o }: { m: Metricas; hallazgos: Hallazgo[]; o: O
   return (
     <section className="card tablero">
       {m.indice != null && (
-        <div className="tablero-indice">
-          <span className="indice-medidor">
-            <Anillo valor={m.indice} />
-            <em>Índice Forma</em>
-          </span>
-          <div className="indice-texto">
-            <h2>{m.titulo}</h2>
+        <div className={`veredicto nivel-${m.nivel}`}>
+          <div className="veredicto-dicho">
+            <h2>
+              <i aria-hidden="true" /> {m.titulo}
+            </h2>
             <p>{m.consejo}</p>
-            <div className="indice-escala" role="img" aria-label={`Índice Forma ${m.indice} de 100: ${m.titulo}`}>
-              {NIVELES.map((n, i) => {
-                const hasta = NIVELES[i + 1]?.desde ?? 100;
-                const aqui = m.nivel === n.id;
-                // La marca vive dentro de su tramo: así nunca aparece sobre el vecino por culpa de los espacios.
-                const dentro = Math.min(88, Math.max(12, ((m.indice! - n.desde) / (hasta - n.desde)) * 100));
-                return (
-                  <span key={n.id} className={`tramo ${aqui ? 'aqui' : ''}`} style={{ flexGrow: hasta - n.desde }}>
-                    <i />
-                    <em>{n.etiqueta}</em>
-                    {aqui && (
-                      <span className="indice-marca" style={{ left: `${dentro}%` }}>
-                        <b>{m.indice}</b>
-                      </span>
-                    )}
-                  </span>
-                );
-              })}
-            </div>
+            {m.confianza !== 'alta' && (
+              <p className="veredicto-aviso">
+                Con {m.sesiones} {m.sesiones === 1 ? 'sesión' : 'sesiones'} esto sirve para priorizar, no para afirmar magnitudes.
+              </p>
+            )}
+          </div>
+          <div className="veredicto-cifra">
+            <strong>{m.indice}</strong>
+            <span>de 100</span>
             <details className="indice-como">
               <summary>Cómo se calcula</summary>
               <p className="muted small">
-                Índice Forma: tareas logradas (45%), eficiencia frente al camino más corto (25%) y esfuerzo percibido (30%). Es una medida propia de esta plataforma para comparar versiones de un mismo flujo, no un
-                estándar de la industria.
+                Índice Forma: tareas logradas (45%), eficiencia frente al camino más corto (25%) y esfuerzo percibido (30%). Sirve para comparar versiones de un mismo flujo; no es un estándar de la industria. Bajo 55
+                conviene rehacer el camino, hasta 69 corregir, hasta 84 ajustar y desde 85 avanzar.
               </p>
             </details>
-            {m.confianza !== 'alta' && (
-              <span className="aviso-muestra">
-                Muestra {m.confianza === 'media' ? 'acotada' : 'exploratoria'}: {m.sesiones} {m.sesiones === 1 ? 'sesión' : 'sesiones'}. Sirve para priorizar, no para afirmar magnitudes.
-              </span>
-            )}
           </div>
         </div>
       )}

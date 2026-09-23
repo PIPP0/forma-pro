@@ -5365,116 +5365,79 @@ dialog.modal {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
-.tablero-indice {
+/* El veredicto manda: una frase que se entiende sola, con el color del estado.
+   La cifra queda al lado como referencia, no como protagonista. */
+.veredicto {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
   align-items: center;
-  padding-bottom: 20px;
+  padding: 4px 0 20px;
   margin-bottom: 20px;
   border-bottom: 1px solid var(--rule-soft);
 }
-.anillo {
-  width: 84px;
-  height: 84px;
-  flex: none;
-}
-.indice-medidor {
-  display: grid;
-  justify-items: center;
-  gap: 6px;
-}
-.indice-medidor em {
-  font-style: normal;
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-3);
-}
-.indice-texto {
-  display: grid;
-  gap: 8px;
-  min-width: 0;
-}
-.tablero-indice h2 {
-  margin: 0;
-  font-size: 19px;
+.veredicto h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--ink);
 }
-.tablero-indice p {
+.veredicto h2 i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--estado, var(--accent));
+}
+.veredicto p {
   margin: 0;
-  max-width: 78ch;
+  max-width: 76ch;
   color: var(--ink-2);
+  font-size: 14.5px;
+  line-height: 1.6;
 }
-/* Escala: responde «¿y 85 es bueno?» sin tener que explicarlo. */
-.indice-escala {
-  position: relative;
-  display: flex;
-  gap: 3px;
-  margin: 14px 0 6px;
-  max-width: 460px;
+.veredicto-aviso {
+  margin-top: 8px !important;
+  font-size: 13px !important;
+  color: var(--warn) !important;
 }
-.indice-escala .tramo {
-  position: relative;
+.veredicto-cifra {
   display: grid;
-  gap: 4px;
-  min-width: 0;
-  /* Sin base cero, el ancho del texto desalinea los tramos y la marca cae en el tramo vecino. */
-  flex-basis: 0;
+  justify-items: center;
+  gap: 1px;
+  padding-left: 24px;
+  border-left: 1px solid var(--rule-soft);
+  min-width: 132px;
 }
-.indice-escala .tramo i {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--rule);
+.veredicto-cifra strong {
+  font-size: 40px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: var(--estado, var(--accent));
 }
-.indice-escala .tramo.aqui i {
-  background: var(--accent);
-}
-.indice-escala .tramo em {
-  font-style: normal;
-  font-size: 11.5px;
+.veredicto-cifra > span {
+  font-size: 12px;
   color: var(--ink-3);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
-.indice-escala .tramo.aqui em {
-  color: var(--ink);
-  font-weight: 600;
+.nivel-avanzar {
+  --estado: var(--ok);
 }
-.tramo-rango {
-  display: none;
+.nivel-ajustar {
+  --estado: var(--accent);
 }
-.indice-marca {
-  position: absolute;
-  top: -21px;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 999px;
-  padding: 1px 7px;
+.nivel-corregir {
+  --estado: #c9701c;
 }
-.indice-marca::after {
-  content: '';
-  position: absolute;
-  left: 50%;
-  bottom: -5px;
-  width: 1px;
-  height: 5px;
-  background: var(--accent-line);
+.nivel-rehacer {
+  --estado: var(--err);
 }
 .indice-como {
-  margin-top: 2px;
-}
-@media (max-width: 560px) {
-  /* En pantalla angosta los cuatro rótulos se truncan: queda el tramo en el que estás. */
-  .indice-escala .tramo:not(.aqui) em {
-    visibility: hidden;
-  }
+  margin-top: 8px;
 }
 .indice-como summary {
   cursor: pointer;
@@ -5501,17 +5464,25 @@ dialog.modal {
   color: var(--ink-2);
 }
 .indice-como p {
-  margin: 6px 0 0;
-  max-width: 78ch;
+  margin: 8px 0 0;
+  max-width: 46ch;
+  text-align: left;
 }
-.aviso-muestra {
-  justify-self: start;
-  font-size: 12.5px;
-  color: var(--warn);
-  background: var(--warn-soft);
-  border-radius: var(--r-control);
-  padding: 7px 11px;
-  margin-top: 4px;
+@media (max-width: 720px) {
+  .veredicto {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+  .veredicto-cifra {
+    justify-items: start;
+    padding: 12px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--rule-soft);
+    width: 100%;
+  }
+  .indice-como p {
+    max-width: none;
+  }
 }
 
 .hallazgo {
