@@ -1012,17 +1012,21 @@ function Tablero({ m, hallazgos, o }: { m: Metricas; hallazgos: Hallazgo[]; o: O
             <div className="indice-escala" role="img" aria-label={`Índice Forma ${m.indice} de 100: ${m.titulo}`}>
               {NIVELES.map((n, i) => {
                 const hasta = NIVELES[i + 1]?.desde ?? 100;
+                const aqui = m.nivel === n.id;
+                // La marca vive dentro de su tramo: así nunca aparece sobre el vecino por culpa de los espacios.
+                const dentro = Math.min(88, Math.max(12, ((m.indice! - n.desde) / (hasta - n.desde)) * 100));
                 return (
-                  <span key={n.id} className={`tramo ${m.nivel === n.id ? 'aqui' : ''}`} style={{ flexGrow: hasta - n.desde }}>
+                  <span key={n.id} className={`tramo ${aqui ? 'aqui' : ''}`} style={{ flexGrow: hasta - n.desde }}>
                     <i />
                     <em>{n.etiqueta}</em>
-                    <span className="tramo-rango">{n.desde}</span>
+                    {aqui && (
+                      <span className="indice-marca" style={{ left: `${dentro}%` }}>
+                        <b>{m.indice}</b>
+                      </span>
+                    )}
                   </span>
                 );
               })}
-              <span className="indice-marca" style={{ left: `${m.indice}%` }}>
-                <b>{m.indice}</b>
-              </span>
             </div>
             <details className="indice-como">
               <summary>Cómo se calcula</summary>

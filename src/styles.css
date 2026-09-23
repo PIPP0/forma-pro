@@ -5417,6 +5417,7 @@ dialog.modal {
   max-width: 460px;
 }
 .indice-escala .tramo {
+  position: relative;
   display: grid;
   gap: 4px;
   min-width: 0;
@@ -5448,7 +5449,7 @@ dialog.modal {
 }
 .indice-marca {
   position: absolute;
-  top: -20px;
+  top: -21px;
   transform: translateX(-50%);
   font-size: 11px;
   font-weight: 600;
