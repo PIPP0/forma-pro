@@ -267,6 +267,7 @@ export function ImageScreen({
   // El arrastre vive en refs: los eventos llegan antes del siguiente render.
   const arrastre = useRef<{ id: string; modo: 'mover' | Esquina; desde: { x: number; y: number }; original: Caja; actual: Caja } | null>(null);
   const [ajuste, setAjuste] = useState<{ id: string; actual: Caja } | null>(null);
+  const [falloImagen, setFalloImagen] = useState(false);
   if (!screen.image) return null;
 
   // De mayor a menor: la zona chica se dibuja encima y es la que recibe el toque,
@@ -365,7 +366,23 @@ export function ImageScreen({
 
   return (
     <div className="img-screen" ref={host}>
-      <img src={screen.image.url} alt={screen.name} draggable={false} />
+      <img
+        src={screen.image.url}
+        alt={screen.name}
+        draggable={false}
+        onLoad={() => setFalloImagen(false)}
+        // Un marco en blanco no dice nada: si la imagen no llega, hay que decir por qué.
+        onError={() => setFalloImagen(true)}
+      />
+      {falloImagen && (
+        <div className="img-caida">
+          <strong>No se pudo cargar esta pantalla</strong>
+          <span>La imagen vive en la nube de Forma. Suele ser la conexión de este equipo, una extensión que bloquea contenido o un firewall.</span>
+          <a href={screen.image.url} target="_blank" rel="noreferrer">
+            Abrir la imagen directamente
+          </a>
+        </div>
+      )}
       {zonas.map((h) => {
         const sel = selectedId === h.id;
         const c = ajuste?.id === h.id ? ajuste.actual : h;

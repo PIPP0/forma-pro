@@ -32,7 +32,7 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
     setEntrando(true);
     try {
       const cuenta = await entrarConPassword(correo, clave);
-      entrarComoCuenta(cuenta.email ?? correo, name);
+      entrarComoCuenta(cuenta.email ?? correo, name, cuenta.veniaSinCuenta);
       olvidarPreferencia();
       setCloudAccountCache(cuenta);
       setClave('');

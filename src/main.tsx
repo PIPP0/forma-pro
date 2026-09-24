@@ -19,7 +19,7 @@ if (isAccessLink()) {
       // Entrar con un correo es entrar de verdad: la sesión local pasa a ser esa cuenta, y con
       // ella llegan sus proyectos. Si no, quedarías dentro con otra identidad y verías otra cosa.
       if (account.email) {
-        entrarComoCuenta(account.email);
+        entrarComoCuenta(account.email, undefined, account.veniaSinCuenta);
         olvidarPreferencia();
       }
       setCloudAccountCache(account);

@@ -42,6 +42,8 @@ export interface CloudAccount {
   uid: string;
   /** null: cuenta anónima de este navegador (sin correo guardado). */
   email: string | null;
+  /** Este navegador venía sin cuenta: lo que hay aquí todavía no es de nadie. */
+  veniaSinCuenta?: boolean;
 }
 
 const EMAIL_KEY = 'formapro.cloud.email';
@@ -82,6 +84,7 @@ export async function entrarConPassword(email: string, password: string): Promis
   const c = await cloud();
   const correo = email.trim().toLowerCase();
   const actual = c.auth.currentUser;
+  const veniaSinCuenta = !actual || actual.isAnonymous;
   const credencial = c.fa.EmailAuthProvider.credential(correo, password);
 
   const entrar = async () => (await c.fa.signInWithEmailAndPassword(c.auth, correo, password)).user;
@@ -106,7 +109,7 @@ export async function entrarConPassword(email: string, password: string): Promis
       }
     }
     writeLocal(EMAIL_KEY, null);
-    return { uid: user.uid, email: user.email ?? correo };
+    return { uid: user.uid, email: user.email ?? correo, veniaSinCuenta };
   } catch (e) {
     const code = (e as { code?: string }).code;
     if (code === 'auth/invalid-credential' || code === 'auth/wrong-password')
@@ -139,6 +142,7 @@ export async function completeAccessLink(): Promise<CloudAccount> {
   const email = readLocal(EMAIL_KEY);
   if (!email) throw new Error('Abre el enlace en el mismo navegador donde lo pediste, o pide uno nuevo desde Ajustes.');
   const current = c.auth.currentUser;
+  const veniaSinCuenta = !current || current.isAnonymous;
   let user;
   if (current?.isAnonymous) {
     // Se vincula el correo a la cuenta anónima: los estudios y resultados siguen siendo suyos.
@@ -154,7 +158,7 @@ export async function completeAccessLink(): Promise<CloudAccount> {
     user = (await c.fa.signInWithEmailLink(c.auth, email, location.href)).user;
   }
   writeLocal(EMAIL_KEY, null);
-  return { uid: user.uid, email: user.email ?? email };
+  return { uid: user.uid, email: user.email ?? email, veniaSinCuenta };
 }
 
 /** Credencial de la sesión actual para llamar a las funciones del proyecto. Vacía si la cuenta es anónima. */

@@ -6,7 +6,7 @@ import type { DB, Membership, Project, Session, Study, StudyEvent } from './mode
 import { roleFor } from './permissions';
 import { uid } from './ids';
 import { borrarDelEspacio, bajarDelEspacio, ensureCloudAccount, leerIndiceEspacio, subirAlEspacio, type EntradaEspacio } from './cloud';
-import { currentUser, getDb, reemplazarDesdeNube } from './store';
+import { currentUser, getDb, projectsFor, reemplazarDesdeNube } from './store';
 
 /** Paquete de un estudio: lo que hace falta para que sus resultados se vean en otro equipo. */
 interface PaqueteEstudio {
@@ -103,26 +103,32 @@ export async function sincronizarEspacio(): Promise<ResumenSync> {
   const remoto = new Map(indice.map((e) => [clave(e), e]));
   const resumen: ResumenSync = { ...vacio, conflictos: [] };
 
-  // Lo local, con su fecha de modificación.
+  // Lo local, con su fecha de modificación. Solo lo de esta cuenta: en un navegador compartido
+  // pueden convivir los proyectos de otra persona, y no tienen por qué viajar a este espacio.
+  const mios = projectsFor(db, currentUser(db));
+  const idsMios = new Set(mios.map((p) => p.id));
   const locales: { entrada: EntradaEspacio; contenido: unknown }[] = [
-    ...db.projects.map((p) => ({ entrada: { tipo: 'proyecto' as const, id: p.id, nombre: p.name, actualizado: p.updatedAt }, contenido: p })),
-    ...db.studies.map((s) => {
-      const sessions = db.sessions.filter((x) => x.studyId === s.id);
-      const ids = new Set(sessions.map((x) => x.id));
-      return {
-        entrada: { tipo: 'estudio' as const, id: s.id, nombre: s.name, actualizado: marcaEstudio(s, sessions) },
-        contenido: { study: s, sessions, events: db.events.filter((e) => ids.has(e.sessionId)) } satisfies PaqueteEstudio,
-      };
-    }),
+    ...mios.map((p) => ({ entrada: { tipo: 'proyecto' as const, id: p.id, nombre: p.name, actualizado: p.updatedAt }, contenido: p })),
+    ...db.studies
+      .filter((s) => idsMios.has(s.projectId))
+      .map((s) => {
+        const sessions = db.sessions.filter((x) => x.studyId === s.id);
+        const ids = new Set(sessions.map((x) => x.id));
+        return {
+          entrada: { tipo: 'estudio' as const, id: s.id, nombre: s.name, actualizado: marcaEstudio(s, sessions) },
+          contenido: { study: s, sessions, events: db.events.filter((e) => ids.has(e.sessionId)) } satisfies PaqueteEstudio,
+        };
+      }),
   ];
   // Un proyecto de ejemplo recién sembrado: nunca se editó y no tiene estudios.
   const intacto = (p?: Project) => !!p && p.updatedAt === p.createdAt && !db.studies.some((s) => s.projectId === p.id);
+  const mioPorId = new Map(mios.map((p) => [p.id, p]));
 
   // Qué mover, decidido aparte.
   const plan = planificar(
     locales.map((l) => ({
       ...l.entrada,
-      prescindible: l.entrada.tipo === 'proyecto' && intacto(db.projects.find((p) => p.id === l.entrada.id)!),
+      prescindible: l.entrada.tipo === 'proyecto' && intacto(mioPorId.get(l.entrada.id)),
     })),
     indice,
   );

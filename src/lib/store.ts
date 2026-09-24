@@ -196,9 +196,12 @@ if (typeof window !== 'undefined') void Promise.resolve().then(ensureSamples);
 
 /**
  * Entrar con un correo: el mismo que identifica tu espacio en la nube.
- * Lo que ya estaba en este navegador no se pierde de vista: pasa a estar a tu nombre.
+ *
+ * `heredarLocales` solo se activa cuando lo que hay en este navegador no es de nadie todavía
+ * —se trabajó sin cuenta— para no perderlo de vista al entrar por primera vez. Si aquí ya
+ * trabajó otra cuenta, sus proyectos no se heredan: cada correo ve lo suyo.
  */
-export function entrarComoCuenta(email: string, nombre?: string): boolean {
+export function entrarComoCuenta(email: string, nombre?: string, heredarLocales = false): boolean {
   const correo = email.trim().toLowerCase();
   if (!EMAIL.test(correo)) return false;
   const anterior = currentUser();
@@ -208,7 +211,7 @@ export function entrarComoCuenta(email: string, nombre?: string): boolean {
     user = { id: uid('u_'), name: nombre?.trim() || correo.split('@')[0], email: correo };
     next = { ...next, users: [...next.users, user] };
   }
-  const visibles = anterior ? projectsFor(next, anterior) : next.projects;
+  const visibles = heredarLocales ? (anterior ? projectsFor(next, anterior) : next.projects) : [];
   const nuevas: Membership[] = visibles
     .filter((p) => !roleFor(next, p, user!))
     .map((p) => ({ id: uid('m_'), subjectType: 'project' as const, subjectId: p.id, email: correo, role: 'owner' as const }));
