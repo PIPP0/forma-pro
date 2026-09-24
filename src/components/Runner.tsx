@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type MouseEvent } from 'react';
 import type { Block, Breakpoint, Hotspot, Mode, Project, StudyEvent } from '../lib/model';
 import { CHOICE_TYPES, TOGGLE_TYPES, baseId, blockMeta, breakpointOf, hotspotAt, screenFor, withValues } from '../lib/model';
 import { notify } from '../lib/toast';
+import { emitir as emitirFeedback, prepararSonido, type Feedback } from '../lib/feedback';
 import { BlockView } from './BlockView';
 import { ImageScreen, PhoneChrome, ScaledFrame, SheetLayout, blockWrapperStyle, contentWidth, screenStyle, sheetBackdrop } from './ScreenCanvas';
 
@@ -90,6 +91,8 @@ export function Runner({
     if (!target || baseId(target) === baseId(current)) return;
     setErrors({});
     setStack((s) => [...s, targetId]);
+    // Lo que se siente al llegar: la confirmación que en una app real llega por el cuerpo.
+    emitirFeedback(target.feedback);
     emit({ kind: 'navigate', screen: target.id, x: 0, y: 0 });
   };
 
@@ -126,6 +129,7 @@ export function Runner({
 
   /** Pantalla importada como imagen: se navega por sus zonas tocables. */
   const onImageClick = (e: MouseEvent) => {
+    prepararSonido();
     // Se elige por geometría, no por el orden de dibujo: manda la zona más chica bajo el dedo.
     const host = (e.currentTarget as HTMLElement).querySelector('.img-screen');
     let hotspot: Hotspot | undefined;
@@ -150,6 +154,7 @@ export function Runner({
     }
     if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: hotspot.id, dwell: Math.round(gap), ...c });
     emit({ kind: 'tap', screen: current.id, block: hotspot.id, ...c });
+    emitirFeedback(hotspot.feedback);
     if (hotspot.back) {
       navigate({ id: '', type: 'button', label: '', action: 'back' });
       return;
@@ -160,6 +165,7 @@ export function Runner({
   };
 
   const onClick = (e: MouseEvent) => {
+    prepararSonido();
     const target = e.target as Element;
     if (target.closest('[data-scrim]')) {
       // Tocar fuera de la hoja inferior la cierra, como en una app real.

@@ -5,6 +5,7 @@ import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resol
 import { can } from '../lib/permissions';
 import { clone, edit, quitarFigmaOps } from '../lib/ops';
 import { conImagenExterna, incrustarImagenes } from '../lib/incrustar';
+import { SONIDOS, VIBRACIONES, reproducir, vibracionDisponible, vibrar, type SonidoId, type VibracionId } from '../lib/feedback';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
 import { colorValue, effectiveStyle, findComponent } from '../lib/tokens';
 import { importHtml } from '../lib/importer';
@@ -1152,8 +1153,8 @@ function HotspotsSection({
         </p>
       )}
       {hotspots.map((h, i) => (
+        <Fragment key={h.id}>
         <Field
-          key={h.id}
           className={selected === h.id ? 'zona-elegida' : ''}
           label={
             onSelect ? (
@@ -1203,8 +1204,137 @@ function HotspotsSection({
               </Button>
             )}
           </div>
+          {(h.target || h.back) && (
+            <div className="zona-feedback">
+              <select
+                className="input"
+                aria-label={`Sonido al tocar ${h.label || 'la zona'}`}
+                value={h.feedback?.sonido ?? ''}
+                disabled={!editable}
+                onChange={(e) => {
+                  const sonido = e.target.value || undefined;
+                  const f = { ...h.feedback, sonido };
+                  save(
+                    hotspots.map((x) => (x.id === h.id ? { ...x, feedback: f.sonido || f.vibracion ? f : undefined } : x)),
+                    `Cambiar el sonido de «${h.label || 'la zona'}»`,
+                  );
+                  reproducir(sonido as SonidoId | undefined);
+                }}
+              >
+                <option value="">Sin sonido</option>
+                {SONIDOS.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nombre}
+                  </option>
+                ))}
+              </select>
+              <select
+                className="input"
+                aria-label={`Vibración al tocar ${h.label || 'la zona'}`}
+                value={h.feedback?.vibracion ?? ''}
+                disabled={!editable}
+                onChange={(e) => {
+                  const vibracion = e.target.value || undefined;
+                  const f = { ...h.feedback, vibracion };
+                  save(
+                    hotspots.map((x) => (x.id === h.id ? { ...x, feedback: f.sonido || f.vibracion ? f : undefined } : x)),
+                    `Cambiar la vibración de «${h.label || 'la zona'}»`,
+                  );
+                  vibrar(vibracion as VibracionId | undefined);
+                }}
+              >
+                <option value="">Sin vibración</option>
+                {VIBRACIONES.map((x) => (
+                  <option key={x.id} value={x.id}>
+                    {x.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </Field>
+        </Fragment>
       ))}
+    </Section>
+  );
+}
+
+/**
+ * Elegir qué se oye y qué se siente. Cada opción se prueba al elegirla: un sonido no se puede
+ * juzgar leyendo su nombre.
+ */
+function FeedbackSection({
+  titulo,
+  ayuda,
+  valor,
+  editable,
+  onChange,
+}: {
+  titulo: string;
+  ayuda: string;
+  valor?: { sonido?: string; vibracion?: string };
+  editable: boolean;
+  onChange: (v: { sonido?: string; vibracion?: string } | undefined) => void;
+}) {
+  const hayVibracion = vibracionDisponible();
+  const set = (parche: { sonido?: string; vibracion?: string }) => {
+    const proximo = { ...valor, ...parche };
+    const vacio = !proximo.sonido && !proximo.vibracion;
+    onChange(vacio ? undefined : proximo);
+  };
+
+  return (
+    <Section title={titulo}>
+      <p className="muted small">{ayuda}</p>
+      <Field label="Sonido">
+        <select
+          className="input"
+          value={valor?.sonido ?? ''}
+          disabled={!editable}
+          onChange={(e) => {
+            const id = e.target.value || undefined;
+            set({ sonido: id });
+            reproducir(id as SonidoId | undefined);
+          }}
+        >
+          <option value="">Sin sonido</option>
+          {SONIDOS.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.nombre} — {x.descripcion}
+            </option>
+          ))}
+        </select>
+      </Field>
+      <Field label="Vibración" hint={hayVibracion ? undefined : 'Este equipo no vibra. Android sí lo hace; el iPhone no lo permite desde el navegador.'}>
+        <select
+          className="input"
+          value={valor?.vibracion ?? ''}
+          disabled={!editable}
+          onChange={(e) => {
+            const id = e.target.value || undefined;
+            set({ vibracion: id });
+            vibrar(id as VibracionId | undefined);
+          }}
+        >
+          <option value="">Sin vibración</option>
+          {VIBRACIONES.map((x) => (
+            <option key={x.id} value={x.id}>
+              {x.nombre} — {x.descripcion}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {(valor?.sonido || valor?.vibracion) && (
+        <Button
+          size="sm"
+          onClick={() => {
+            reproducir(valor.sonido as SonidoId | undefined);
+            vibrar(valor.vibracion as VibracionId | undefined);
+          }}
+        >
+          <IconPlay size={14} /> Probarlo
+        </Button>
+      )}
     </Section>
   );
 }
@@ -1315,6 +1445,13 @@ function ScreenProps({
         </span>
       </div>
       {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} drawing={drawing} onDrawing={onDrawing} selected={selectedId} onSelect={onSelectZone} />}
+      <FeedbackSection
+        titulo="Al llegar aquí"
+        ayuda="Lo que se oye y se siente cuando alguien llega a esta pantalla. Se nota sobre todo en confirmaciones y errores."
+        valor={base.feedback}
+        editable={editable}
+        onChange={(v) => apply([edit.screen(project, base.id, 'feedback', v)], v ? `Dar sonido a «${base.name}»` : `Quitar el sonido de «${base.name}»`)}
+      />
       <Section title="Contenido">
         <Field label="Nombre de pantalla">
           <CommitInput

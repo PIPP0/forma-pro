@@ -207,6 +207,8 @@ export interface Hotspot {
   /** La pantalla de destino se abre encima de la actual (superposición de Figma). */
   overlay?: boolean;
   label?: string;
+  /** Sonido y vibración al tocar esta zona. */
+  feedback?: { sonido?: string; vibracion?: string };
 }
 
 /**
@@ -251,6 +253,8 @@ export interface Screen {
   figmaParts?: { id: string; name: string; x: number; y: number; w: number; h: number; k?: 'i' | 'f' | 't' | 'v' }[];
   /** Transición automática: pasa sola a otra pantalla tras unos milisegundos. */
   autoNext?: { ms: number; target?: string; back?: boolean };
+  /** Sonido y vibración al llegar a esta pantalla. */
+  feedback?: { sonido?: string; vibracion?: string };
   blocks: Block[];
 }
 

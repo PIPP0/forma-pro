@@ -139,6 +139,15 @@ La app pregunta con qué correo entras antes de abrir el espacio. Se entra con *
 
 Entrar con un correo alinea las dos identidades que antes vivían separadas: la sesión local de la app y la cuenta de la nube. Lo que ya existía en el navegador no se pierde de vista: pasa a estar a nombre de quien entra.
 
+## Sonido y vibración
+
+Un prototipo se siente real cuando confirma por el oído y por el cuerpo, no solo por la pantalla. En **Diseñar → Propiedades** cada pantalla tiene «Al llegar aquí» y cada zona tocable sus propios selectores:
+
+- Ocho sonidos (toque, éxito, error, aviso, transición, envío, abono, tecla) **sintetizados con Web Audio** en `src/lib/feedback.ts`: no hay archivos que subir, que pesar ni que cargar desde la nube, y cada uno se prueba al elegirlo.
+- Cinco patrones de vibración vía `navigator.vibrate`. **Android vibra; el iPhone no**, porque Safari no expone esa API: el selector lo dice cuando el equipo no puede.
+- El audio de un navegador solo arranca tras un gesto, así que el primer toque de la prueba despierta el `AudioContext` y el primer sonido no llega tarde.
+- `silenciar()` existe para pruebas en sala, donde el sonido molesta o contamina la sesión.
+
 ## Imágenes que se ven en cualquier equipo
 
 Una pantalla importada guarda su imagen en la nube y la pide aparte. En equipos con bloqueadores de contenido o redes filtradas esa petición no llega y el marco queda vacío. El botón **Incrustar imágenes** (en Diseñar, junto a «Flujo de Figma») trae cada imagen y la guarda dentro del proyecto, en `screen.image.data`, sin borrar la URL:

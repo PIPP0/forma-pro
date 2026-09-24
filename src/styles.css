@@ -5763,3 +5763,15 @@ dialog.modal {
 .img-caida a {
   font-size: 12.5px;
 }
+
+/* Sonido y vibración de una zona: dos selectores angostos bajo su destino. */
+.zona-feedback {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 6px;
+}
+.zona-feedback select {
+  font-size: 12.5px;
+  padding: 6px 8px;
+}
