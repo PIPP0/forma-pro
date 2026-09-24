@@ -135,7 +135,7 @@ Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exacta
 
 ## Entrar
 
-La app pregunta con qué correo entras antes de abrir el espacio. El correo es la identidad: llega un enlace, se abre en ese navegador y con él bajan los proyectos de esa cuenta. Quien prefiera trabajar solo en un equipo puede decirlo una vez —«Seguir trabajando solo en este navegador»— y no se le vuelve a preguntar hasta que cierre sesión.
+La app pregunta con qué correo entras antes de abrir el espacio. Se entra con **correo y contraseña** (mínimo seis caracteres; si el correo es nuevo, esa pasa a ser su contraseña). Para un correo que se creó con enlace de acceso y todavía no tiene contraseña, «Crear o recuperar contraseña» envía el correo para ponerla. El enlace por correo sigue disponible como camino alternativo. Quien prefiera trabajar solo en un equipo puede decirlo una vez —«Seguir trabajando solo en este navegador»— y no se le vuelve a preguntar hasta que cierre sesión.
 
 Entrar con un correo alinea las dos identidades que antes vivían separadas: la sesión local de la app y la cuenta de la nube. Lo que ya existía en el navegador no se pierde de vista: pasa a estar a nombre de quien entra.
 

@@ -71,6 +71,60 @@ export async function ensureCloudAccount(): Promise<CloudAccount> {
 }
 
 /** Envía el enlace de acceso. Al abrirlo en este navegador, la nube queda conectada. */
+/**
+ * Entrar con correo y contraseña. Si el correo no existe todavía, crea la cuenta con esa clave.
+ * La cuenta anónima de este navegador se vincula para no perder los estudios ya publicados.
+ */
+export async function entrarConPassword(email: string, password: string): Promise<CloudAccount> {
+  // Se valida antes de llamar: con una clave corta, Firebase responde «credencial inválida» y el
+  // mensaje que llegaría a la pantalla diría algo que no es.
+  if (password.length < 6) throw new Error('La contraseña debe tener al menos 6 caracteres.');
+  const c = await cloud();
+  const correo = email.trim().toLowerCase();
+  const actual = c.auth.currentUser;
+  const credencial = c.fa.EmailAuthProvider.credential(correo, password);
+
+  const entrar = async () => (await c.fa.signInWithEmailAndPassword(c.auth, correo, password)).user;
+
+  try {
+    let user;
+    if (actual?.isAnonymous) {
+      try {
+        user = (await c.fa.linkWithCredential(actual, credencial)).user;
+      } catch (e) {
+        const code = (e as { code?: string }).code;
+        // El correo ya tenía cuenta (otro equipo, o esta misma persona): se entra con ella.
+        if (code === 'auth/email-already-in-use' || code === 'auth/credential-already-in-use') user = await entrar();
+        else throw e;
+      }
+    } else {
+      try {
+        user = await entrar();
+      } catch (e) {
+        if ((e as { code?: string }).code === 'auth/user-not-found') user = (await c.fa.createUserWithEmailAndPassword(c.auth, correo, password)).user;
+        else throw e;
+      }
+    }
+    writeLocal(EMAIL_KEY, null);
+    return { uid: user.uid, email: user.email ?? correo };
+  } catch (e) {
+    const code = (e as { code?: string }).code;
+    if (code === 'auth/invalid-credential' || code === 'auth/wrong-password')
+      throw new Error('La contraseña no coincide. Si nunca le pusiste una a este correo, usa «Crear o recuperar contraseña».');
+    if (code === 'auth/weak-password') throw new Error('La contraseña debe tener al menos 6 caracteres.');
+    if (code === 'auth/invalid-email') throw new Error('Ese correo no tiene un formato válido.');
+    if (code === 'auth/too-many-requests') throw new Error('Demasiados intentos seguidos. Espera un momento y vuelve a probar.');
+    if (code === 'auth/network-request-failed') throw new Error('No hay conexión con la nube. Revisa tu red e inténtalo de nuevo.');
+    throw new Error('No pudimos entrar con ese correo. Inténtalo de nuevo en un momento.');
+  }
+}
+
+/** Para cuando alguien olvida su contraseña: llega un correo para ponerla de nuevo. */
+export async function enviarCambioDePassword(email: string) {
+  const c = await cloud();
+  await c.fa.sendPasswordResetEmail(c.auth, email.trim().toLowerCase(), { url: `${location.origin}${location.pathname}` });
+}
+
 export async function sendAccessLink(email: string) {
   const c = await cloud();
   await c.fa.sendSignInLinkToEmail(c.auth, email, { url: `${location.origin}${location.pathname}`, handleCodeInApp: true });

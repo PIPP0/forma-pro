@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { currentUser, exportWorkspace, importWorkspace, resetWorkspace, useDb } from '../lib/store';
+import { currentUser, exportWorkspace, importWorkspace, resetWorkspace, signOut, useDb } from '../lib/store';
 import { AI_MODELS, consumoDeIa, getAiKey, setAiKey, type IaConsumo } from '../lib/ai';
 import { download } from '../lib/share';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
+import { olvidarPreferencia } from '../lib/session';
 import { Badge, Button, Field, Modal, pickFile, timeAgo } from '../components/ui';
-import { disconnectCloud, sendAccessLink } from '../lib/cloud';
+import { disconnectCloud } from '../lib/cloud';
 import { getFigmaToken, setFigmaToken } from '../lib/figma';
 import { setCloudAccountCache, useCloudAccount } from '../components/useCloudAccount';
 import { sincronizarAhora, useEstadoSync } from '../components/useSync';
@@ -29,7 +30,7 @@ export function SettingsView() {
         </div>
       </div>
 
-      <CloudSection email={user?.email ?? ''} />
+      <CloudSection />
 
       <IaSection hasKey={hasKey} keyValue={key} setKeyValue={setKey} setHasKey={setHasKey} />
 
@@ -167,11 +168,8 @@ function FigmaSection() {
   );
 }
 
-function CloudSection({ email }: { email: string }) {
+function CloudSection() {
   const { account, loading } = useCloudAccount();
-  const [to, setTo] = useState(email);
-  const [sentTo, setSentTo] = useState('');
-  const [busy, setBusy] = useState(false);
 
   return (
     <section className="section">
@@ -201,31 +199,20 @@ function CloudSection({ email }: { email: string }) {
         <p className="muted small">Activa en este navegador. Guarda tu acceso con tu correo para no perder tus resultados si borras los datos del navegador o cambias de equipo.</p>
       )}
       {account && !account.email && (
-        <form
-          className="row add-row"
-          onSubmit={async (e) => {
-            e.preventDefault();
-            const clean = to.trim().toLowerCase();
-            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) return notify('Escribe un correo válido.', 'error');
-            setBusy(true);
-            try {
-              await sendAccessLink(clean);
-              setSentTo(clean);
-            } catch {
-              notify('No pudimos enviar el enlace. Revisa el correo y tu conexión.', 'error');
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <input className="input grow" type="email" aria-label="Correo para conectar la nube" value={to} onChange={(e) => setTo(e.target.value)} />
-          <Button tone="primary" type="submit" disabled={busy}>
-            {busy ? 'Enviando…' : 'Guardar mi acceso'}
+        <div className="row">
+          <Button
+            tone="primary"
+            onClick={() => {
+              olvidarPreferencia();
+              signOut();
+            }}
+          >
+            Entrar con mi correo
           </Button>
-        </form>
+          <span className="muted small">Te lleva a la pantalla de entrada. Con tu correo y contraseña, tus proyectos y resultados te siguen a cualquier computador.</span>
+        </div>
       )}
-      {sentTo && !account?.email && <p className="small">Te enviamos un enlace a {sentTo}. Ábrelo en este mismo navegador para terminar de conectar. Si no llega en un par de minutos, revisa la carpeta de spam.</p>}
-    </section>
+      </section>
   );
 }
 

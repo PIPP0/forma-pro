@@ -5717,3 +5717,15 @@ dialog.modal {
   color: var(--ink-2);
   line-height: 1.6;
 }
+
+.welcome-otras {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.welcome-otras .link-btn {
+  font-size: 13px;
+}

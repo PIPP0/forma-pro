@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { entrarComoCuenta } from '../lib/store';
-import { sendAccessLink } from '../lib/cloud';
+import { enviarCambioDePassword, entrarConPassword, sendAccessLink } from '../lib/cloud';
+import { setCloudAccountCache } from '../components/useCloudAccount';
+import { olvidarPreferencia } from '../lib/session';
 import { notify } from '../lib/toast';
 import { transferProject } from '../lib/seed';
 import { Runner } from '../components/Runner';
@@ -11,27 +13,48 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; onSeguirLocal?: () => void } = {}) {
   const [email, setEmail] = useState('');
+  const [clave, setClave] = useState('');
   const [name, setName] = useState('');
   const [tried, setTried] = useState(false);
-  const [enviando, setEnviando] = useState(false);
+  const [entrando, setEntrando] = useState(false);
+  const [error, setError] = useState('');
   const [enviado, setEnviado] = useState('');
   const demo = useMemo(() => transferProject('demo'), []);
 
-  const emailError = tried && !EMAIL.test(email.trim()) ? 'Escribe un correo con formato válido, por ejemplo nombre@empresa.cl.' : '';
+  const correo = email.trim().toLowerCase();
+  const emailError = tried && !EMAIL.test(correo) ? 'Escribe un correo con formato válido, por ejemplo nombre@empresa.cl.' : '';
+  const claveError = tried && clave.length < 6 ? 'La contraseña debe tener al menos 6 caracteres.' : '';
 
-  /** Entrar de verdad: el enlace conecta este navegador con tus proyectos, estén donde estén. */
   const entrar = async () => {
     setTried(true);
-    const correo = email.trim().toLowerCase();
-    if (!EMAIL.test(correo)) return;
-    setEnviando(true);
+    setError('');
+    if (!EMAIL.test(correo) || clave.length < 6) return;
+    setEntrando(true);
     try {
-      await sendAccessLink(correo);
+      const cuenta = await entrarConPassword(correo, clave);
+      entrarComoCuenta(cuenta.email ?? correo, name);
+      olvidarPreferencia();
+      setCloudAccountCache(cuenta);
+      setClave('');
+      notify(`Entraste como ${cuenta.email}. Estamos trayendo tus proyectos…`, 'success');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setEntrando(false);
+    }
+  };
+
+  /** Camino alternativo, para quien no recuerda su contraseña o prefiere no usarla. */
+  const porCorreo = async (tipo: 'enlace' | 'cambio') => {
+    setTried(true);
+    if (!EMAIL.test(correo)) return;
+    setError('');
+    try {
+      if (tipo === 'enlace') await sendAccessLink(correo);
+      else await enviarCambioDePassword(correo);
       setEnviado(correo);
     } catch {
-      notify('No pudimos enviar el enlace. Revisa tu conexión e inténtalo de nuevo.', 'error');
-    } finally {
-      setEnviando(false);
+      setError('No pudimos enviar el correo. Revisa tu conexión e inténtalo de nuevo.');
     }
   };
 
@@ -47,10 +70,10 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
             <div className="welcome-enviado">
               <h2>Revisa tu correo</h2>
               <p>
-                Enviamos un enlace de acceso a <strong>{enviado}</strong>. Ábrelo en este navegador y entrarás con tus proyectos, vengas del computador que vengas.
+                Te escribimos a <strong>{enviado}</strong>. Abre el enlace en este navegador: según lo que pediste, entrarás directamente o podrás definir tu contraseña.
               </p>
-              <p className="muted small">¿No llega? Revisa la carpeta de no deseados o vuelve a intentarlo en un minuto.</p>
-              <Button onClick={() => setEnviado('')}>Usar otro correo</Button>
+              <p className="muted small">¿No llega? Revisa la carpeta de no deseados o inténtalo de nuevo en un minuto.</p>
+              <Button onClick={() => setEnviado('')}>Volver</Button>
             </div>
           ) : (
             <form
@@ -61,20 +84,31 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
                 void entrar();
               }}
             >
-              <Field
-                label="Tu correo"
-                hint={emailError ? <span className="field-error">{emailError}</span> : 'Te enviamos un enlace para entrar. Sin contraseña, y tus proyectos te siguen a cualquier computador.'}
-              >
+              <Field label="Tu correo" hint={emailError && <span className="field-error">{emailError}</span>}>
                 <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="nombre@empresa.cl" aria-invalid={!!emailError} autoFocus />
               </Field>
-              <Button tone="primary" type="submit" disabled={enviando}>
-                {enviando ? 'Enviando el enlace…' : 'Entrar con mi correo'}
+              <Field
+                label="Contraseña"
+                hint={claveError ? <span className="field-error">{claveError}</span> : 'Si el correo es nuevo, la contraseña que escribas será la suya.'}
+              >
+                <input type="password" autoComplete="current-password" value={clave} onChange={(e) => setClave(e.target.value)} placeholder="Al menos 6 caracteres" aria-invalid={!!claveError} />
+              </Field>
+              {error && <p className="error-text">{error}</p>}
+              <Button tone="primary" type="submit" disabled={entrando}>
+                {entrando ? 'Entrando…' : 'Entrar'}
               </Button>
+              <p className="welcome-otras">
+                <button type="button" className="link-btn" onClick={() => void porCorreo('cambio')}>
+                  Crear o recuperar contraseña
+                </button>
+                <span aria-hidden="true">·</span>
+                <button type="button" className="link-btn" onClick={() => void porCorreo('enlace')}>
+                  Entrar con un enlace por correo
+                </button>
+              </p>
               <details className="welcome-local">
-                <summary>{seguirComo ? `Seguir trabajando solo en este navegador` : 'Probar sin cuenta, solo en este navegador'}</summary>
-                <p className="muted small">
-                  Podrás diseñar y correr pruebas, pero lo que hagas se queda aquí: no viaja a otros equipos ni se recupera si borras los datos del navegador.
-                </p>
+                <summary>{seguirComo ? 'Seguir trabajando solo en este navegador' : 'Probar sin cuenta, solo en este navegador'}</summary>
+                <p className="muted small">Podrás diseñar y correr pruebas, pero lo que hagas se queda aquí: no viaja a otros equipos ni se recupera si borras los datos del navegador.</p>
                 {seguirComo ? (
                   <Button onClick={() => onSeguirLocal?.()}>Seguir como {seguirComo}</Button>
                 ) : (
@@ -82,7 +116,6 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
                     <input aria-label="Tu nombre" value={name} onChange={(e) => setName(e.target.value)} placeholder="Tu nombre" />
                     <Button
                       onClick={() => {
-                        const correo = email.trim().toLowerCase();
                         if (!EMAIL.test(correo)) return setTried(true);
                         if (entrarComoCuenta(correo, name)) onSeguirLocal?.();
                       }}
