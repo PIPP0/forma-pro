@@ -5673,3 +5673,47 @@ dialog.modal {
 .donde-viven span {
   max-width: 82ch;
 }
+
+.welcome-local {
+  margin-top: 18px;
+}
+.welcome-local summary {
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-3);
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+}
+.welcome-local summary::-webkit-details-marker {
+  display: none;
+}
+.welcome-local summary::before {
+  content: '▸';
+  font-size: 10px;
+}
+.welcome-local[open] summary::before {
+  content: '▾';
+}
+.welcome-local p {
+  margin: 8px 0 12px;
+  max-width: 54ch;
+}
+.welcome-enviado {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  max-width: 52ch;
+}
+.welcome-enviado h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.welcome-enviado p {
+  margin: 0;
+  color: var(--ink-2);
+  line-height: 1.6;
+}

@@ -3,7 +3,9 @@ import type { Project, Role } from '../lib/model';
 import { currentUser, projectsFor, redo, saveVersion, signOut, switchUser, undo, useDb } from '../lib/store';
 import { ROLE_LABEL, can } from '../lib/permissions';
 import { href } from '../lib/router';
-import { useCloudAccount } from './useCloudAccount';
+import { setCloudAccountCache, useCloudAccount } from './useCloudAccount';
+import { disconnectCloud } from '../lib/cloud';
+import { olvidarPreferencia } from '../lib/session';
 import { useEstadoSync } from './useSync';
 import { Button, Modal } from './ui';
 import { AssistantModal } from './AssistantModal';
@@ -177,6 +179,9 @@ export function Shell({ project, role, active, children }: { project?: Project; 
                     role="menuitem"
                     onClick={() => {
                       setMenu(null);
+                      olvidarPreferencia();
+                      void disconnectCloud().catch(() => undefined);
+                      setCloudAccountCache(null);
                       signOut();
                     }}
                   >

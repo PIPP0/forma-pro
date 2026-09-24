@@ -133,6 +133,12 @@ En Resultados, el botón **Entregables** reúne todo lo que el estudio puede dar
 
 Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exactamente lo mismo. Cuando el estudio tiene un resumen por IA que sigue correspondiendo a sus sesiones, aparece además un botón **Crear PPT** en la barra, junto a «Importar resultados»: es el atajo para quien ya hizo el análisis y solo quiere el archivo.
 
+## Entrar
+
+La app pregunta con qué correo entras antes de abrir el espacio. El correo es la identidad: llega un enlace, se abre en ese navegador y con él bajan los proyectos de esa cuenta. Quien prefiera trabajar solo en un equipo puede decirlo una vez —«Seguir trabajando solo en este navegador»— y no se le vuelve a preguntar hasta que cierre sesión.
+
+Entrar con un correo alinea las dos identidades que antes vivían separadas: la sesión local de la app y la cuenta de la nube. Lo que ya existía en el navegador no se pierde de vista: pasa a estar a nombre de quien entra.
+
 ## Tu espacio en cualquier computador
 
 Con el acceso guardado por correo, los proyectos y los estudios dejan de vivir solo en un navegador: se sincronizan con la cuenta y aparecen en cualquier equipo donde entres con ese correo.

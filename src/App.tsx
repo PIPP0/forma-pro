@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react';
 import { useRoute } from './lib/router';
 import { currentUser, useDb } from './lib/store';
+import { useCloudAccount } from './components/useCloudAccount';
+import { prefiereLocal, quedarseLocal } from './lib/session';
 import { roleFor } from './lib/permissions';
 import { Shell } from './components/Shell';
 import { Empty, Toasts } from './components/ui';
@@ -21,6 +23,7 @@ export default function App() {
   const route = useRoute();
   const db = useDb();
   const user = currentUser(db);
+  const { account: cuenta, loading: cuentaCargando } = useCloudAccount();
   const [a, b, c, d] = route.parts;
 
   if (a === 't' && b) {
@@ -32,10 +35,12 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  // Entrar es entrar con tu correo: es lo que hace que tus proyectos estén en cualquier equipo.
+  // Quien prefiera trabajar solo en este navegador lo dice una vez y no se le vuelve a preguntar.
+  if (!user || (!cuenta?.email && !prefiereLocal())) {
     return (
       <>
-        <Welcome />
+        <Welcome seguirComo={user && !cuentaCargando ? user.name : undefined} onSeguirLocal={quedarseLocal} />
         <Toasts />
       </>
     );

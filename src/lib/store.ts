@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import type { Comment, DB, LibraryRelease, Op, OpInput, Project, ProjectVersion, Role, Session, Study, StudyEvent, StudyTask, SyntheticUser, User } from './model';
+import type { Comment, DB, LibraryRelease, Membership, Op, OpInput, Project, ProjectVersion, Role, Session, Study, StudyEvent, StudyTask, SyntheticUser, User } from './model';
 import { emptyDb } from './model';
 import { applyOp, clone, edit, invertOp } from './ops';
 import { can, roleFor, type Permission, ROLE_LABEL } from './permissions';
@@ -193,6 +193,28 @@ const migrateAdopted = (d: DB) => migrate(d);
 
 // Personas que ya tenían sesión abierta antes de que existiera el ejemplo.
 if (typeof window !== 'undefined') void Promise.resolve().then(ensureSamples);
+
+/**
+ * Entrar con un correo: el mismo que identifica tu espacio en la nube.
+ * Lo que ya estaba en este navegador no se pierde de vista: pasa a estar a tu nombre.
+ */
+export function entrarComoCuenta(email: string, nombre?: string): boolean {
+  const correo = email.trim().toLowerCase();
+  if (!EMAIL.test(correo)) return false;
+  const anterior = currentUser();
+  let user = db.users.find((u) => u.email === correo);
+  let next = db;
+  if (!user) {
+    user = { id: uid('u_'), name: nombre?.trim() || correo.split('@')[0], email: correo };
+    next = { ...next, users: [...next.users, user] };
+  }
+  const visibles = anterior ? projectsFor(next, anterior) : next.projects;
+  const nuevas: Membership[] = visibles
+    .filter((p) => !roleFor(next, p, user!))
+    .map((p) => ({ id: uid('m_'), subjectType: 'project' as const, subjectId: p.id, email: correo, role: 'owner' as const }));
+  commit({ ...next, memberships: [...next.memberships, ...nuevas], currentUserId: user.id });
+  return true;
+}
 
 export const signOut = () => commit({ ...db, currentUserId: undefined });
 export const switchUser = (id: string) => commit({ ...db, currentUserId: id });
