@@ -148,6 +148,8 @@ Un prototipo se siente real cuando confirma por el oído y por el cuerpo, no sol
 - El audio de un navegador solo arranca tras un gesto, así que el primer toque de la prueba despierta el `AudioContext` y el primer sonido no llega tarde.
 - `silenciar()` existe para pruebas en sala, donde el sonido molesta o contamina la sesión.
 
+También se pueden **subir sonidos propios**: quedan en `project.sounds` como data URL, con un tope de 600 KB por archivo —un sonido de interfaz dura menos de dos segundos— y viajan dentro del proyecto, así que funcionan igual en un equipo que bloquee la nube. Se suben una vez y se reutilizan en cualquier pantalla o zona. Figma no exporta audio (sus prototipos no lo soportan), de modo que el sonido de un flujo importado se define aquí.
+
 ## Imágenes que se ven en cualquier equipo
 
 Una pantalla importada guarda su imagen en la nube y la pide aparte. En equipos con bloqueadores de contenido o redes filtradas esa petición no llega y el marco queda vacío. El botón **Incrustar imágenes** (en Diseñar, junto a «Flujo de Figma») trae cada imagen y la guarda dentro del proyecto, en `screen.image.data`, sin borrar la URL:

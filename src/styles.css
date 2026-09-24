@@ -5775,3 +5775,34 @@ dialog.modal {
   font-size: 12.5px;
   padding: 6px 8px;
 }
+
+.sonidos-propios {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+.lista-sonidos {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  width: 100%;
+}
+.lista-sonidos li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--r-control);
+  font-size: 12.5px;
+}
+.lista-sonidos .link-btn {
+  font-size: 12.5px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -286,6 +286,8 @@ export interface Project {
   library?: { releaseId: string; version: string; sourceProjectId: string };
   /** Proyecto sin sistema de diseño: no se le agrega la biblioteca del catálogo. */
   noSystem?: boolean;
+  /** Sonidos propios del proyecto, guardados dentro para que suenen en cualquier equipo. */
+  sounds?: ProjectSound[];
   createdAt: number;
   updatedAt: number;
 }
@@ -313,6 +315,17 @@ export interface User {
   email: string;
   /** Proyectos de ejemplo que ya se agregaron a esta persona (no reaparecen si los elimina). */
   samples?: string[];
+}
+
+/** Un sonido subido por el equipo. Vive dentro del proyecto: no depende de la nube ni de la red. */
+export interface ProjectSound {
+  id: string;
+  name: string;
+  /** El archivo como data URL. */
+  data: string;
+  /** Peso en bytes del archivo original, para poder avisar cuando el proyecto engorda. */
+  bytes: number;
+  ms?: number;
 }
 
 export interface Membership {

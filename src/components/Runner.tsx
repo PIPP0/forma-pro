@@ -92,7 +92,7 @@ export function Runner({
     setErrors({});
     setStack((s) => [...s, targetId]);
     // Lo que se siente al llegar: la confirmación que en una app real llega por el cuerpo.
-    emitirFeedback(target.feedback);
+    emitirFeedback(target.feedback, project.sounds);
     emit({ kind: 'navigate', screen: target.id, x: 0, y: 0 });
   };
 
@@ -154,7 +154,7 @@ export function Runner({
     }
     if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: hotspot.id, dwell: Math.round(gap), ...c });
     emit({ kind: 'tap', screen: current.id, block: hotspot.id, ...c });
-    emitirFeedback(hotspot.feedback);
+    emitirFeedback(hotspot.feedback, project.sounds);
     if (hotspot.back) {
       navigate({ id: '', type: 'button', label: '', action: 'back' });
       return;

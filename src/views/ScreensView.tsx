@@ -5,7 +5,7 @@ import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resol
 import { can } from '../lib/permissions';
 import { clone, edit, quitarFigmaOps } from '../lib/ops';
 import { conImagenExterna, incrustarImagenes } from '../lib/incrustar';
-import { SONIDOS, VIBRACIONES, reproducir, vibracionDisponible, vibrar, type SonidoId, type VibracionId } from '../lib/feedback';
+import { SONIDOS, VIBRACIONES, leerSonido, reproducir, vibracionDisponible, vibrar, type SonidoId, type VibracionId } from '../lib/feedback';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
 import { colorValue, effectiveStyle, findComponent } from '../lib/tokens';
 import { importHtml } from '../lib/importer';
@@ -22,7 +22,7 @@ import { FitPreview } from '../components/FitPreview';
 import { CopilotPanel } from '../components/CopilotPanel';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
 import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
-import { IconArrowUpRight, IconChevronRight, IconClose, IconCursor, IconDiamond, IconDownload, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
+import { IconArrowUpRight, IconChevronRight, IconClose, IconCursor, IconDiamond, IconDownload, IconExpand, IconUpload, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
 
 
 /** Bloque que instancia un componente, con su contenido de ejemplo propio. */
@@ -1218,15 +1218,26 @@ function HotspotsSection({
                     hotspots.map((x) => (x.id === h.id ? { ...x, feedback: f.sonido || f.vibracion ? f : undefined } : x)),
                     `Cambiar el sonido de «${h.label || 'la zona'}»`,
                   );
-                  reproducir(sonido as SonidoId | undefined);
+                  reproducir(sonido, project.sounds);
                 }}
               >
                 <option value="">Sin sonido</option>
-                {SONIDOS.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.nombre}
-                  </option>
-                ))}
+                {(project.sounds ?? []).length > 0 && (
+                  <optgroup label="Tuyos">
+                    {(project.sounds ?? []).map((x) => (
+                      <option key={x.id} value={x.id}>
+                        {x.name}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                <optgroup label="De la plataforma">
+                  {SONIDOS.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.nombre}
+                    </option>
+                  ))}
+                </optgroup>
               </select>
               <select
                 className="input"
@@ -1268,15 +1279,18 @@ function FeedbackSection({
   ayuda,
   valor,
   editable,
+  project,
   onChange,
 }: {
   titulo: string;
   ayuda: string;
   valor?: { sonido?: string; vibracion?: string };
   editable: boolean;
+  project: Project;
   onChange: (v: { sonido?: string; vibracion?: string } | undefined) => void;
 }) {
   const hayVibracion = vibracionDisponible();
+  const propios = project.sounds ?? [];
   const set = (parche: { sonido?: string; vibracion?: string }) => {
     const proximo = { ...valor, ...parche };
     const vacio = !proximo.sonido && !proximo.vibracion;
@@ -1294,17 +1308,29 @@ function FeedbackSection({
           onChange={(e) => {
             const id = e.target.value || undefined;
             set({ sonido: id });
-            reproducir(id as SonidoId | undefined);
+            reproducir(id, propios);
           }}
         >
           <option value="">Sin sonido</option>
-          {SONIDOS.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.nombre} — {x.descripcion}
-            </option>
-          ))}
+          {propios.length > 0 && (
+            <optgroup label="Tuyos">
+              {propios.map((x) => (
+                <option key={x.id} value={x.id}>
+                  {x.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
+          <optgroup label="De la plataforma">
+            {SONIDOS.map((x) => (
+              <option key={x.id} value={x.id}>
+                {x.nombre} — {x.descripcion}
+              </option>
+            ))}
+          </optgroup>
         </select>
       </Field>
+      {editable && <SubirSonido project={project} onSubido={(id) => set({ sonido: id })} />}
       <Field label="Vibración" hint={hayVibracion ? undefined : 'Este equipo no vibra. Android sí lo hace; el iPhone no lo permite desde el navegador.'}>
         <select
           className="input"
@@ -1328,7 +1354,7 @@ function FeedbackSection({
         <Button
           size="sm"
           onClick={() => {
-            reproducir(valor.sonido as SonidoId | undefined);
+            reproducir(valor.sonido, propios);
             vibrar(valor.vibracion as VibracionId | undefined);
           }}
         >
@@ -1336,6 +1362,77 @@ function FeedbackSection({
         </Button>
       )}
     </Section>
+  );
+}
+
+/** Sube un sonido propio y lo deja dentro del proyecto, listo para cualquier pantalla. */
+function SubirSonido({ project, onSubido }: { project: Project; onSubido: (id: string) => void }) {
+  const [cargando, setCargando] = useState(false);
+  const propios = project.sounds ?? [];
+  const pesoTotal = propios.reduce((a, s) => a + s.bytes, 0);
+
+  const elegir = async () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'audio/*';
+    input.onchange = async () => {
+      const file = input.files?.[0];
+      if (!file) return;
+      setCargando(true);
+      try {
+        const { data, bytes, ms } = await leerSonido(file);
+        const sonido = { id: uid('snd_'), name: file.name.replace(/\.[^.]+$/, '').slice(0, 40), data, bytes, ms };
+        applyOps(project.id, [edit.project('sounds', [...propios, sonido])], `Agregar el sonido «${sonido.name}»`);
+        reproducir(sonido.id, [...propios, sonido]);
+        onSubido(sonido.id);
+        notify(`«${sonido.name}» quedó en el proyecto (${Math.round(bytes / 1024)} KB).`, 'success');
+      } catch (e) {
+        notify((e as Error).message, 'error');
+      } finally {
+        setCargando(false);
+      }
+    };
+    input.click();
+  };
+
+  return (
+    <div className="sonidos-propios">
+      <Button size="sm" disabled={cargando} onClick={() => void elegir()}>
+        <IconUpload size={14} /> {cargando ? 'Cargando…' : 'Subir un sonido'}
+      </Button>
+      {propios.length > 0 && (
+        <>
+          <ul className="lista-sonidos">
+            {propios.map((s) => (
+              <li key={s.id}>
+                <button type="button" className="link-btn" title="Escucharlo" onClick={() => reproducir(s.id, propios)}>
+                  {s.name}
+                </button>
+                <span className="muted small">
+                  {Math.round(s.bytes / 1024)} KB{s.ms ? ` · ${(s.ms / 1000).toFixed(1).replace('.', ',')} s` : ''}
+                </span>
+                <button
+                  type="button"
+                  className="icon-btn"
+                  aria-label={`Quitar ${s.name}`}
+                  title="Quitarlo del proyecto"
+                  onClick={() => {
+                    const usos = project.screens.filter((x) => x.feedback?.sonido === s.id || x.hotspots?.some((h) => h.feedback?.sonido === s.id)).length;
+                    applyOps(project.id, [edit.project('sounds', propios.filter((x) => x.id !== s.id))], `Quitar el sonido «${s.name}»`);
+                    if (usos) notify(`Quitaste «${s.name}», que estaba en ${usos} ${usos === 1 ? 'lugar' : 'lugares'}. Esas pantallas quedan sin sonido.`, 'info');
+                  }}
+                >
+                  <IconClose size={12} />
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">
+            {propios.length} {propios.length === 1 ? 'sonido propio' : 'sonidos propios'} · {Math.round(pesoTotal / 1024)} KB dentro del proyecto. Viajan con él a cualquier equipo.
+          </p>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1450,6 +1547,7 @@ function ScreenProps({
         ayuda="Lo que se oye y se siente cuando alguien llega a esta pantalla. Se nota sobre todo en confirmaciones y errores."
         valor={base.feedback}
         editable={editable}
+        project={project}
         onChange={(v) => apply([edit.screen(project, base.id, 'feedback', v)], v ? `Dar sonido a «${base.name}»` : `Quitar el sonido de «${base.name}»`)}
       />
       <Section title="Contenido">

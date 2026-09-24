@@ -106,8 +106,25 @@ export function prepararSonido() {
   }
 }
 
-export function reproducir(id?: SonidoId) {
+/** Los sonidos propios se guardan como data URL; se reproducen tal cual, sin sintetizar nada. */
+const propios = new Map<string, HTMLAudioElement>();
+
+function reproducirPropio(data: string) {
+  if (typeof Audio === 'undefined') return;
+  let audio = propios.get(data);
+  if (!audio) {
+    audio = new Audio(data);
+    audio.preload = 'auto';
+    propios.set(data, audio);
+  }
+  audio.currentTime = 0;
+  void audio.play().catch(() => undefined);
+}
+
+export function reproducir(id?: string, biblioteca?: { id: string; data: string }[]) {
   if (!id || silenciado) return;
+  const propio = biblioteca?.find((s) => s.id === id);
+  if (propio) return reproducirPropio(propio.data);
   const receta = SONIDOS.find((s) => s.id === id);
   if (!receta) return;
   prepararSonido();
@@ -136,11 +153,35 @@ export function vibrar(id?: VibracionId) {
 }
 
 /** Lo que ocurre al llegar a una pantalla o al tocar una zona. */
-export function emitir(f?: { sonido?: string; vibracion?: string }) {
+export function emitir(f?: { sonido?: string; vibracion?: string }, biblioteca?: { id: string; data: string }[]) {
   if (!f) return;
-  reproducir(f.sonido as SonidoId | undefined);
+  reproducir(f.sonido, biblioteca);
   vibrar(f.vibracion as VibracionId | undefined);
 }
 
-export const nombreSonido = (id?: SonidoId) => SONIDOS.find((s) => s.id === id)?.nombre ?? 'Sin sonido';
+/** Tamaño máximo de un sonido propio: los de interfaz duran menos de dos segundos. */
+export const MAX_SONIDO = 600 * 1024;
+
+/** Lee un archivo de audio y lo deja listo para guardarse dentro del proyecto. */
+export async function leerSonido(file: File): Promise<{ data: string; bytes: number; ms?: number }> {
+  if (!/^audio\//.test(file.type)) throw new Error('Ese archivo no es un audio. Sirven .mp3, .wav, .m4a y .ogg.');
+  if (file.size > MAX_SONIDO) throw new Error(`«${file.name}» pesa ${Math.round(file.size / 1024)} KB. Un sonido de interfaz debería estar bajo ${Math.round(MAX_SONIDO / 1024)} KB: recórtalo o bájale la calidad.`);
+  const data = await new Promise<string>((listo, falla) => {
+    const lector = new FileReader();
+    lector.onload = () => (typeof lector.result === 'string' ? listo(lector.result) : falla(new Error('no se pudo leer')));
+    lector.onerror = () => falla(new Error('no se pudo leer'));
+    lector.readAsDataURL(file);
+  });
+  // La duración es informativa: si el navegador no la sabe, el sonido igual sirve.
+  const ms = await new Promise<number | undefined>((listo) => {
+    if (typeof Audio === 'undefined') return listo(undefined);
+    const a = new Audio(data);
+    a.onloadedmetadata = () => listo(Number.isFinite(a.duration) ? Math.round(a.duration * 1000) : undefined);
+    a.onerror = () => listo(undefined);
+  });
+  return { data, bytes: file.size, ms };
+}
+
+export const nombreSonido = (id?: string, biblioteca?: { id: string; name: string }[]) =>
+  biblioteca?.find((s) => s.id === id)?.name ?? SONIDOS.find((s) => s.id === id)?.nombre ?? 'Sin sonido';
 export const nombreVibracion = (id?: VibracionId) => VIBRACIONES.find((v) => v.id === id)?.nombre ?? 'Sin vibración';
