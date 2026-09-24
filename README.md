@@ -133,6 +133,17 @@ En Resultados, el botón **Entregables** reúne todo lo que el estudio puede dar
 
 Todo sale del mismo `construirInforme()`, así que las tres salidas dicen exactamente lo mismo. Cuando el estudio tiene un resumen por IA que sigue correspondiendo a sus sesiones, aparece además un botón **Crear PPT** en la barra, junto a «Importar resultados»: es el atajo para quien ya hizo el análisis y solo quiere el archivo.
 
+## Tu espacio en cualquier computador
+
+Con el acceso guardado por correo, los proyectos y los estudios dejan de vivir solo en un navegador: se sincronizan con la cuenta y aparecen en cualquier equipo donde entres con ese correo.
+
+- El índice está en Firestore (`espacios/{uid}/indice`) y el contenido en Storage (`espacios/{uid}/proyectos|estudios/{id}.json`), un archivo por pieza: así no pesa el tope de 1 MiB de un documento.
+- Gana la versión guardada más tarde. Las sesiones de las pruebas no se pisan: se unen por id, porque nunca se editan.
+- Lo que borras aquí deja una marca en el índice, o volvería en la próxima sincronización.
+- En un navegador recién estrenado, los proyectos de ejemplo se descartan si la nube trae trabajo real: ver «Ahorro con propósito» junto a lo tuyo sería confuso.
+- Todo lo que está en tu espacio es tuyo: si un proyecto llega a nombre de otra persona —los usuarios de demostración tienen el mismo id en todos los navegadores— se te da acceso al sincronizar.
+- La decisión de qué mover vive en `planificar()` (`src/lib/sync.ts`), aparte de la red y con pruebas propias: es la parte que puede quitar cosas de este navegador.
+
 ## IA del equipo
 
 La clave de Anthropic vive en el proyecto en la nube (`forma-pro-cl26`), no en los navegadores: quien tenga su correo en la lista autorizada usa el asistente y el resumen de investigación desde cualquier equipo, solo con guardar su acceso por correo en Ajustes.

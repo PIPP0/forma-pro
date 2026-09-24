@@ -3,9 +3,11 @@ import type { Project, Role } from '../lib/model';
 import { currentUser, projectsFor, redo, saveVersion, signOut, switchUser, undo, useDb } from '../lib/store';
 import { ROLE_LABEL, can } from '../lib/permissions';
 import { href } from '../lib/router';
+import { useCloudAccount } from './useCloudAccount';
+import { useEstadoSync } from './useSync';
 import { Button, Modal } from './ui';
 import { AssistantModal } from './AssistantModal';
-import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconSparkle, IconUpload, IconUsers } from './icons';
+import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconRefresh, IconSparkle, IconUpload, IconUsers } from './icons';
 
 const TABS = [
   { id: 'screens', label: 'Diseñar', Icon: IconSend },
@@ -21,6 +23,35 @@ const MORE = [
   { id: 'history', label: 'Historial' },
   { id: 'team', label: 'Equipo' },
 ];
+
+/** Dónde vive lo que estás haciendo: en este navegador o también en tu cuenta. */
+function EstadoGuardado() {
+  const { account } = useCloudAccount();
+  const sync = useEstadoSync();
+  if (!account?.email)
+    return (
+      <span className="save-state">
+        <IconCheckCircle size={15} /> Guardado en este navegador
+      </span>
+    );
+  if (sync.sincronizando)
+    return (
+      <span className="save-state">
+        <IconRefresh size={15} className="girando" /> Sincronizando…
+      </span>
+    );
+  if (sync.error)
+    return (
+      <span className="save-state alerta" title={sync.error}>
+        <IconRefresh size={15} /> Sin sincronizar
+      </span>
+    );
+  return (
+    <span className="save-state" title={`Tus proyectos viajan con ${account.email}`}>
+      <IconCheckCircle size={15} /> Guardado en tu cuenta
+    </span>
+  );
+}
 
 export function BrandLockup() {
   return (
@@ -100,11 +131,7 @@ export function Shell({ project, role, active, children }: { project?: Project; 
           )}
         </nav>
         <div className="topbar-actions">
-          {project && (
-            <span className="save-state">
-              <IconCheckCircle size={15} /> Guardado en este navegador
-            </span>
-          )}
+          {project && <EstadoGuardado />}
           {project && can(role, 'publish') && (
             <button type="button" className="icon-btn" title="Guardar versión con nombre" aria-label="Guardar versión con nombre" onClick={() => setVersionOpen(true)}>
               <IconSave size={18} />

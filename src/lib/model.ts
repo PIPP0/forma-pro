@@ -356,6 +356,8 @@ export interface Study {
   /** Último resumen por IA, con la huella de las sesiones que lo produjeron: no se paga dos veces por lo mismo. */
   summary?: StudySummary;
   created: number;
+  /** Última vez que cambió algo del estudio. Decide qué versión gana al sincronizar entre equipos. */
+  updatedAt?: number;
 }
 
 export interface StudySummary {

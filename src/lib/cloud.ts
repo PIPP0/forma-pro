@@ -232,6 +232,64 @@ export async function uploadPrototypeImage(projectId: string, name: string, blob
   return c.st.getDownloadURL(ref);
 }
 
+// ---------- Espacio de trabajo en la nube ----------
+//
+// El índice vive en Firestore (una lectura para saber qué hay y cuándo cambió) y el contenido
+// en Storage (un archivo por proyecto o estudio, sin el tope de 1 MiB de un documento).
+
+export interface EntradaEspacio {
+  tipo: 'proyecto' | 'estudio';
+  id: string;
+  nombre: string;
+  actualizado: number;
+  /** Se borró en algún equipo: hay que quitarlo también en los demás. */
+  borrado?: boolean;
+}
+
+const rutaEspacio = (uid: string, e: { tipo: string; id: string }) => `espacios/${uid}/${e.tipo}s/${e.id}.json`;
+
+/** Qué hay en la nube y desde cuándo, sin descargar el contenido. */
+export async function leerIndiceEspacio(): Promise<EntradaEspacio[]> {
+  const c = await cloud();
+  const u = c.auth.currentUser;
+  if (!u || u.isAnonymous) return [];
+  const snap = await c.fs.getDocs(c.fs.collection(c.db, 'espacios', u.uid, 'indice'));
+  return snap.docs.map((d) => d.data() as EntradaEspacio);
+}
+
+/** Sube un proyecto o un estudio completo y deja su marca en el índice. */
+export async function subirAlEspacio(entrada: EntradaEspacio, contenido: unknown) {
+  const c = await cloud();
+  const u = c.auth.currentUser;
+  if (!u || u.isAnonymous) throw new Error('sin cuenta con correo');
+  const ref = c.st.ref(c.storage, rutaEspacio(u.uid, entrada));
+  await c.st.uploadBytes(ref, new Blob([JSON.stringify(contenido)], { type: 'application/json' }), { contentType: 'application/json' });
+  await c.fs.setDoc(c.fs.doc(c.db, 'espacios', u.uid, 'indice', `${entrada.tipo}_${entrada.id}`), { ...entrada, borrado: false });
+}
+
+export async function bajarDelEspacio<T>(entrada: { tipo: 'proyecto' | 'estudio'; id: string }): Promise<T | undefined> {
+  const c = await cloud();
+  const u = c.auth.currentUser;
+  if (!u || u.isAnonymous) return undefined;
+  try {
+    const url = await c.st.getDownloadURL(c.st.ref(c.storage, rutaEspacio(u.uid, entrada)));
+    const r = await fetch(url);
+    if (!r.ok) return undefined;
+    return (await r.json()) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+/** Marca de borrado: sin ella, el otro equipo volvería a subir lo que acabas de eliminar. */
+export async function borrarDelEspacio(entrada: { tipo: 'proyecto' | 'estudio'; id: string; nombre: string }) {
+  const c = await cloud();
+  const u = c.auth.currentUser;
+  if (!u || u.isAnonymous) return;
+  await c.st.deleteObject(c.st.ref(c.storage, rutaEspacio(u.uid, entrada))).catch(() => undefined);
+  await c.fs.setDoc(c.fs.doc(c.db, 'espacios', u.uid, 'indice', `${entrada.tipo}_${entrada.id}`), { ...entrada, borrado: true, actualizado: Date.now() });
+}
+
 // ---------- Sesión en curso (persona participante, anónima) ----------
 
 async function participant(): Promise<Cloud & { uid: string }> {

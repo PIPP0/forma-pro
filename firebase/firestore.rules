@@ -18,6 +18,11 @@ service cloud.firestore {
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
+    // Índice del espacio de trabajo: qué proyectos y estudios hay y cuándo cambiaron. Solo su dueño.
+    match /espacios/{uid}/indice/{entrada} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
     // La configuración y el consumo de la IA solo los toca el servidor (Admin SDK): nadie los lee desde el cliente.
     match /config/{doc} {
       allow read, write: if false;

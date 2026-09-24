@@ -5643,3 +5643,20 @@ dialog.modal {
     gap: 12px;
   }
 }
+
+.save-state.alerta {
+  color: var(--warn);
+}
+.girando {
+  animation: girar 1.1s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .girando {
+    animation: none;
+  }
+}
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -4,10 +4,11 @@ import { AI_MODELS, consumoDeIa, getAiKey, setAiKey, type IaConsumo } from '../l
 import { download } from '../lib/share';
 import { notify } from '../lib/toast';
 import { go } from '../lib/router';
-import { Badge, Button, Field, Modal, pickFile } from '../components/ui';
+import { Badge, Button, Field, Modal, pickFile, timeAgo } from '../components/ui';
 import { disconnectCloud, sendAccessLink } from '../lib/cloud';
 import { getFigmaToken, setFigmaToken } from '../lib/figma';
 import { setCloudAccountCache, useCloudAccount } from '../components/useCloudAccount';
+import { sincronizarAhora, useEstadoSync } from '../components/useSync';
 
 export function SettingsView() {
   const db = useDb();
@@ -34,9 +35,11 @@ export function SettingsView() {
 
       <FigmaSection />
 
+      <EspacioSection />
+
       <section className="section">
-        <h2 className="section-title">Respaldo del espacio de trabajo</h2>
-        <p className="muted">Tus proyectos, versiones, estudios y resultados viven en este navegador. Exporta un respaldo para moverlos a otro equipo o guardarlos.</p>
+        <h2 className="section-title">Respaldo en archivo</h2>
+        <p className="muted">Además de la nube, puedes guardar una copia completa en un archivo: sirve para archivar un momento del trabajo o para mover todo a otra cuenta.</p>
         <div className="row">
           <Button onClick={() => download(`forma-respaldo-${new Date().toISOString().slice(0, 10)}.json`, exportWorkspace())}>Exportar respaldo</Button>
           <Button
@@ -314,6 +317,44 @@ function IaSection({ hasKey, keyValue, setKeyValue, setHasKey }: { hasKey: boole
           )}
         </form>
       </details>
+    </section>
+  );
+}
+
+/** Tu espacio en la nube: lo que hace que los proyectos estén en cualquier computador. */
+function EspacioSection() {
+  const { account } = useCloudAccount();
+  const sync = useEstadoSync();
+  const db = useDb();
+  const proyectos = db.projects.length;
+  const estudios = db.studies.length;
+
+  return (
+    <section className="section">
+      <h2 className="section-title">Tu espacio en la nube</h2>
+      {account?.email ? (
+        <>
+          <p className="muted">
+            Tus {proyectos} {proyectos === 1 ? 'proyecto' : 'proyectos'} y {estudios} {estudios === 1 ? 'estudio' : 'estudios'} viajan con {account.email}. Entra con ese correo en cualquier computador o
+            navegador y los encuentras ahí, con sus pantallas y sus resultados.
+          </p>
+          <div className="row">
+            {sync.error ? <Badge tone="warn">Sin sincronizar</Badge> : sync.sincronizando ? <Badge>Sincronizando…</Badge> : <Badge tone="ok">Al día</Badge>}
+            {sync.ultima && !sync.sincronizando && <span className="muted small">Última vez, {timeAgo(sync.ultima)}.</span>}
+            <Button size="sm" disabled={sync.sincronizando} onClick={() => void sincronizarAhora(true)}>
+              Sincronizar ahora
+            </Button>
+          </div>
+          {sync.error && <p className="muted small">{sync.error}</p>}
+          <p className="muted small">
+            Si cambias un mismo proyecto en dos equipos sin sincronizar entremedio, queda la versión guardada más tarde. Las sesiones de las pruebas nunca se pierden: se juntan las de todos los equipos.
+          </p>
+        </>
+      ) : (
+        <p className="muted">
+          Guarda tu acceso con correo más arriba y tus proyectos dejarán de vivir solo en este navegador: se sincronizan con tu cuenta y aparecen en cualquier computador donde entres con ese correo.
+        </p>
+      )}
     </section>
   );
 }

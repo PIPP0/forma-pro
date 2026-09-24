@@ -338,9 +338,16 @@ export function renameProject(projectId: string, name: string) {
   applyOps(projectId, [edit.project('name', name)], 'Renombrar proyecto');
 }
 
+/** La sincronización escucha esto para avisar a la nube; el store no necesita saber de ella. */
+const avisarBorrado = (tipo: 'proyecto' | 'estudio', id: string, nombre: string) => {
+  if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('forma:borrado', { detail: { tipo, id, nombre } }));
+};
+
 export function deleteProject(projectId: string): boolean {
   const g = guard(projectId, 'delete');
   if (!g) return false;
+  const nombreProyecto = db.projects.find((p) => p.id === projectId)?.name ?? '';
+  const estudiosDelProyecto = db.studies.filter((s) => s.projectId === projectId);
   const studyIds = new Set(db.studies.filter((s) => s.projectId === projectId).map((s) => s.id));
   const sessionIds = new Set(db.sessions.filter((s) => studyIds.has(s.studyId)).map((s) => s.id));
   sessionIds.forEach((id) => void deleteAudio(id));
@@ -356,6 +363,9 @@ export function deleteProject(projectId: string): boolean {
     events: db.events.filter((e) => !sessionIds.has(e.sessionId)),
   });
   stacks.delete(projectId);
+  // Borrar aquí tiene que borrar allá, o el proyecto vuelve en la próxima sincronización.
+  avisarBorrado('proyecto', projectId, nombreProyecto);
+  estudiosDelProyecto.forEach((e) => avisarBorrado('estudio', e.id, e.name));
   notify(`Eliminaste «${g.project.name}».`, 'success');
   return true;
 }
@@ -494,13 +504,14 @@ export function createStudy(projectId: string, input: { name: string; tasks: Omi
 export function setStudyStatus(studyId: string, status: Study['status']) {
   const s = db.studies.find((x) => x.id === studyId);
   if (!s || !guard(s.projectId, 'runStudy')) return;
-  commit({ ...db, studies: db.studies.map((x) => (x.id === studyId ? { ...x, status } : x)) });
+  commit({ ...db, studies: db.studies.map((x) => (x.id === studyId ? { ...x, status, updatedAt: Date.now() } : x)) });
   notify(status === 'closed' ? 'Cerraste el estudio. El enlace deja de aceptar sesiones.' : 'Reabriste el estudio.', 'success');
 }
 
 export function deleteStudy(studyId: string) {
   const s = db.studies.find((x) => x.id === studyId);
   if (!s || !guard(s.projectId, 'runStudy')) return;
+  avisarBorrado('estudio', s.id, s.name);
   const sessionIds = new Set(db.sessions.filter((x) => x.studyId === studyId).map((x) => x.id));
   sessionIds.forEach((id) => void deleteAudio(id));
   commit({
@@ -725,6 +736,12 @@ export function importWorkspace(text: string): boolean {
     notify('El archivo no es un respaldo válido de Forma.', 'error');
     return false;
   }
+}
+
+/** Aplica lo que trajo la sincronización. No toca el historial de deshacer: no es una edición de nadie. */
+export function reemplazarDesdeNube(next: DB) {
+  commit(next);
+  flush();
 }
 
 export function resetWorkspace() {

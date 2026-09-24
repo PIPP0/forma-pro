@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ensureCloudAccount, type CloudAccount } from '../lib/cloud';
+import { iniciarSync } from './useSync';
 
 // Cuenta en la nube compartida por toda la app: se crea sola (anónima) y la actualiza guardar el acceso con correo.
 let cached: CloudAccount | null | undefined;
@@ -8,6 +9,8 @@ const listeners = new Set<() => void>();
 
 export function setCloudAccountCache(account: CloudAccount | null) {
   cached = account;
+  // Con correo guardado, el espacio de trabajo viaja: la sincronización arranca sola.
+  if (account?.email) iniciarSync();
   listeners.forEach((l) => l());
 }
 
