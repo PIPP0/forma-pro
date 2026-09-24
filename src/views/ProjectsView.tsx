@@ -5,6 +5,8 @@ import { ROLE_LABEL, can, roleFor } from '../lib/permissions';
 import { go, href } from '../lib/router';
 import { CATALOG } from '../lib/catalog';
 import { Badge, Button, Empty, Field, Modal, timeAgo } from '../components/ui';
+import { useCloudAccount } from '../components/useCloudAccount';
+import { sincronizarAhora, useEstadoSync } from '../components/useSync';
 
 export function ProjectsView() {
   const db = useDb();
@@ -38,6 +40,8 @@ export function ProjectsView() {
           Nuevo proyecto
         </Button>
       </div>
+
+      <DondeViven />
 
       {projects.length === 0 ? (
         <Empty
@@ -176,4 +180,44 @@ export function ProjectsView() {
       </Modal>
     </div>
   );
+}
+
+/** Aquí es donde alguien descubre que le faltan proyectos: conviene decirle dónde están. */
+function DondeViven() {
+  const { account, loading } = useCloudAccount();
+  const sync = useEstadoSync();
+  if (loading) return null;
+
+  if (!account?.email)
+    return (
+      <div className="notice donde-viven">
+        <span>
+          Estos proyectos viven solo en este navegador. <strong>Guarda tu acceso con tu correo</strong> y los verás en cualquier computador, con sus pantallas y sus resultados.
+        </span>
+        <a className="btn btn-default btn-sm" href={href('/settings')}>
+          Guardar mi acceso
+        </a>
+      </div>
+    );
+
+  if (sync.error)
+    return (
+      <div className="notice notice-warn donde-viven">
+        <span>
+          No pudimos sincronizar con tu cuenta, así que puede que falten proyectos de otros equipos. {sync.error}
+        </span>
+        <Button size="sm" disabled={sync.sincronizando} onClick={() => void sincronizarAhora(true)}>
+          Reintentar
+        </Button>
+      </div>
+    );
+
+  if (sync.sincronizando && !sync.ultima)
+    return (
+      <div className="notice donde-viven">
+        <span>Trayendo tus proyectos desde tu cuenta…</span>
+      </div>
+    );
+
+  return null;
 }

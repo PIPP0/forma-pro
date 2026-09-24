@@ -5660,3 +5660,16 @@ dialog.modal {
     transform: rotate(360deg);
   }
 }
+
+.donde-viven {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 0 0 22px;
+  font-size: 13.5px;
+}
+.donde-viven span {
+  max-width: 82ch;
+}
