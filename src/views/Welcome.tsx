@@ -93,7 +93,14 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
               >
                 <input type="password" autoComplete="current-password" value={clave} onChange={(e) => setClave(e.target.value)} placeholder="Al menos 6 caracteres" aria-invalid={!!claveError} />
               </Field>
-              {error && <p className="error-text">{error}</p>}
+              {error && (
+                <div className="notice notice-err welcome-error">
+                  <span>{error}</span>
+                  <Button size="sm" onClick={() => void porCorreo('cambio')}>
+                    Crear contraseña
+                  </Button>
+                </div>
+              )}
               <Button tone="primary" type="submit" disabled={entrando}>
                 {entrando ? 'Entrando…' : 'Entrar'}
               </Button>

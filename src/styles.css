@@ -5729,3 +5729,13 @@ dialog.modal {
 .welcome-otras .link-btn {
   font-size: 13px;
 }
+
+.welcome-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0;
+  font-size: 13.5px;
+}
