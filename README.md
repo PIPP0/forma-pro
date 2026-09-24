@@ -139,6 +139,15 @@ La app pregunta con qué correo entras antes de abrir el espacio. Se entra con *
 
 Entrar con un correo alinea las dos identidades que antes vivían separadas: la sesión local de la app y la cuenta de la nube. Lo que ya existía en el navegador no se pierde de vista: pasa a estar a nombre de quien entra.
 
+## Imágenes que se ven en cualquier equipo
+
+Una pantalla importada guarda su imagen en la nube y la pide aparte. En equipos con bloqueadores de contenido o redes filtradas esa petición no llega y el marco queda vacío. El botón **Incrustar imágenes** (en Diseñar, junto a «Flujo de Figma») trae cada imagen y la guarda dentro del proyecto, en `screen.image.data`, sin borrar la URL:
+
+- Se ejecuta desde un equipo donde las imágenes sí cargan; desde uno bloqueado no habría nada que traer.
+- El proyecto pesa más (del orden de 1,5 MB por cada nueve pantallas), pero viaja completo por la sincronización.
+- El enlace de una prueba **no** lleva esa copia (`sinIncrustadas()` en `share.ts`): sigue pesando unos kilobytes y usando la URL.
+- Si una imagen no carga, la pantalla dice por qué y ofrece abrirla aparte, en vez de dejar un marco en blanco.
+
 ## Tu espacio en cualquier computador
 
 Con el acceso guardado por correo, los proyectos y los estudios dejan de vivir solo en un navegador: se sincronizan con la cuenta y aparecen en cualquier equipo donde entres con ese correo.

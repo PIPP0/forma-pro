@@ -235,7 +235,13 @@ export interface Screen {
   /** Pantalla que se ve de fondo en el lienzo cuando es hoja inferior. */
   sheetOver?: string;
   /** Pantalla importada como imagen (por ejemplo, desde Figma): se ve tal cual y se toca en sus zonas. */
-  image?: { url: string; width: number; height: number };
+  image?: {
+    url: string;
+    width: number;
+    height: number;
+    /** Copia dentro del proyecto, para equipos donde la nube está bloqueada. Manda sobre `url`. */
+    data?: string;
+  };
   hotspots?: Hotspot[];
   /** Nodo de Figma del que viene, para volver a importarla. */
   figmaId?: string;

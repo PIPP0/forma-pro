@@ -367,7 +367,7 @@ export function ImageScreen({
   return (
     <div className="img-screen" ref={host}>
       <img
-        src={screen.image.url}
+        src={screen.image.data ?? screen.image.url}
         alt={screen.name}
         draggable={false}
         onLoad={() => setFalloImagen(false)}

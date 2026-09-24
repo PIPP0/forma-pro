@@ -23,12 +23,18 @@ async function pipe(data: BlobPart, stream: CompressionStream | DecompressionStr
 
 export type SharedStudy = Pick<Study, 'id' | 'name' | 'tasks' | 'snapshot' | 'askAudio' | 'status' | 'cloud'>;
 
+/** Las imágenes incrustadas se quedan en casa: el enlace lleva la URL, que pesa unos bytes. */
+const sinIncrustadas = (p: Study['snapshot']): Study['snapshot'] => ({
+  ...p,
+  screens: p.screens.map((s) => (s.image?.data ? { ...s, image: { url: s.image.url, width: s.image.width, height: s.image.height } } : s)),
+});
+
 export async function encodeStudy(study: Study): Promise<string> {
   const payload: SharedStudy = {
     id: study.id,
     name: study.name,
     tasks: study.tasks,
-    snapshot: study.snapshot,
+    snapshot: sinIncrustadas(study.snapshot),
     askAudio: study.askAudio,
     status: study.status,
     ...(study.cloud ? { cloud: true } : {}),

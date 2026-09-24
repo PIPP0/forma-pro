@@ -4,6 +4,7 @@ import { BLOCK_TYPES, BREAKPOINTS, STYLE_KEYS, baseId, blockMeta, breakpointOf, 
 import { addComment, applyOps, canRedo, canUndo, getDb, redo, releasesFor, resolveComment, undo, useDb, userName } from '../lib/store';
 import { can } from '../lib/permissions';
 import { clone, edit, quitarFigmaOps } from '../lib/ops';
+import { conImagenExterna, incrustarImagenes } from '../lib/incrustar';
 import { checkProject, AREA_LABEL, type Issue } from '../lib/flowCheck';
 import { colorValue, effectiveStyle, findComponent } from '../lib/tokens';
 import { importHtml } from '../lib/importer';
@@ -20,7 +21,7 @@ import { FitPreview } from '../components/FitPreview';
 import { CopilotPanel } from '../components/CopilotPanel';
 import { ColorCell, CommitInput, CommitNumber, ValuePicker } from '../components/inputs';
 import { Button, Field, Modal, Tabs, timeAgo } from '../components/ui';
-import { IconArrowUpRight, IconChevronRight, IconClose, IconCursor, IconDiamond, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
+import { IconArrowUpRight, IconChevronRight, IconClose, IconCursor, IconDiamond, IconDownload, IconExpand, IconFileImage, IconFrame, IconLink, IconMessage, IconMinus, IconMoon, IconPlay, IconPlus, IconRedo, IconSearch, IconShield, IconSliders, IconSparkle, IconSun, IconUndo } from '../components/icons';
 
 
 /** Bloque que instancia un componente, con su contenido de ejemplo propio. */
@@ -127,6 +128,28 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
   const [importOpen, setImportOpen] = useState(false);
   const [figmaOpen, setFigmaOpen] = useState(false);
   const [quitarFigma, setQuitarFigma] = useState(false);
+  const [incrustando, setIncrustando] = useState<string | null>(null);
+  const porIncrustar = conImagenExterna(project).length;
+
+  /**
+   * Trae las imágenes y las deja dentro del proyecto. Pesa más, pero se ve en cualquier equipo:
+   * dejan de ser una petición que un bloqueador o un firewall puedan cortar.
+   */
+  const guardarImagenesDentro = async () => {
+    setIncrustando('Trayendo imágenes…');
+    try {
+      const r = await incrustarImagenes(project, (hechas, total) => setIncrustando(`Incrustando ${hechas} de ${total}…`));
+      if (r.ops.length) applyOps(project.id, r.ops, `Incrustaste ${r.listas} ${r.listas === 1 ? 'imagen' : 'imágenes'} en el proyecto`);
+      const mb = (r.peso / 1024 / 1024).toFixed(1).replace('.', ',');
+      if (r.fallidas)
+        notify(`Quedaron ${r.fallidas} sin incrustar: este equipo tampoco pudo descargarlas. Hazlo desde el computador donde sí se ven.`, 'error');
+      else notify(`Listo: las imágenes viajan dentro del proyecto (${mb} MB). Se verán en cualquier equipo.`, 'success');
+    } catch {
+      notify('No pudimos incrustar las imágenes. Inténtalo de nuevo.', 'error');
+    } finally {
+      setIncrustando(null);
+    }
+  };
   const [proto, setProto] = useState(() => {
     try {
       return localStorage.getItem('formapro.canvas.proto') === '1';
@@ -734,13 +757,27 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
             </div>
             <div className="head-pills">
               {editable && deFigma.length > 0 && (
-                <button type="button" className="sys-pill" title="Quitar las pantallas importadas de Figma" onClick={() => setQuitarFigma(true)}>
-                  <IconFileImage size={14} />
-                  Flujo de Figma · {deFigma.length}
-                  <span className="pill-x" aria-hidden="true">
-                    <IconClose size={12} />
-                  </span>
-                </button>
+                <>
+                  <button type="button" className="sys-pill" title="Quitar las pantallas importadas de Figma" onClick={() => setQuitarFigma(true)}>
+                    <IconFileImage size={14} />
+                    Flujo de Figma · {deFigma.length}
+                    <span className="pill-x" aria-hidden="true">
+                      <IconClose size={12} />
+                    </span>
+                  </button>
+                  {porIncrustar > 0 && (
+                    <button
+                      type="button"
+                      className="sys-pill"
+                      title="Guarda las imágenes dentro del proyecto para que se vean también donde el navegador bloquea la nube"
+                      disabled={!!incrustando}
+                      onClick={() => void guardarImagenesDentro()}
+                    >
+                      <IconDownload size={14} />
+                      {incrustando ?? `Incrustar imágenes · ${porIncrustar}`}
+                    </button>
+                  )}
+                </>
               )}
               <div className="guard-wrap">
               <button type="button" className={`sys-pill ${errors ? 'err' : ''}`} aria-expanded={guardOpen} onClick={() => setGuardOpen((v) => !v)}>
