@@ -1549,7 +1549,7 @@ function ScreenProps({
       {screen.image && <HotspotsSection project={project} screen={screen} editable={editable} drawing={drawing} onDrawing={onDrawing} selected={selectedId} onSelect={onSelectZone} />}
       <FeedbackSection
         titulo="Al llegar aquí"
-        ayuda="Lo que se oye y se siente cuando alguien llega a esta pantalla. Se nota sobre todo en confirmaciones y errores."
+        ayuda="Solo suena si esta pantalla aparece sola, sin que nadie haya tocado nada (una transición automática). Si se llega tocando un botón o una zona, manda el sonido que tenga esa zona — el de aquí no se usa de respaldo."
         valor={base.feedback}
         editable={editable}
         project={project}

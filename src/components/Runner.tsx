@@ -87,19 +87,19 @@ export function Runner({
   const pending = current.blocks.some((b) => b.required && !isFilled(b));
 
   /**
-   * `zonaYaAviso`: la zona tocada ya emitió su propio sonido y vibración. No se suma el de la
-   * pantalla que llega encima: con los dos sonando juntos, el más largo tapaba al más corto y
-   * daba la impresión de que sonaba «el que no corresponde». Uno solo por cada toque, siempre
-   * el más específico primero.
+   * `porToque`: se llegó tocando algo (una zona, un botón), no por una transición automática.
+   * El sonido de «al llegar aquí» de la pantalla que recibe es solo para cuando aparece sola,
+   * sin que nadie haya tocado nada — si alguien tocó para llegar, lo único que suena es lo que
+   * se configuró en eso que tocó (y nada, si no le pusieron sonido). Así nunca suena un sonido
+   * que no se definió ahí mismo.
    */
-  const goTo = (targetId: string, zonaYaAviso?: boolean) => {
+  const goTo = (targetId: string, porToque?: boolean) => {
     const target = screenFor(project, targetId, breakpoint);
     if (!target || baseId(target) === baseId(current)) return;
     setErrors({});
     setStack((s) => [...s, targetId]);
-    // Lo que se siente al llegar: la confirmación que en una app real llega por el cuerpo.
-    // Solo si la zona que llevó hasta aquí no trae ya lo suyo.
-    if (!zonaYaAviso) emitirFeedback(target.feedback, project.sounds);
+    // Lo que se siente al llegar sola: solo en transiciones automáticas, nunca de respaldo de un toque.
+    if (!porToque) emitirFeedback(target.feedback, project.sounds);
     emit({ kind: 'navigate', screen: target.id, x: 0, y: 0 });
   };
 
@@ -120,7 +120,7 @@ export function Runner({
           return 'blocked' as const;
         }
       }
-      goTo(block.target);
+      goTo(block.target, true);
     }
   };
 
@@ -161,13 +161,13 @@ export function Runner({
     }
     if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: hotspot.id, dwell: Math.round(gap), ...c });
     emit({ kind: 'tap', screen: current.id, block: hotspot.id, ...c });
-    const tieneFeedback = !!(hotspot.feedback?.sonido || hotspot.feedback?.vibracion);
-    if (tieneFeedback) emitirFeedback(hotspot.feedback, project.sounds);
+    // Lo único que suena es lo que se configuró en esta zona. Si no tiene, no suena nada.
+    emitirFeedback(hotspot.feedback, project.sounds);
     if (hotspot.back) {
       navigate({ id: '', type: 'button', label: '', action: 'back' });
       return;
     }
-    if (hotspot.target) goTo(hotspot.target, tieneFeedback);
+    if (hotspot.target) goTo(hotspot.target, true);
     // Al probar desde el proyecto conviene saber por qué no pasó nada; en un estudio real, no.
     else if (avisaSinDestino) notify(`La zona «${hotspot.label || 'sin nombre'}» no lleva a ninguna pantalla.`, 'info');
   };
@@ -201,7 +201,7 @@ export function Runner({
 
     if (optionTarget) {
       emit({ kind: 'tap', screen: current.id, block: block.id, option, ...c });
-      goTo(optionTarget);
+      goTo(optionTarget, true);
       return;
     }
     if (blockMeta(block.type).field) {
