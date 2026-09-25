@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../lib/model';
 import { baseId } from '../lib/model';
-import { createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, saveStudySummary, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
+import { applyStudySnapshotOps, createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, saveStudySummary, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
+import { conImagenExterna, incrustarImagenes } from '../lib/incrustar';
 import { deleteCloudSession, deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
 import { useCloudAccount } from '../components/useCloudAccount';
 import { notify } from '../lib/toast';
@@ -780,7 +781,7 @@ function StudyDetail({ project, role, study, studies }: { project: Project; role
 
             <aside className="study-side">
               <div className="card">
-                <HeatmapPanel study={study} events={events} />
+                <HeatmapPanel study={study} events={events} editable={manage} />
               </div>
             </aside>
           </div>
@@ -1100,13 +1101,14 @@ function Funnel({ study, sessions, events }: { study: Study; sessions: Session[]
   );
 }
 
-function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] }) {
+function HeatmapPanel({ study, events, editable }: { study: Study; events: StudyEvent[]; editable: boolean }) {
   const snap = study.snapshot;
   const touched = snap.screens.filter((s) => events.some((e) => e.screen === s.id && ['tap', 'misclick', 'blocked'].includes(e.kind)));
   const [screenId, setScreenId] = useState(touched[0]?.id);
   const [task, setTask] = useState<string>('all');
   const [tipo, setTipo] = useState<'todos' | 'tap' | 'misclick'>('todos');
   const [dir, setDir] = useState<'sig' | 'ant'>('sig');
+  const [incrustando, setIncrustando] = useState<string | null>(null);
   const screen = snap.screens.find((s) => s.id === screenId) ?? touched[0];
   if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
   const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
@@ -1118,9 +1120,40 @@ function HeatmapPanel({ study, events }: { study: Study; events: StudyEvent[] })
     setDir(i > indice ? 'sig' : 'ant');
     setScreenId(destino.id);
   };
+  // El estudio guarda su propio prototipo (para no cambiarle el piso a quien ya lo respondió).
+  // Si se incrustaron las imágenes DESPUÉS de publicarlo, esta copia se quedó sin ellas.
+  const porIncrustar = conImagenExterna(snap).length;
+  const guardarImagenesDelEstudio = async () => {
+    setIncrustando('Trayendo imágenes…');
+    try {
+      const r = await incrustarImagenes(snap, (hechas, total) => setIncrustando(`Incrustando ${hechas} de ${total}…`));
+      if (r.ops.length) applyStudySnapshotOps(study.id, r.ops);
+      const mb = (r.peso / 1024 / 1024).toFixed(1).replace('.', ',');
+      if (r.fallidas) notify(`Quedaron ${r.fallidas} sin incrustar: este equipo tampoco pudo descargarlas. Hazlo desde el computador donde sí se ven.`, 'error');
+      else notify(`Listo: las imágenes del estudio viajan dentro de él (${mb} MB). Se verán en cualquier equipo.`, 'success');
+    } catch {
+      notify('No pudimos incrustar las imágenes. Inténtalo de nuevo.', 'error');
+    } finally {
+      setIncrustando(null);
+    }
+  };
   return (
     <section className="heat-panel">
-      <h2 className="section-title">Mapa de calor</h2>
+      <div className="heat-panel-head">
+        <h2 className="section-title">Mapa de calor</h2>
+        {editable && porIncrustar > 0 && (
+          <button
+            type="button"
+            className="sys-pill"
+            title="Guarda las imágenes de este estudio dentro de él para que se vean también donde el navegador bloquea la nube"
+            disabled={!!incrustando}
+            onClick={() => void guardarImagenesDelEstudio()}
+          >
+            <IconDownload size={14} />
+            {incrustando ?? `Incrustar imágenes · ${porIncrustar}`}
+          </button>
+        )}
+      </div>
       <div className="stack">
         <Field label="Pantalla">
           <select value={screen.id} onChange={(e) => irA(touched.findIndex((s) => s.id === e.target.value))}>

@@ -674,6 +674,20 @@ export function saveStudySummary(studyId: string, summary: Study['summary']) {
   commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, summary } : s)) });
 }
 
+/**
+ * Aplica cambios a la copia congelada de un estudio (por ejemplo, incrustar sus imágenes) sin
+ * tocar el proyecto en vivo: un estudio ya publicado mantiene su propio prototipo, aparte de lo
+ * que se siga editando en Diseñar.
+ */
+export function applyStudySnapshotOps(studyId: string, ops: OpInput[]): boolean {
+  const study = db.studies.find((s) => s.id === studyId);
+  if (!study || !guard(study.projectId, 'runStudy')) return false;
+  let snapshot = study.snapshot;
+  for (const op of ops) snapshot = applyOp(snapshot, op).doc;
+  commit({ ...db, studies: db.studies.map((s) => (s.id === studyId ? { ...s, snapshot, updatedAt: Date.now() } : s)) });
+  return true;
+}
+
 /** Quita una sesión de los resultados: sus respuestas, sus eventos y su grabación. */
 export function deleteSession(sessionId: string) {
   const s = db.sessions.find((x) => x.id === sessionId);

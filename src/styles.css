@@ -454,6 +454,17 @@ p {
 .section-head .section-title {
   margin: 0;
 }
+.heat-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.heat-panel-head .section-title {
+  margin: 0;
+}
 .section-title {
   font-size: 18px;
   letter-spacing: -0.015em;
