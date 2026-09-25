@@ -86,13 +86,20 @@ export function Runner({
   const isFilled = (b: Block) => (TOGGLE_TYPES.includes(b.type) ? !!checked[b.id] : !!(values[b.id] ?? (b.type === 'tabs' ? b.value : ''))?.trim());
   const pending = current.blocks.some((b) => b.required && !isFilled(b));
 
-  const goTo = (targetId: string) => {
+  /**
+   * `zonaYaAviso`: la zona tocada ya emitió su propio sonido y vibración. No se suma el de la
+   * pantalla que llega encima: con los dos sonando juntos, el más largo tapaba al más corto y
+   * daba la impresión de que sonaba «el que no corresponde». Uno solo por cada toque, siempre
+   * el más específico primero.
+   */
+  const goTo = (targetId: string, zonaYaAviso?: boolean) => {
     const target = screenFor(project, targetId, breakpoint);
     if (!target || baseId(target) === baseId(current)) return;
     setErrors({});
     setStack((s) => [...s, targetId]);
     // Lo que se siente al llegar: la confirmación que en una app real llega por el cuerpo.
-    emitirFeedback(target.feedback, project.sounds);
+    // Solo si la zona que llevó hasta aquí no trae ya lo suyo.
+    if (!zonaYaAviso) emitirFeedback(target.feedback, project.sounds);
     emit({ kind: 'navigate', screen: target.id, x: 0, y: 0 });
   };
 
@@ -154,12 +161,13 @@ export function Runner({
     }
     if (gap > HESITATION_MS && !wasFirst) emit({ kind: 'hesitation', screen: current.id, block: hotspot.id, dwell: Math.round(gap), ...c });
     emit({ kind: 'tap', screen: current.id, block: hotspot.id, ...c });
-    emitirFeedback(hotspot.feedback, project.sounds);
+    const tieneFeedback = !!(hotspot.feedback?.sonido || hotspot.feedback?.vibracion);
+    if (tieneFeedback) emitirFeedback(hotspot.feedback, project.sounds);
     if (hotspot.back) {
       navigate({ id: '', type: 'button', label: '', action: 'back' });
       return;
     }
-    if (hotspot.target) goTo(hotspot.target);
+    if (hotspot.target) goTo(hotspot.target, tieneFeedback);
     // Al probar desde el proyecto conviene saber por qué no pasó nada; en un estudio real, no.
     else if (avisaSinDestino) notify(`La zona «${hotspot.label || 'sin nombre'}» no lleva a ninguna pantalla.`, 'info');
   };
