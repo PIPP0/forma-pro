@@ -1205,7 +1205,11 @@ function HotspotsSection({
             )}
           </div>
           {(h.target || h.back) && (
-            <div className="zona-feedback">
+            <div className="zona-feedback-wrap">
+              <p className="muted small zona-feedback-nota">
+                Al tocar esta zona, un instante antes de pasar a «{h.back ? 'la pantalla anterior' : (project.screens.find((s) => s.id === h.target)?.name ?? 'la otra pantalla')}»:
+              </p>
+              <div className="zona-feedback">
               <select
                 className="input"
                 aria-label={`Sonido al tocar ${h.label || 'la zona'}`}
@@ -1261,6 +1265,7 @@ function HotspotsSection({
                   </option>
                 ))}
               </select>
+              </div>
             </div>
           )}
         </Field>

@@ -5769,7 +5769,12 @@ dialog.modal {
   font-size: 12.5px;
 }
 
-/* Sonido y vibración de una zona: dos selectores angostos bajo su destino. */
+/* Sonido y vibración de una zona: dos selectores angostos bajo su destino. Sin la nota de arriba,
+   esta fila se confunde fácil con «el sonido de la pantalla a la que lleva» — no lo es: suena al
+   tocar, todavía en esta pantalla, un instante antes de que cambie. */
+.zona-feedback-nota {
+  margin: 8px 0 4px;
+}
 .zona-feedback {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
