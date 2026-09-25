@@ -1109,17 +1109,6 @@ function HeatmapPanel({ study, events, editable }: { study: Study; events: Study
   const [tipo, setTipo] = useState<'todos' | 'tap' | 'misclick'>('todos');
   const [dir, setDir] = useState<'sig' | 'ant'>('sig');
   const [incrustando, setIncrustando] = useState<string | null>(null);
-  const screen = snap.screens.find((s) => s.id === screenId) ?? touched[0];
-  if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
-  const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
-  const pts = events.filter((e) => e.screen === screen.id && cuenta(e.kind) && (task === 'all' || e.taskId === task));
-  const indice = touched.findIndex((s) => s.id === screen.id);
-  const irA = (i: number) => {
-    const destino = touched[i];
-    if (!destino) return;
-    setDir(i > indice ? 'sig' : 'ant');
-    setScreenId(destino.id);
-  };
   // El estudio guarda su propio prototipo (para no cambiarle el piso a quien ya lo respondió).
   // Si se incrustaron las imágenes DESPUÉS de publicarlo, esta copia se quedó sin ellas.
   const porIncrustar = conImagenExterna(snap).length;
@@ -1136,6 +1125,42 @@ function HeatmapPanel({ study, events, editable }: { study: Study; events: Study
     } finally {
       setIncrustando(null);
     }
+  };
+  // Automático: al abrir los resultados, si el estudio tiene imágenes sin incrustar se intenta
+  // traerlas solo. Si este equipo también las tiene bloqueadas, no se avisa nada — se reintenta
+  // solo la próxima vez que alguien lo abra desde un equipo donde sí carguen. Necesita el mismo
+  // permiso que el botón manual, así que no corre para quien solo puede mirar el estudio.
+  const intentoAutoRef = useRef(false);
+  useEffect(() => {
+    if (!editable || intentoAutoRef.current || incrustando || !porIncrustar) return;
+    intentoAutoRef.current = true;
+    void (async () => {
+      setIncrustando('Trayendo imágenes…');
+      try {
+        const r = await incrustarImagenes(snap, (hechas, total) => setIncrustando(`Incrustando ${hechas} de ${total}…`));
+        if (r.ops.length) {
+          applyStudySnapshotOps(study.id, r.ops);
+          const mb = (r.peso / 1024 / 1024).toFixed(1).replace('.', ',');
+          notify(`Las imágenes de «${study.name}» ya viajan dentro del estudio (${mb} MB): se verán en cualquier equipo.`, 'success');
+        }
+      } catch {
+        /* este equipo tampoco pudo: se reintenta solo la próxima vez */
+      } finally {
+        setIncrustando(null);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [study.id]);
+  const screen = snap.screens.find((s) => s.id === screenId) ?? touched[0];
+  if (!screen) return <p className="muted">Todavía no hay toques registrados.</p>;
+  const cuenta = (k: string) => (tipo === 'todos' ? ['tap', 'misclick', 'blocked'].includes(k) : tipo === 'tap' ? k === 'tap' : k === 'misclick' || k === 'blocked');
+  const pts = events.filter((e) => e.screen === screen.id && cuenta(e.kind) && (task === 'all' || e.taskId === task));
+  const indice = touched.findIndex((s) => s.id === screen.id);
+  const irA = (i: number) => {
+    const destino = touched[i];
+    if (!destino) return;
+    setDir(i > indice ? 'sig' : 'ant');
+    setScreenId(destino.id);
   };
   return (
     <section className="heat-panel">

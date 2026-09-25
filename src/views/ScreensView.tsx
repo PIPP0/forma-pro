@@ -151,6 +151,32 @@ export function ScreensView({ project, role, initialScreen, openAi, openPlay }: 
       setIncrustando(null);
     }
   };
+
+  // Automático: apenas se abre el proyecto, si hay imágenes sin incrustar se intenta traerlas
+  // solo, sin que nadie tenga que tocar el botón. Si este equipo también las tiene bloqueadas,
+  // no se avisa nada —eso ya se explica al lado de cada pantalla caída— y se reintenta solo la
+  // próxima vez que alguien lo abra desde un equipo donde sí carguen.
+  const intentoAutoRef = useRef(false);
+  useEffect(() => {
+    if (!editable || intentoAutoRef.current || incrustando || !porIncrustar) return;
+    intentoAutoRef.current = true;
+    void (async () => {
+      setIncrustando('Trayendo imágenes…');
+      try {
+        const r = await incrustarImagenes(project, (hechas, total) => setIncrustando(`Incrustando ${hechas} de ${total}…`));
+        if (r.ops.length) {
+          applyOps(project.id, r.ops, `Incrustaste ${r.listas} ${r.listas === 1 ? 'imagen' : 'imágenes'} en el proyecto`);
+          const mb = (r.peso / 1024 / 1024).toFixed(1).replace('.', ',');
+          notify(`Las imágenes de «${project.name}» ya viajan dentro del proyecto (${mb} MB): se verán en cualquier equipo.`, 'success');
+        }
+      } catch {
+        /* este equipo tampoco pudo: se reintenta solo la próxima vez */
+      } finally {
+        setIncrustando(null);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project.id]);
   const [proto, setProto] = useState(() => {
     try {
       return localStorage.getItem('formapro.canvas.proto') === '1';
