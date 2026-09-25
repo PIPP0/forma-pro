@@ -25,23 +25,32 @@ let enCurso: Promise<ResumenSync> | undefined;
 let pendiente: ReturnType<typeof setTimeout> | undefined;
 let arrancado = false;
 
+// 20 s de margen: bastante para una conexión lenta, y suficiente para no dejar a nadie mirando
+// «Sincronizando…» para siempre si algo se cuelga (una cuenta de nube que no termina de
+// resolverse, por ejemplo). Sin este límite, un cuelgue ahí dejaba `enCurso` puesto para
+// siempre, así que ni el botón «Sincronizar ahora» ni los reintentos automáticos volvían a
+// intentarlo — el espacio dejaba de subir nada y nadie se enteraba.
+const TIEMPO_LIMITE_MS = 20_000;
+const fallo = (mensaje: string): ResumenSync => ({ subidos: 0, bajados: 0, borrados: 0, conflictos: [], error: mensaje });
+
+function conLimite(promesa: Promise<ResumenSync>): Promise<ResumenSync> {
+  const limite = new Promise<ResumenSync>((resolve) => {
+    setTimeout(() => resolve(fallo('La sincronización está tardando demasiado. Revisa tu conexión e inténtalo de nuevo.')), TIEMPO_LIMITE_MS);
+  });
+  return Promise.race([promesa, limite]).catch(() => fallo('No pudimos sincronizar. Lo intentamos de nuevo en un rato.'));
+}
+
 /** Una sincronización a la vez: si ya hay una corriendo, se espera esa. */
 export function sincronizarAhora(manual = false): Promise<ResumenSync> {
   if (enCurso) return enCurso;
   set({ sincronizando: true, error: undefined });
-  enCurso = sincronizarEspacio()
+  enCurso = conLimite(sincronizarEspacio())
     .then((r) => {
       set({ sincronizando: false, ultima: Date.now(), error: r.error, activo: true });
       if (manual) {
         const partes = [r.bajados && `${r.bajados} ${r.bajados === 1 ? 'traído' : 'traídos'}`, r.subidos && `${r.subidos} ${r.subidos === 1 ? 'subido' : 'subidos'}`].filter(Boolean);
         notify(r.error ?? (partes.length ? `Espacio al día: ${partes.join(' y ')}.` : 'Tu espacio ya estaba al día.'), r.error ? 'error' : 'success');
       }
-      return r;
-    })
-    .catch(() => {
-      const r: ResumenSync = { subidos: 0, bajados: 0, borrados: 0, conflictos: [], error: 'No pudimos sincronizar. Lo intentamos de nuevo en un rato.' };
-      set({ sincronizando: false, error: r.error });
-      if (manual) notify(r.error!, 'error');
       return r;
     })
     .finally(() => {

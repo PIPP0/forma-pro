@@ -22,14 +22,23 @@ interface Cloud {
 
 let loading: Promise<Cloud> | undefined;
 
+// authStateReady() (o la carga del SDK) a veces no se resuelve nunca en algunos navegadores —
+// sin este límite, todo lo que toca la nube (sincronizar, entrar, subir resultados) se quedaba
+// esperando para siempre, sin avisar y sin poder reintentar: `loading` quedaba puesto y ningún
+// llamado nuevo volvía a intentarlo.
+const TIEMPO_LIMITE_MS = 15_000;
+
 function cloud(): Promise<Cloud> {
-  loading ??= (async () => {
-    const [app, fa, fs, st] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore/lite'), import('firebase/storage')]);
-    const fbApp = app.initializeApp(FIREBASE_CONFIG);
-    const auth = fa.getAuth(fbApp);
-    await auth.authStateReady();
-    return { auth, db: fs.getFirestore(fbApp), storage: st.getStorage(fbApp), fa, fs, st };
-  })().catch((e) => {
+  loading ??= Promise.race([
+    (async () => {
+      const [app, fa, fs, st] = await Promise.all([import('firebase/app'), import('firebase/auth'), import('firebase/firestore/lite'), import('firebase/storage')]);
+      const fbApp = app.initializeApp(FIREBASE_CONFIG);
+      const auth = fa.getAuth(fbApp);
+      await auth.authStateReady();
+      return { auth, db: fs.getFirestore(fbApp), storage: st.getStorage(fbApp), fa, fs, st };
+    })(),
+    new Promise<Cloud>((_, reject) => setTimeout(() => reject(new Error('La nube no respondió a tiempo.')), TIEMPO_LIMITE_MS)),
+  ]).catch((e) => {
     loading = undefined;
     throw e;
   });
