@@ -4843,15 +4843,20 @@ dialog.modal {
 .hotspot {
   position: absolute;
   user-select: none;
-  touch-action: none;
+  /* Deja pasar el scroll vertical: en el prototipo la zona solo debe capturar el toque, no el dedo
+     entero. Sin esto, una zona grande (como una tarjeta que ocupa media pantalla) bloqueaba el
+     scroll nativo de todo el navegador y la pantalla se veía "cortada" sin forma de bajar. */
+  touch-action: manipulation;
   border: 0;
   padding: 0;
   background: transparent;
   cursor: pointer;
   border-radius: 6px;
 }
-/* Sin seleccionar se ve la imagen tal cual: solo un contorno fino marca la zona. */
+/* En el editor sí hace falta bloquear el scroll: al arrastrar para mover o redimensionar la zona,
+   el dedo no debe iniciar un scroll de la página a mitad de camino. */
 .hotspot.editable {
+  touch-action: none;
   outline: 1px dashed rgba(93, 79, 240, 0.5);
 }
 .hotspot.movible {
