@@ -6,7 +6,7 @@ import type { DB, Membership, Project, Session, Study, StudyEvent } from './mode
 import { roleFor } from './permissions';
 import { uid } from './ids';
 import { borrarDelEspacio, bajarDelEspacio, ensureCloudAccount, leerIndiceEspacio, subirAlEspacio, type EntradaEspacio } from './cloud';
-import { currentUser, getDb, projectsFor, reemplazarDesdeNube } from './store';
+import { almacenListo, currentUser, getDb, projectsFor, reemplazarDesdeNube } from './store';
 
 /** Paquete de un estudio: lo que hace falta para que sus resultados se vean en otro equipo. */
 interface PaqueteEstudio {
@@ -89,6 +89,9 @@ export function planificar(locales: { tipo: 'proyecto' | 'estudio'; id: string; 
  */
 export async function sincronizarEspacio(): Promise<ResumenSync> {
   const vacio: ResumenSync = { subidos: 0, bajados: 0, borrados: 0, conflictos: [] };
+  // Antes de subir nada hay que tener el espacio completo a la vista: si sincronizáramos con la
+  // copia liviana del arranque, subiríamos proyectos sin sus imágenes y pisaríamos los de la nube.
+  await almacenListo;
   let indice: EntradaEspacio[];
   let correoCuenta = '';
   try {

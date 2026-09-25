@@ -11,6 +11,7 @@ import { checkProject, hasBlockingErrors } from './flowCheck';
 import { uid } from './ids';
 import { notify } from './toast';
 import { deleteAudio, saveAudio } from './blobs';
+import { guardarEstado, leerEstado, olvidarEstado } from './almacen';
 import { audioToBlob, isAudioPayload, type AudioMap } from './share';
 
 const KEY = 'formapro.db.v1';
@@ -32,21 +33,93 @@ function load(): DB {
 let db: DB = load();
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
+/** ¿Alguien editó algo desde que arrancamos? Decide si lo guardado puede reemplazar lo que hay. */
+let tocado = false;
+
+/**
+ * El espacio sin sus archivos: las pantallas de Figma y los sonidos propios viajan dentro del
+ * proyecto y pesan megabytes. Esta copia es lo que cabe en localStorage cuando ya no cabe todo;
+ * alcanza para pintar la primera pantalla mientras IndexedDB devuelve el espacio completo.
+ */
+export function sinArchivos(d: DB): DB {
+  return {
+    ...d,
+    projects: d.projects.map((p) => ({
+      ...p,
+      sounds: p.sounds?.map((s) => ({ ...s, data: '' })),
+      screens: p.screens.map((s) => (s.image?.data ? { ...s, image: { ...s.image, data: undefined } } : s)),
+    })),
+  };
+}
+
+function guardarLocal(d: DB): boolean {
+  try {
+    globalThis.localStorage?.setItem(KEY, JSON.stringify(d));
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 function flush() {
-  try {
-    globalThis.localStorage?.setItem(KEY, JSON.stringify(db));
-  } catch {
-    notify('No se pudo guardar en este navegador: el almacenamiento está lleno. Exporta un respaldo y elimina estudios antiguos.', 'error');
-  }
+  // IndexedDB primero: es donde el espacio cabe entero.
+  const enIndexed = guardarEstado(db).then(
+    () => true,
+    () => false,
+  );
+  if (guardarLocal(db)) return;
+  // No cupo. Se guarda la versión sin archivos para que el próximo arranque sea inmediato, y se
+  // avisa solo si IndexedDB tampoco pudo: ahí sí hay riesgo de perder trabajo.
+  const liviano = guardarLocal(sinArchivos(db));
+  void enIndexed.then((ok) => {
+    if (ok || liviano) return;
+    notify('Este navegador no está guardando tus cambios: se quedó sin espacio. Exporta un respaldo antes de cerrar la pestaña.', 'error');
+  });
 }
 
 function commit(next: DB) {
   db = next;
+  tocado = true;
   clearTimeout(timer);
   timer = setTimeout(flush, 120);
   listeners.forEach((l) => l());
 }
+
+/** Rellena los archivos que la copia liviana dejó fuera, sin tocar nada más de lo que hay ahora. */
+export function conArchivosDe(actual: DB, guardado: DB): DB {
+  const fuente = new Map(guardado.projects.map((p) => [p.id, p]));
+  return {
+    ...actual,
+    projects: actual.projects.map((p) => {
+      const g = fuente.get(p.id);
+      if (!g) return p;
+      const imagenes = new Map(g.screens.filter((s) => s.image?.data).map((s) => [s.id, s.image!.data!]));
+      const sonidos = new Map((g.sounds ?? []).filter((s) => s.data).map((s) => [s.id, s.data]));
+      return {
+        ...p,
+        sounds: p.sounds?.map((s) => (s.data ? s : { ...s, data: sonidos.get(s.id) ?? s.data })),
+        screens: p.screens.map((s) => (s.image && !s.image.data && imagenes.has(s.id) ? { ...s, image: { ...s.image, data: imagenes.get(s.id) } } : s)),
+      };
+    }),
+  };
+}
+
+/**
+ * Trae el espacio completo desde IndexedDB. Arrancamos con lo que había en localStorage para no
+ * hacer esperar a nadie; esto llega unos milisegundos después con lo que no cabía allí.
+ */
+export const almacenListo: Promise<void> = (async () => {
+  let guardado: DB | undefined;
+  try {
+    guardado = await leerEstado<DB>();
+  } catch {
+    return;
+  }
+  if (!guardado || guardado.schema !== 1 || !Array.isArray(guardado.projects)) return;
+  // Si ya se editó algo en este rato, lo de la pantalla manda: solo se recuperan los archivos.
+  db = tocado ? conArchivosDe(db, guardado) : migrate({ ...emptyDb(), ...guardado });
+  listeners.forEach((l) => l());
+})();
 
 if (typeof window !== 'undefined') {
   window.addEventListener('pagehide', flush);
@@ -54,7 +127,7 @@ if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
     if (e.key !== KEY || !e.newValue) return;
     try {
-      db = { ...emptyDb(), ...JSON.parse(e.newValue) };
+      db = conArchivosDe({ ...emptyDb(), ...JSON.parse(e.newValue) }, db);
       listeners.forEach((l) => l());
     } catch {
       /* ignorar */
@@ -66,7 +139,14 @@ export const getDb = () => db;
 
 /** Vuelve a leer lo guardado (por ejemplo, sesiones terminadas en otra pestaña). */
 export function refreshFromStorage() {
+  const previo = db;
   db = load();
+  void leerEstado<DB>()
+    .then((guardado) => {
+      db = guardado?.schema === 1 && Array.isArray(guardado.projects) ? migrate({ ...emptyDb(), ...guardado }) : conArchivosDe(db, previo);
+      listeners.forEach((l) => l());
+    })
+    .catch(() => undefined);
   listeners.forEach((l) => l());
   notify('Datos actualizados.', 'success');
 }
@@ -772,5 +852,6 @@ export function reemplazarDesdeNube(next: DB) {
 export function resetWorkspace() {
   commit(emptyDb());
   stacks.clear();
+  void olvidarEstado().catch(() => undefined);
   flush();
 }
