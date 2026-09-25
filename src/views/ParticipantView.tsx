@@ -11,6 +11,7 @@ import { enterFullscreen, exitFullscreen, rememberStudyLink, useImmersiveMode, u
 import { Runner, type RunnerEvent } from '../components/Runner';
 import { Button, copyText } from '../components/ui';
 import { BrandLockup } from '../components/Shell';
+import { useCloudAccount } from '../components/useCloudAccount';
 
 type Step = 'intro' | 'task' | 'rate' | 'sending' | 'done';
 
@@ -182,6 +183,9 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
   const [recovered, setRecovered] = useState<{ draft: SessionDraft; audio?: Blob }>();
   // Nube: en estudios conectados, desde el enlace, la sesión y el audio suben mientras la persona avanza.
   const cloudMode = !!study.cloud && !local && guarda;
+  // Probando aquí mismo, con cuenta de correo: el audio también sube, para oírlo desde cualquier equipo.
+  const { account: cuenta } = useCloudAccount();
+  const subeAudioLocal = local && !!study.cloud && !!cuenta?.email;
   const cloudReady = useRef<Promise<void>>(Promise.resolve());
   const cloudPending = useRef<Blob[]>([]);
   const cloudParts = useRef(0);
@@ -394,6 +398,12 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
         } catch {
           notify('No hubo espacio en este navegador para guardar el audio. Tus respuestas sí quedaron guardadas.', 'error');
         }
+        // Queda igual en este navegador; además viaja a la nube para poder oírla desde cualquier equipo.
+        // La grabación solo se acepta si antes existe la sesión: son dos escrituras, en ese orden.
+        if (subeAudioLocal)
+          void uploadSession(study.id, session.current!, events.current)
+            .then(() => uploadFullAudio(study.id, session.current!.id, blob, 0))
+            .catch(() => undefined);
       } else {
         // Desde el enlace, la grabación viaja dentro del archivo de resultados.
         audioBlob.current = blob;
@@ -446,6 +456,10 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
         } catch {
           notify('No hubo espacio en este navegador para guardar el audio. Tus respuestas sí quedaron guardadas.', 'error');
         }
+        if (subeAudioLocal)
+          void uploadSession(study.id, session.current, events.current)
+            .then(() => uploadFullAudio(study.id, id, audio, 0))
+            .catch(() => undefined);
       }
       saveSession(session.current, events.current);
       await clearDraft(study.id, id);

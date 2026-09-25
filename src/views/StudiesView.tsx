@@ -1436,7 +1436,11 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
     if (blobs[s.id]) return blobs[s.id];
     setCargando(s.id);
     let blob = await getAudio(s.id).catch(() => undefined);
-    if (!blob && s.source === 'cloud') {
+    // Antes solo se buscaba en la nube si la sesión venía marcada 'cloud'. Ahora una prueba hecha
+    // aquí mismo también puede haber subido su audio (con cuenta de correo, en un estudio
+    // publicado): sin eso, «Está en el navegador donde se hizo la sesión» seguía apareciendo aunque
+    // el audio ya viajara. Intentar la nube siempre es gratis cuando no hay copia local.
+    if (!blob && study.cloud) {
       const remoto = await downloadCloudAudio(study.id, s.id).catch(() => undefined);
       if (remoto) {
         blob = remoto.blob;
@@ -1445,7 +1449,7 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
     }
     setCargando(undefined);
     if (!blob) {
-      setFallo((f) => ({ ...f, [s.id]: s.source === 'cloud' ? 'No pudimos traerla de la nube.' : 'Está en el navegador donde se hizo la sesión.' }));
+      setFallo((f) => ({ ...f, [s.id]: study.cloud ? 'No pudimos traerla de la nube.' : 'Está en el navegador donde se hizo la sesión.' }));
       return undefined;
     }
     const url = URL.createObjectURL(blob);
