@@ -1072,6 +1072,25 @@ dialog.modal::backdrop {
   padding: 6px 10px 2px;
   display: block;
 }
+/* Una fila de «Cambiar de perfil» con su propio botón para quitarla de la lista. */
+.menu-row {
+  display: flex;
+  align-items: stretch;
+}
+.menu-row > button:first-child {
+  flex: 1;
+  min-width: 0;
+}
+.menu-row-quitar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  color: var(--ink-3);
+}
+.menu-row-quitar:hover {
+  color: var(--err);
+  background: var(--panel-2);
+}
 
 /* ---------- Bienvenida ---------- */
 

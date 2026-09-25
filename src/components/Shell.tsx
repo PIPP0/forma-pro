@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Project, Role } from '../lib/model';
-import { currentUser, projectsFor, redo, saveVersion, signOut, switchUser, undo, useDb } from '../lib/store';
+import { currentUser, olvidarPerfil, projectsFor, redo, saveVersion, signOut, switchUser, undo, useDb } from '../lib/store';
 import { ROLE_LABEL, can } from '../lib/permissions';
 import { href } from '../lib/router';
 import { setCloudAccountCache, useCloudAccount } from './useCloudAccount';
 import { disconnectCloud } from '../lib/cloud';
 import { olvidarPreferencia } from '../lib/session';
+import { notify } from '../lib/toast';
 import { useEstadoSync } from './useSync';
 import { Button, Modal } from './ui';
 import { AssistantModal } from './AssistantModal';
-import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconRefresh, IconSparkle, IconUpload, IconUsers } from './icons';
+import { IconChart, IconCheckCircle, IconChevronDown, IconChevronRight, IconDiamond, IconPlay, IconSave, IconSend, IconShield, IconRefresh, IconSparkle, IconTrash, IconUpload, IconUsers } from './icons';
 
 const TABS = [
   { id: 'screens', label: 'Diseñar', Icon: IconSend },
@@ -82,6 +83,7 @@ export function Shell({ project, role, active, children }: { project?: Project; 
   const user = currentUser(db);
   const [menu, setMenu] = useState<'user' | 'project' | null>(null);
   const [versionOpen, setVersionOpen] = useState(false);
+  const [quitarPerfil, setQuitarPerfil] = useState<{ id: string; nombre: string } | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
   const [versionName, setVersionName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
@@ -157,17 +159,30 @@ export function Shell({ project, role, active, children }: { project?: Project; 
                       {db.users
                         .filter((u) => u.id !== user.id)
                         .map((u) => (
-                          <button
-                            key={u.id}
-                            type="button"
-                            role="menuitem"
-                            onClick={() => {
-                              switchUser(u.id);
-                              setMenu(null);
-                            }}
-                          >
-                            {u.name} <span className="muted">{u.email}</span>
-                          </button>
+                          <div key={u.id} className="menu-row">
+                            <button
+                              type="button"
+                              role="menuitem"
+                              onClick={() => {
+                                switchUser(u.id);
+                                setMenu(null);
+                              }}
+                            >
+                              {u.name} <span className="muted">{u.email}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="menu-row-quitar"
+                              title={`Quitar «${u.email}» de la lista`}
+                              aria-label={`Quitar «${u.email}» de la lista`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setQuitarPerfil({ id: u.id, nombre: u.email });
+                              }}
+                            >
+                              <IconTrash size={14} />
+                            </button>
+                          </div>
                         ))}
                     </div>
                   )}
@@ -286,6 +301,32 @@ export function Shell({ project, role, active, children }: { project?: Project; 
           </label>
         </Modal>
       )}
+
+      <Modal
+        open={!!quitarPerfil}
+        title="Quitar perfil de la lista"
+        onClose={() => setQuitarPerfil(null)}
+        footer={
+          <>
+            <Button onClick={() => setQuitarPerfil(null)}>Cancelar</Button>
+            <Button
+              tone="danger"
+              onClick={() => {
+                if (!quitarPerfil) return;
+                olvidarPerfil(quitarPerfil.id);
+                notify(`Quitaste «${quitarPerfil.nombre}» de la lista de perfiles.`, 'success');
+                setQuitarPerfil(null);
+              }}
+            >
+              Quitar perfil
+            </Button>
+          </>
+        }
+      >
+        <p className="muted">
+          Se deja de ofrecer «{quitarPerfil?.nombre}» en «Cambiar de perfil» en este navegador. Sus proyectos y estudios no se tocan: siguen intactos con su historial.
+        </p>
+      </Modal>
     </div>
   );
 }

@@ -302,6 +302,17 @@ export function entrarComoCuenta(email: string, nombre?: string, heredarLocales 
 export const signOut = () => commit({ ...db, currentUserId: undefined });
 export const switchUser = (id: string) => commit({ ...db, currentUserId: id });
 
+/**
+ * Quita un perfil local que ya no hace falta (por ejemplo, uno creado por un correo mal
+ * escrito). No borra sus proyectos ni estudios —esos siguen siendo de quien los creó, con su
+ * fecha y su historial intactos—, solo deja de ofrecerlo en «Cambiar de perfil». No se puede
+ * quitar el perfil con el que se está trabajando ahora mismo.
+ */
+export function olvidarPerfil(id: string) {
+  if (id === db.currentUserId) return;
+  commit({ ...db, users: db.users.filter((u) => u.id !== id) });
+}
+
 export const projectsFor = (d: DB, user?: User) => (user ? d.projects.filter((p) => roleFor(d, p, user)) : []);
 
 function guard(projectId: string, perm: Permission): { user: User; project: Project; role: Role } | null {
