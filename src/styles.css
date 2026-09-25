@@ -1740,7 +1740,8 @@ dialog.modal::backdrop {
 .device-scroll {
   height: 100%;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .phone {
   display: flex;
@@ -2762,7 +2763,12 @@ dialog.modal::backdrop {
 }
 .runner-fill {
   flex: 1;
-  overflow: auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  /* Deprecado, pero en algunos iPhone sigue siendo lo único que evita que el scroll hacia
+     arriba se quede pegado tras bajar dentro de este contenedor. No hace daño dejarlo. */
+  -webkit-overflow-scrolling: touch;
   background: #fff;
 }
 .runner-fill .screen {
