@@ -139,16 +139,24 @@ export const getDb = () => db;
 
 /** Vuelve a leer lo guardado (por ejemplo, sesiones terminadas en otra pestaña). */
 export function refreshFromStorage() {
+  // load() solo lee localStorage: desde que el espacio vive también en IndexedDB, esa es la
+  // copia liviana (sin imágenes ni sonidos incrustados) que se guarda ahí cuando no cabe todo.
+  // Aplicarla de una vez, antes de traer la copia completa, hacía parpadear la vista un
+  // instante con las imágenes caídas —«la vista interna»— hasta que llegaba la buena. Se espera
+  // la copia completa primero, y solo entonces se avisa: un único cambio, ya correcto.
   const previo = db;
-  db = load();
-  void leerEstado<DB>()
+  const liviana = load();
+  leerEstado<DB>()
     .then((guardado) => {
-      db = guardado?.schema === 1 && Array.isArray(guardado.projects) ? migrate({ ...emptyDb(), ...guardado }) : conArchivosDe(db, previo);
+      db = guardado?.schema === 1 && Array.isArray(guardado.projects) ? migrate({ ...emptyDb(), ...guardado }) : conArchivosDe(liviana, previo);
       listeners.forEach((l) => l());
+      notify('Datos actualizados.', 'success');
     })
-    .catch(() => undefined);
-  listeners.forEach((l) => l());
-  notify('Datos actualizados.', 'success');
+    .catch(() => {
+      db = conArchivosDe(liviana, previo);
+      listeners.forEach((l) => l());
+      notify('Datos actualizados.', 'success');
+    });
 }
 export const subscribe = (l: () => void) => {
   listeners.add(l);
