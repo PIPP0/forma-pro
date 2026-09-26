@@ -1103,6 +1103,30 @@ dialog.modal::backdrop {
   background: var(--panel-2);
 }
 
+.app-loading {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--panel);
+}
+.app-loading .brand-mark {
+  animation: respira 1.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-loading .brand-mark {
+    animation: none;
+  }
+}
+@keyframes respira {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
 /* ---------- Bienvenida ---------- */
 
 .welcome {

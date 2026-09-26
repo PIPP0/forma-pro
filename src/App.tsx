@@ -4,7 +4,7 @@ import { currentUser, useDb } from './lib/store';
 import { useCloudAccount } from './components/useCloudAccount';
 import { prefiereLocal, quedarseLocal } from './lib/session';
 import { roleFor } from './lib/permissions';
-import { Shell } from './components/Shell';
+import { Shell, BrandLockup } from './components/Shell';
 import { Empty, Toasts } from './components/ui';
 import { Welcome } from './views/Welcome';
 import { ProjectsView } from './views/ProjectsView';
@@ -35,16 +35,36 @@ export default function App() {
     );
   }
 
-  // Entrar es entrar con tu correo: es lo que hace que tus proyectos estén en cualquier equipo.
-  // Quien prefiera trabajar solo en este navegador lo dice una vez y no se le vuelve a preguntar.
-  // Si ya hay un perfil local (alguien que volvió), se espera a saber si la nube confirma su
-  // correo antes de decidir si corresponde pedirle iniciar sesión: sin esto, cada recarga pasaba
-  // un instante por la pantalla de inicio mientras la cuenta terminaba de confirmarse, aunque la
-  // persona ya estuviera conectada.
-  if (!user || (!cuentaCargando && !cuenta?.email && !prefiereLocal())) {
+  // Sin ningún perfil local, no hay nada que esperar: nunca hubo nadie aquí.
+  if (!user) {
     return (
       <>
-        <Welcome seguirComo={user && !cuentaCargando ? user.name : undefined} onSeguirLocal={quedarseLocal} />
+        <Welcome onSeguirLocal={quedarseLocal} />
+        <Toasts />
+      </>
+    );
+  }
+
+  // Entrar es entrar con tu correo: es lo que hace que tus proyectos estén en cualquier equipo.
+  // Quien prefiera trabajar solo en este navegador lo dice una vez y no se le vuelve a preguntar,
+  // y no depende de la nube en absoluto. Para quien sí usa correo, hay un perfil local pero
+  // todavía no se sabe si la nube confirma una sesión real — mientras se sabe, no se muestra ni
+  // el login ni el espacio de trabajo: cualquiera de los dos, mostrado de más, es un parpadeo a
+  // la pantalla que no corresponde. Se espera con una pantalla neutra hasta tener la respuesta.
+  if (!prefiereLocal() && cuentaCargando) {
+    return (
+      <>
+        <div className="app-loading" aria-busy="true">
+          <BrandLockup />
+        </div>
+        <Toasts />
+      </>
+    );
+  }
+  if (!prefiereLocal() && !cuenta?.email) {
+    return (
+      <>
+        <Welcome seguirComo={user.name} onSeguirLocal={quedarseLocal} />
         <Toasts />
       </>
     );
