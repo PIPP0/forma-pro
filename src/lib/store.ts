@@ -33,8 +33,6 @@ function load(): DB {
 let db: DB = load();
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setTimeout> | undefined;
-/** ¿Alguien editó algo desde que arrancamos? Decide si lo guardado puede reemplazar lo que hay. */
-let tocado = false;
 
 /**
  * El espacio sin sus archivos: las pantallas de Figma y los sonidos propios viajan dentro del
@@ -79,7 +77,6 @@ function flush() {
 
 function commit(next: DB) {
   db = next;
-  tocado = true;
   clearTimeout(timer);
   timer = setTimeout(flush, 120);
   listeners.forEach((l) => l());
@@ -116,8 +113,13 @@ export const almacenListo: Promise<void> = (async () => {
     return;
   }
   if (!guardado || guardado.schema !== 1 || !Array.isArray(guardado.projects)) return;
-  // Si ya se editó algo en este rato, lo de la pantalla manda: solo se recuperan los archivos.
-  db = tocado ? conArchivosDe(db, guardado) : migrate({ ...emptyDb(), ...guardado });
+  // IndexedDB solo aporta los archivos que no cupieron en localStorage — nunca reemplaza la
+  // sesión activa. guardarEstado() en flush() no se espera antes de que la pestaña se cierre o
+  // recargue, así que puede quedar un instante atrás: si aquí se confiara en IndexedDB entero
+  // (con quién inició sesión incluido), un recargo rápido después de entrar con otra cuenta
+  // podía traer de vuelta a la cuenta vieja un instante, antes de que algo lo corrigiera —
+  // se sentía como pasar por otra pantalla y volver.
+  db = conArchivosDe(db, guardado);
   listeners.forEach((l) => l());
 })();
 
