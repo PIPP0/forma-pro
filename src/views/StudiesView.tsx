@@ -282,7 +282,7 @@ function NewStudyModal({ project, open, onClose }: { project: Project; open: boo
       <button type="button" role="switch" aria-checked={askAudio} className="switch-row" onClick={() => setAskAudio((v) => !v)}>
         <span>
           <strong>Grabar audio en el prototipo</strong>
-          <span className="muted small">Quien participa verá un interruptor que le pregunta si quiere grabar. Puede hacer la prueba sin grabar y apagarlo en cualquier momento.</span>
+          <span className="muted small">El navegador de quien participa le pedirá permiso para usar el micrófono. Si no lo permite, la prueba sigue igual, sin grabar.</span>
         </span>
         <span className={`switch ${askAudio ? 'on' : ''}`} aria-hidden="true">
           <i />
