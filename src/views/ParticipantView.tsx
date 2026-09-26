@@ -166,7 +166,6 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
   const [difficulty, setDifficulty] = useState<number>();
   const [comment, setComment] = useState('');
   const [recording, setRecording] = useState(false);
-  const [askRecord, setAskRecord] = useState(false);
   const [mode] = useState<Mode>(() => (window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
   const [bp] = useState<Breakpoint>(viewportBreakpoint);
 
@@ -323,11 +322,6 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
       setRecording(false);
       return false;
     }
-  };
-
-  const pauseRecording = () => {
-    if (recorder.current?.state === 'recording') recorder.current.pause();
-    setRecording(false);
   };
 
   const start = async () => {
@@ -558,7 +552,7 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
           {/* Continuar es la aceptación: no hay una pantalla aparte de consentimiento. */}
           <p className="consent-note">
             Al continuar, aceptas y autorizas que se registren tus toques, tiempos y respuestas{study.askAudio ? ', y el audio de tu voz,' : ''} dentro de este prototipo, solo con fines de estudio.
-            {study.askAudio ? ' Tu navegador te pedirá permiso para usar el micrófono y puedes pausar la grabación cuando quieras.' : ''} No te pedimos datos personales y puedes dejar la prueba en cualquier momento.
+            {study.askAudio ? ' Tu navegador te pedirá permiso para usar el micrófono; si no lo permites, la prueba sigue igual, sin grabar.' : ''} No te pedimos datos personales y puedes dejar la prueba en cualquier momento.
           </p>
           {ensayo ? (
             <div className="ensayo-card">
@@ -610,50 +604,8 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
                 ⛶
               </Button>
             )}
-            {study.askAudio && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={recording}
-                className={`rec-toggle ${recording ? 'on' : ''}`}
-                onClick={() => {
-                  if (recording) pauseRecording();
-                  else if (session.current?.consent.audio) startRecording();
-                  else setAskRecord(true);
-                }}
-              >
-                <span className={`switch ${recording ? 'on' : ''}`} aria-hidden="true">
-                  <i />
-                </span>
-                {recording ? 'Grabando audio' : 'Grabar audio'}
-              </button>
-            )}
-            <Button size="sm" onClick={() => finishTask('giveup', events.current.filter((e) => e.kind === 'navigate').at(-1)?.screen ?? task.startScreenId)}>
-              No pude completarla
-            </Button>
           </div>
         </div>
-        {askRecord && (
-          <div className="rec-ask" role="alertdialog" aria-label="¿Grabar el audio?">
-            <strong>¿Quieres grabar el audio de esta sesión?</strong>
-            <p className="small">Grabaremos tu voz mientras usas el prototipo para entender qué piensas. Solo se usa para mejorar el diseño y puedes apagarlo cuando quieras.</p>
-            <div className="row">
-              <Button
-                tone="primary"
-                size="sm"
-                onClick={async () => {
-                  setAskRecord(false);
-                  await startRecording();
-                }}
-              >
-                Sí, grabar audio
-              </Button>
-              <Button size="sm" onClick={() => setAskRecord(false)}>
-                Ahora no
-              </Button>
-            </div>
-          </div>
-        )}
         <div className={bp === 'mobile' ? 'participant-fill' : 'participant-stage'}>
           <Runner
             key={task.id}
