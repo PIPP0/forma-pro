@@ -37,7 +37,11 @@ export default function App() {
 
   // Entrar es entrar con tu correo: es lo que hace que tus proyectos estén en cualquier equipo.
   // Quien prefiera trabajar solo en este navegador lo dice una vez y no se le vuelve a preguntar.
-  if (!user || (!cuenta?.email && !prefiereLocal())) {
+  // Si ya hay un perfil local (alguien que volvió), se espera a saber si la nube confirma su
+  // correo antes de decidir si corresponde pedirle iniciar sesión: sin esto, cada recarga pasaba
+  // un instante por la pantalla de inicio mientras la cuenta terminaba de confirmarse, aunque la
+  // persona ya estuviera conectada.
+  if (!user || (!cuentaCargando && !cuenta?.email && !prefiereLocal())) {
     return (
       <>
         <Welcome seguirComo={user && !cuentaCargando ? user.name : undefined} onSeguirLocal={quedarseLocal} />
