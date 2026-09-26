@@ -4824,6 +4824,15 @@ dialog.modal {
 .ensayo-card p {
   margin: 0;
 }
+@media (max-width: 480px) {
+  .ensayo-acciones {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ensayo-acciones .btn {
+    width: 100%;
+  }
+}
 .participant-card .consent-note {
   font-size: 13px;
   line-height: 1.5;

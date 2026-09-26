@@ -558,7 +558,7 @@ function Flow({ study, local, ensayo, onRestart }: { study: SharedStudy; local: 
             <div className="ensayo-card">
               <strong>Estás abriendo la prueba desde tu proyecto</strong>
               <p className="muted small">Elige si esta sesión debe contar en los resultados. Así tus ensayos no se mezclan con los de quienes participan.</p>
-              <div className="row">
+              <div className="row ensayo-acciones">
                 <Button
                   tone="primary"
                   onClick={() => {
