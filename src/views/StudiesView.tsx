@@ -3,7 +3,7 @@ import type { Project, Role, Session, Study, StudyEvent, StudyTask } from '../li
 import { baseId } from '../lib/model';
 import { applyStudySnapshotOps, createStudy, deleteSession, deleteStudy, getDb, importResults, mergeCloudSessions, refreshFromStorage, saveStudySummary, setStudyCloud, setStudyStatus, useDb, userName } from '../lib/store';
 import { conImagenExterna, incrustarImagenes } from '../lib/incrustar';
-import { deleteCloudSession, deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus } from '../lib/cloud';
+import { deleteCloudSession, deleteCloudStudy, downloadCloudAudio, fetchCloudSessions, publishStudyToCloud, setCloudStudyStatus, uploadFullAudio, uploadSession } from '../lib/cloud';
 import { useCloudAccount } from '../components/useCloudAccount';
 import { notify } from '../lib/toast';
 import { can } from '../lib/permissions';
@@ -1451,8 +1451,36 @@ function Grabaciones({ study, sessions, onAbrir }: { study: Study; sessions: Ses
   const [abierto, setAbierto] = useState<Record<string, boolean>>({});
   const [fallo, setFallo] = useState<Record<string, string>>({});
   const creadas = useRef<string[]>([]);
+  const { account } = useCloudAccount();
 
   useEffect(() => () => creadas.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  // Automático: las grabaciones hechas aquí mismo, antes de que esto subiera solo, se quedaron
+  // atrapadas en este navegador. Si el estudio está conectado y hay cuenta con correo, se
+  // intenta subir cada una que todavía solo esté local — una sola vez por visita, en silencio,
+  // con un único aviso al final si algo llegó.
+  const intentoAutoRef = useRef(false);
+  useEffect(() => {
+    if (intentoAutoRef.current || !study.cloud || !account?.email || !conAudio.length) return;
+    intentoAutoRef.current = true;
+    void (async () => {
+      const eventos = getDb().events;
+      let subidas = 0;
+      for (const s of conAudio) {
+        const blob = await getAudio(s.id).catch(() => undefined);
+        if (!blob) continue; // no está aquí: ya viajó, o vive en otro navegador.
+        try {
+          await uploadSession(study.id, s, eventos.filter((e) => e.sessionId === s.id));
+          await uploadFullAudio(study.id, s.id, blob, 0);
+          subidas++;
+        } catch {
+          /* este intento no contó: se vuelve a probar la próxima vez */
+        }
+      }
+      if (subidas) notify(`${subidas} ${subidas === 1 ? 'grabación que estaba atrapada aquí ya viaja' : 'grabaciones que estaban atrapadas aquí ya viajan'} a tu cuenta.`, 'success');
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [study.id]);
 
   if (!conAudio.length) return null;
 
