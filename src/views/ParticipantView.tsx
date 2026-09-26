@@ -96,7 +96,10 @@ function FullscreenCard() {
   const mode = useImmersiveMode();
   const full = useIsFullscreen();
   const [help, setHelp] = useState(false);
-  if (mode === 'none' || full) return null;
+  // En iPhone, Safari no tiene forma de ocultar su barra desde la página — solo agregando la
+  // prueba a la pantalla de inicio, en varios pasos. Como no se logra con un toque, mejor no
+  // ofrecer nada aquí: la prueba corre igual, con la barra de Safari a la vista.
+  if (mode === 'none' || mode === 'ios' || full) return null;
   return (
     <div className="install-card install-card-stack">
       <div className="install-card-row">
@@ -115,24 +118,10 @@ function FullscreenCard() {
           Pantalla completa
         </Button>
       </div>
-      {/* iPhone y apps como WhatsApp no dejan ocultar el navegador desde la página: pasos para lograrlo. */}
+      {/* Apps como WhatsApp no dejan ocultar el navegador desde la página: pasos para salir a Safari o Chrome. */}
       {help && mode !== 'fullscreen' && (
         <>
           <ol className="install-steps">
-            {mode === 'ios' && (
-              <>
-                <li>En iPhone, Safari solo oculta su barra si abres la prueba desde tu pantalla de inicio.</li>
-                <li>
-                  Toca <strong>Compartir</strong>. En Safari nuevo está dentro del menú <strong>⋯</strong>, abajo a la derecha.
-                </li>
-                <li>
-                  Elige <strong>Agregar a Inicio</strong> (o <strong>Agregar a pantalla de inicio</strong>). Si no la ves, toca <strong>Ver más</strong>.
-                </li>
-                <li>
-                  Toca <strong>Agregar</strong> y abre <strong>Forma</strong> desde el ícono: la prueba se verá a pantalla completa.
-                </li>
-              </>
-            )}
             {mode === 'in-app' && (
               <>
                 <li>
