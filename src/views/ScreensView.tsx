@@ -1971,6 +1971,9 @@ function BlockProps({ project, screen, block, editable, onSelect }: { project: P
 
 function PlayOverlay({ project, screen, mode, onClose }: { project: Project; screen: Screen; mode: Mode; onClose: () => void }) {
   const [m, setM] = useState<Mode>(mode);
+  // Con pantallas de Figma, el modo de color no cambia nada: son imágenes tal cual, no toman los
+  // tokens del sistema. Ofrecerlo ahí solo seria confuso, sin ningún efecto visible.
+  const soloImagenes = !project.screens.some((s) => !s.image && s.blocks.length > 0);
   const [size, setSize] = useState({ w: window.innerWidth, h: window.innerHeight });
   useEffect(() => {
     const onResize = () => setSize({ w: window.innerWidth, h: window.innerHeight });
@@ -1991,16 +1994,18 @@ function PlayOverlay({ project, screen, mode, onClose }: { project: Project; scr
           <IconPlay size={14} /> Probando desde «{screen.name}»
         </span>
         <div className="row">
-          <Tabs
-            small
-            label="Modo de color"
-            value={m}
-            onChange={setM}
-            items={[
-              { id: 'light', label: 'Claro' },
-              { id: 'dark', label: 'Oscuro' },
-            ]}
-          />
+          {!soloImagenes && (
+            <Tabs
+              small
+              label="Modo de color"
+              value={m}
+              onChange={setM}
+              items={[
+                { id: 'light', label: 'Claro' },
+                { id: 'dark', label: 'Oscuro' },
+              ]}
+            />
+          )}
           <Button size="sm" onClick={onClose}>
             Cerrar
           </Button>
