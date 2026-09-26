@@ -139,7 +139,7 @@ export function Welcome({ seguirComo, onSeguirLocal }: { seguirComo?: string; on
       </section>
       <aside className="welcome-right" aria-label="Prototipo de ejemplo">
         <div className="welcome-demo">
-          <span className="frame-label-text"># 01 — Inicio</span>
+          <span className="frame-label-text">Proyecto</span>
           <Runner project={demo} startScreenId="s-inicio" breakpoint="mobile" mode="light" maxScale={0.78} />
           <p className="welcome-demo-cap">Prototipo real hecho con Forma. Tócalo y crea una meta de ahorro.</p>
         </div>

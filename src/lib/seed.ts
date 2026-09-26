@@ -98,7 +98,7 @@ export function transferProject(ownerId: string, name = 'Ahorro con propósito')
     b('b-in-hola' + sfx, 'heading', 'Hola, Francisca', { componentId: 'cmp-heading', variant: 'title', detail: 'Qué bueno verte de nuevo' }),
     b('b-in-saldo' + sfx, 'balance', 'Saldo disponible', { componentId: 'cmp-balance', value: '$ 1.850.000', detail: 'Cuenta corriente', options: ['•• 2840'] }),
     b('b-in-ayuda' + sfx, 'help', 'Tu próximo paso empieza hoy', { componentId: 'cmp-help', detail: 'Dale un espacio a eso que quieres lograr.' }),
-    b('b-in-alcancia' + sfx, 'card', 'Alcancía', { componentId: 'cmp-card', detail: 'Organiza tu ahorro y acércate a tus metas.', action: 'navigate', target: 's-nueva' }),
+    b('b-in-alcancia' + sfx, 'card', 'Objetivos', { componentId: 'cmp-card', detail: 'Organiza tu ahorro y acércate a tus metas.', action: 'navigate', target: 's-nueva' }),
     b('b-in-crear' + sfx, 'button', 'Crear una meta', { componentId: 'cmp-btn-primary', action: 'navigate', target: 's-nueva' }),
     b('b-in-metas' + sfx, 'link', 'Ver mis metas', { action: 'navigate', target: 's-metas' }),
   ];
